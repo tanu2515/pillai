@@ -39,6 +39,7 @@ class Zone(Base):
     name = Column(String, nullable=False)
     type = Column(String, default="gate")
     domain = Column(String, nullable=False)  # venue | transport | hospitality
+    location_note = Column(String, nullable=True)  # real-world anchor, e.g. "Panvel Railway Station"
     capacity = Column(Integer, nullable=False)
     current_count = Column(Integer, default=0)
     last_count = Column(Integer, default=0)

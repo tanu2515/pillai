@@ -1,7 +1,4 @@
-import json
-import os
-import urllib.error
-import urllib.request
+import random
 import uuid
 
 from sqlalchemy.orm import Session
@@ -180,6 +177,7 @@ def full_state(db):
         r = zone_risk(z, db)
         zone_out.append({
             "id": z.id, "name": z.name, "type": z.type, "domain": z.domain,
+            "location_note": z.location_note,
             "capacity": z.capacity, "current_count": z.current_count,
             # HIGH/CRITICAL is the operator-facing signal (color-coded, stable);
             # the raw score can dip briefly right when a ramp's per-tick delta
@@ -458,56 +456,47 @@ def gate_advisory(db):
     return {"gates": out, "suggestion": suggestion}
 
 
-# --- AI layer: narrates structured data only, never invents a number -------
-# Every call below sends the model *only* the already-computed risk/zone
-# fields for the relevant zone(s) — the same numbers already on screen — so
-# the model has nothing to invent from. If ANTHROPIC_API_KEY isn't set, every
-# function below returns a clearly-labelled "not configured" response instead
-# of silently failing or fabricating text.
+# --- AI layer: our own narrator, not a third-party LLM ---------------------
+# This is a deterministic, rule-based text generator we built ourselves — it
+# never calls an external API and never can invent a number, because every
+# sentence is assembled directly from the structured fields already computed
+# above (risk_factors/zone_risk/gate_advisory). "Grounded in" always names the
+# exact zone(s)/state the sentence was built from.
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
-
-
-def _call_llm(system_prompt, user_prompt, max_tokens=300):
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None, "ANTHROPIC_API_KEY is not set — AI narration is unavailable in this environment."
-
-    body = json.dumps({
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": max_tokens,
-        "system": system_prompt,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=body,
-        headers={
-            "content-type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        text = "".join(block.get("text", "") for block in data.get("content", []))
-        return text.strip(), None
-    except urllib.error.HTTPError as e:
-        return None, f"AI request failed ({e.code}): {e.read().decode('utf-8', 'ignore')[:200]}"
-    except Exception as e:  # network hiccup, timeout, etc — degrade gracefully, never crash the dashboard
-        return None, f"AI request failed: {e}"
+URGENCY_TAG = {"CRITICAL": "URGENT", "HIGH": "WATCH", "MODERATE": "MONITOR", "LOW": "OK"}
 
 
-_GROUNDING_SYSTEM = (
-    "You are KAIRO's risk narrator for a live event-operations dashboard. "
-    "You are given a JSON object of already-computed numbers. Narrate what it "
-    "means in one or two short, plain-English sentences. Never invent a number, "
-    "fact, or recommendation that isn't directly supported by the JSON you were "
-    "given. If the JSON doesn't support a claim, don't make it."
-)
+def _dominant_factor(r):
+    """Which weighted term is actually driving this zone's score — narrating
+    around that, rather than always leading with capacity, is what makes the
+    explanation feel specific to the zone instead of a generic template."""
+    weighted = {
+        "capacity_pressure": W_CAPACITY * r["capacity_pressure_pct"],
+        "arrival_surge": W_SURGE * r["arrival_surge"],
+        "flow_instability": W_INSTABILITY * r["flow_instability"],
+        "resource_pressure": W_RESOURCE * r["resource_pressure"],
+        "time_to_criticality": W_TIME * r["time_to_criticality"],
+    }
+    return max(weighted, key=weighted.get)
+
+
+def _factor_sentence(zone, r, dominant):
+    if dominant == "capacity_pressure":
+        return (f"{zone.name} is at {r['capacity_pressure_pct']}% of its {zone.capacity:,}-person capacity — "
+                f"sheer occupancy ({zone.current_count:,} people) is the main driver right now.")
+    if dominant == "arrival_surge":
+        return (f"{zone.name}'s risk is being pushed up mainly by how fast people are arriving right now — "
+                f"inflow is spiking well above its normal pace.")
+    if dominant == "flow_instability":
+        return (f"{zone.name}'s flow just shifted sharply compared to the previous reading — that instability "
+                f"is often an early warning sign, even before occupancy itself looks critical.")
+    if dominant == "resource_pressure":
+        return (f"{zone.name}'s risk is elevated by pressure on what it feeds into — the linked zone it "
+                f"depends on is itself under heavy load ({r['resource_pressure']}%).")
+    if r["time_to_capacity_min"] is not None:
+        return (f"At the current rate, {zone.name} is projected to reach capacity in about "
+                f"{r['time_to_capacity_min']} minutes if nothing changes.")
+    return f"{zone.name} is currently stable — no single factor is driving its score up."
 
 
 def explain_zone(db, zone_id):
@@ -515,38 +504,64 @@ def explain_zone(db, zone_id):
     if not zone:
         return {"text": None, "grounded_in": [], "error": "zone not found"}
     r = zone_risk(zone, db)
-    payload = {
-        "zone_name": zone.name, "domain": zone.domain, "type": zone.type,
-        "current_count": zone.current_count, "capacity": zone.capacity,
-        **r,
-    }
-    text, error = _call_llm(
-        _GROUNDING_SYSTEM,
-        f"Explain this zone's risk to an operator:\n{json.dumps(payload)}",
-    )
-    return {"text": text, "grounded_in": [f"zone:{zone.name}"], "error": error}
+    dominant = _dominant_factor(r)
+    sentence = _factor_sentence(zone, r, dominant)
+    text = f"{sentence} Current score: {r['score']} ({r['level']})."
+    return {"text": text, "grounded_in": [f"zone:{zone.name}"], "error": None}
 
 
 def ai_advisor(db):
+    """Event-wide 'what should I do right now' — top zones by score, one
+    urgency-tagged line each, built the same way as explain_zone."""
     state = full_state(db)
-    text, error = _call_llm(
-        _GROUNDING_SYSTEM
-        + " Return 3-5 short, urgency-tagged recommendations (e.g. 'URGENT:', 'WATCH:') "
-        "as separate lines, each grounded in one specific zone from the JSON.",
-        f"Here is the full current event snapshot, all zones:\n{json.dumps(state['zones'])}",
-        max_tokens=400,
-    )
-    return {"text": text, "grounded_in": ["state:all_zones"], "error": error}
+    top = [z for z in state["zones"] if z["level"] != "LOW"][:5] or state["zones"][:3]
+    lines = []
+    for z in top:
+        zone = db.get(models.Zone, z["id"])
+        r = zone_risk(zone, db)
+        dominant = _dominant_factor(r)
+        lines.append(f"{URGENCY_TAG[z['level']]}: {_factor_sentence(zone, r, dominant)}")
+    text = "\n".join(lines) if lines else "All zones are currently LOW risk — nothing needs attention right now."
+    grounded = [f"zone:{z['name']}" for z in top] or ["state:all_zones"]
+    return {"text": text, "grounded_in": grounded, "error": None}
 
 
 def attendee_advisory(db):
     advisory = gate_advisory(db)
     if not advisory["suggestion"]:
         return {"text": None, "grounded_in": ["state:gates"], "error": None}
-    text, error = _call_llm(
-        "You write one short, friendly sentence for an event attendee (not an operator), "
-        "based only on the JSON gate data you're given. Never invent a number.",
-        f"Gate data:\n{json.dumps(advisory)}",
-        max_tokens=120,
-    )
-    return {"text": text, "grounded_in": ["state:gates"], "error": error}
+    s = advisory["suggestion"]
+    text = (f"{s['crowded_gate']} is filling up ({s['crowded_pct']}%) — {s['suggested_gate']} is quieter "
+            f"({s['suggested_pct']}%) and just as good a way in right now.")
+    return {"text": text, "grounded_in": ["state:gates"], "error": None}
+
+
+# --- Transport Hub: illustrative arrivals feed ------------------------------
+# Panvel Railway Station (our Transport Hub zone) really does interconnect to
+# Navi Mumbai International Airport, which opened 25 Dec 2025 with IndiGo, Air
+# India Express and Akasa Air flying real routes to these destinations. We
+# have no live aviation-data feed here, so this schedule is illustrative and
+# deterministic (seeded by tick, not random each call) — clearly not a claim
+# of live flight tracking, same honest synthetic-vs-real framing as the rest
+# of the crowd data.
+NMIA_ROUTES = [
+    ("IndiGo", "Bengaluru"), ("IndiGo", "Jaipur"), ("IndiGo", "Nagpur"), ("IndiGo", "Patna"),
+    ("IndiGo", "Indore"), ("IndiGo", "Ahmedabad"), ("Air India Express", "Delhi"),
+    ("Air India Express", "Bengaluru"), ("Akasa Air", "Goa"), ("Akasa Air", "Kochi"),
+    ("Akasa Air", "Delhi"), ("Akasa Air", "Ahmedabad"),
+]
+
+
+def transport_hub_arrivals(db):
+    state = get_state_row(db)
+    rnd = random.Random(state.tick)  # deterministic per tick, not per request
+    picks = rnd.sample(NMIA_ROUTES, k=4)
+    arrivals = [
+        {"airline": airline, "origin": origin, "arrives_in_min": 8 + i * 12}
+        for i, (airline, origin) in enumerate(picks)
+    ]
+    return {
+        "note": "Illustrative schedule, not live tracking — reflects NMIA's real Dec-2025 launch "
+                "route network (IndiGo, Air India Express, Akasa Air).",
+        "arrivals": arrivals,
+    }
