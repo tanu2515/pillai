@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Attendee</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#0F1722",
+          panel: "#1E2D42",
+          surface: "#162232",
+          border: "#2C3E56",
+          muted: "#90A4AE",
+          accent: "#00E5FF",
+          warn: "#FFD54F",
+          ok: "#69F0AE",
+          danger: "#FF5252",
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "sans-serif"],
+          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(0,229,255,.06), transparent 40%),
+      linear-gradient(#2C3E56 1px, transparent 1px),
+      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
+    background-size:auto, 32px 32px, 32px 32px;
+    background-color:#0F1722;
+  }
+  .tick{ width:3px; height:18px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; display:inline-block; vertical-align:-3px; margin-right:8px; }
+  input[type=text]{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:12px; }
+  input[type=text]:focus, select:focus{ outline:none; border-color:#00E5FF; }
+  select{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:12px; }
+  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.08em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-secondary{ background:#1E2D42; border:1px solid #2C3E56; color:#fff; font-weight:800; letter-spacing:.08em; transition:.15s; }
+  .btn-secondary:hover{ border-color:#008B99; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+  .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#00E5FF; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.3); border-radius:20px; padding:2px 7px; margin-top:6px; }
+</style>
+</head>
+<body class="bg-bg text-slate-100 font-sans m-0 max-w-md mx-auto pb-8 min-h-screen">
+<header class="px-4 pt-6 pb-2 text-center">
+  <a href="/" class="text-muted text-xs font-mono">&larr; HOME</a>
+  <div class="flex items-center justify-center gap-2 mt-4 mb-1">
+    <span class="tick"></span>
+    <h1 id="event-title" class="text-xl font-extrabold m-0 tracking-[0.03em]">KAIRO</h1>
+  </div>
+  <p class="text-muted text-xs m-0 font-mono">Visitor Advisory</p>
+</header>
+
+<section id="suggestion-box" class="mx-4 my-4 bg-accent/10 border border-accent/40 rounded-2xl p-4 hidden">
+  <h2 class="eyebrow mb-2 text-accent">Alternate Gate Suggestion</h2>
+  <p id="suggestion-text" class="text-sm m-0 leading-relaxed"></p>
+</section>
+
+<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
+  <h2 class="eyebrow mb-3">Gate status — spots remaining</h2>
+  <div id="gates"></div>
+  <div id="ai-advisory-box" class="hidden mt-3 pt-3 border-t border-border">
+    <p id="ai-advisory-text" class="text-sm m-0 leading-relaxed text-accent"></p>
+    <div id="ai-advisory-tag"></div>
+  </div>
+</section>
+
+<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
+  <h2 class="eyebrow mb-3">Register</h2>
+  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Your name</label>
+  <input type="text" id="name" placeholder="Full name" class="w-full p-3 text-base" />
+  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-3 mb-1.5">Which gate will you use?</label>
+  <select id="gate" class="w-full p-3 text-base"></select>
+  <button class="btn-primary w-full mt-4 p-3.5 rounded-xl text-sm" onclick="register()">GET MY ENTRY CODE</button>
+  <div id="reg-result"></div>
+</section>
+
+<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
+  <h2 class="eyebrow mb-3">Check in at the gate</h2>
+  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Entry code</label>
+  <input type="text" id="code" placeholder="8-character code" class="w-full p-3 text-base font-mono" />
+  <button class="btn-secondary w-full mt-4 p-3.5 rounded-xl text-sm" onclick="checkin()">CHECK IN</button>
+  <div id="checkin-result"></div>
+</section>
+
+<p class="text-center text-muted text-[10px] font-mono tracking-wide mt-6">BYTE ALCHEMY &middot; PS-8</p>
+
+<script>
+const API = "";
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
+
+async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+
+async function loadGates() {
+  const advisory = await api("/api/advisory");
+  const gates = advisory.gates;
+  document.getElementById("gates").innerHTML = gates.map(g => `
+    <div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2">
+      <div class="w-3 h-3 rounded-full flex-shrink-0 ${LEVEL_COLOR[g.level]}" style="box-shadow:0 0 6px currentColor;"></div>
+      <div class="flex-1 text-[15px]">${g.name}</div>
+      <div class="text-muted text-sm font-mono">${g.remaining.toLocaleString()} spots left</div>
+    </div>`).join("");
+
+  const select = document.getElementById("gate");
+  if (!select.dataset.loaded) {
+    select.innerHTML = gates.map(g => `<option value="${g.id}">${g.name}</option>`).join("");
+    select.dataset.loaded = "1";
+  }
+
+  const box = document.getElementById("suggestion-box");
+  if (advisory.suggestion) {
+    box.classList.remove("hidden");
+    document.getElementById("suggestion-text").textContent =
+      `${advisory.suggestion.crowded_gate} is at ${advisory.suggestion.crowded_pct}% — ` +
+      `${advisory.suggestion.suggested_gate} is quieter (${advisory.suggestion.suggested_pct}%) and a good alternative.`;
+  } else {
+    box.classList.add("hidden");
+  }
+
+  const aiRes = await api("/api/ai/attendee-advisory");
+  const aiBox = document.getElementById("ai-advisory-box");
+  if (aiRes.text) {
+    aiBox.classList.remove("hidden");
+    document.getElementById("ai-advisory-text").textContent = "✨ " + aiRes.text;
+    document.getElementById("ai-advisory-tag").innerHTML =
+      aiRes.grounded_in && aiRes.grounded_in.length ? `<span class="grounded-tag">GROUNDED IN: ${aiRes.grounded_in.join(", ")}</span>` : "";
+  } else {
+    aiBox.classList.add("hidden");
+  }
+}
+
+(async function loadEvent() {
+  try {
+    const data = await api("/api/event");
+    document.getElementById("event-title").textContent = data.configured ? data.name : "No event configured yet";
+  } catch (e) {}
+})();
+
+async function register() {
+  const name = document.getElementById("name").value || "Guest";
+  const gate_zone_id = parseInt(document.getElementById("gate").value);
+  const res = await api("/api/register", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, gate_zone_id }),
+  });
+  document.getElementById("reg-result").innerHTML = `
+    <div class="mt-3 p-3 rounded-lg text-sm bg-ok/10 border border-ok/50">
+      Registered for ${res.gate}.
+      <div class="text-2xl tracking-[4px] text-center font-mono font-bold text-ok my-2">${res.code}</div>
+      Show this code at the gate.
+    </div>
+  `;
+  document.getElementById("code").value = res.code;
+}
+
+async function checkin() {
+  const code = document.getElementById("code").value.trim();
+  const res = await api("/api/checkin", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const el = document.getElementById("checkin-result");
+  if (res.status === "ok") {
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-ok/10 border border-ok/50">Checked in at ${res.zone}. ${res.remaining_capacity} spots now remaining.</div>`;
+  } else if (res.status === "redirect") {
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">${res.message} Please use <b>${res.suggested_zone}</b> instead.</div>`;
+  } else if (res.status === "already_checked_in") {
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">This code has already been used to check in.</div>`;
+  } else {
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">Code not found. Please register first.</div>`;
+  }
+  await loadGates();
+}
+
+loadGates();
+setInterval(loadGates, 5000);
+</script>
+</body>
+</html>

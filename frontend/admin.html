@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Administrator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", border: "#2C3E56",
+          muted: "#90A4AE", accent: "#00E5FF", warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+        },
+        fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(0,229,255,.04), transparent 45%),
+      linear-gradient(#2C3E56 1px, transparent 1px), linear-gradient(90deg, #2C3E56 1px, transparent 1px);
+    background-size:auto, 36px 36px, 36px 36px; background-color:#0F1722;
+  }
+  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
+  .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+  input[type=text], input[type=number]{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; }
+  input:focus{ outline:none; border-color:#00E5FF; }
+  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; }
+  .cap-input{ width:110px; text-align:right; padding:6px 8px; font-family:'JetBrains Mono',monospace; }
+</style>
+</head>
+<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen">
+
+<div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
+  <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3">
+    <div class="flex items-center gap-3">
+      <a href="/" class="tick"></a>
+      <h1 class="text-sm font-extrabold m-0 tracking-[0.1em] uppercase flex items-center gap-2">
+        <span id="event-title">KAIRO — Administrator</span>
+        <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">ADMINISTRATOR</span>
+      </h1>
+    </div>
+    <a href="/login.html" class="text-xs text-muted hover:text-slate-200 hover:underline font-medium">Switch role →</a>
+  </div>
+</div>
+
+<main class="p-4 sm:p-6 max-w-4xl mx-auto">
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <p class="text-xs text-muted leading-relaxed m-0">
+      Back-office setup only — no risk scores, simulations, or day-of operator tools here (that's the
+      Command Centre, scoped to the 4 operator roles). This screen configures the event itself: its
+      name and headcount targets, each zone's capacity, and which emails hold which roles.
+    </p>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <h2 class="eyebrow mb-3">Event Configuration</h2>
+    <div id="event-form" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Event name</label>
+        <input type="text" id="ev-name" class="w-full p-2.5 text-sm" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Expected attendance</label>
+        <input type="number" id="ev-attendance" class="w-full p-2.5 text-sm font-mono" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Safe capacity</label>
+        <input type="number" id="ev-capacity" class="w-full p-2.5 text-sm font-mono" />
+      </div>
+    </div>
+    <button class="btn-primary rounded-lg px-4 py-2 text-xs mt-3" onclick="saveEvent()">SAVE EVENT DETAILS</button>
+    <span id="event-save-status" class="text-xs text-ok ml-3"></span>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <h2 class="eyebrow mb-3">Zones &amp; Capacities</h2>
+    <div id="zones"></div>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4">
+    <h2 class="eyebrow mb-3">Registered Emails &amp; Roles</h2>
+    <div id="users"></div>
+  </div>
+</main>
+
+<script>
+async function api(path, opts) { const res = await fetch(path, opts); return res.json(); }
+function row(inner) { return `<div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2 text-sm">${inner}</div>`; }
+
+async function loadEvent() {
+  const ev = await api("/api/event");
+  if (ev.configured) {
+    document.getElementById("ev-name").value = ev.name;
+    document.getElementById("ev-attendance").value = ev.expected_attendance;
+    document.getElementById("ev-capacity").value = ev.safe_capacity;
+    document.getElementById("event-title").textContent = `KAIRO — ${ev.name}`;
+  } else {
+    document.getElementById("event-title").textContent = "KAIRO — no event configured";
+  }
+}
+
+async function saveEvent() {
+  const body = {
+    name: document.getElementById("ev-name").value,
+    expected_attendance: parseInt(document.getElementById("ev-attendance").value) || 0,
+    safe_capacity: parseInt(document.getElementById("ev-capacity").value) || 0,
+  };
+  await api("/api/admin/event", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  document.getElementById("event-title").textContent = `KAIRO — ${body.name}`;
+  const status = document.getElementById("event-save-status");
+  status.textContent = "Saved.";
+  setTimeout(() => status.textContent = "", 2000);
+}
+
+async function loadZones() {
+  const state = await api("/api/state");
+  document.getElementById("zones").innerHTML = state.zones
+    .sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name))
+    .map(z => row(`
+      <div class="flex-1">${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+      <div class="text-muted font-mono text-xs">${z.current_count.toLocaleString()} in use</div>
+      <input type="number" class="cap-input" id="cap-${z.id}" value="${z.capacity}" />
+      <button class="btn-primary rounded-lg px-3 py-1.5 text-[11px]" onclick="saveCapacity(${z.id})">SAVE</button>
+    `)).join("");
+}
+
+async function saveCapacity(zoneId) {
+  const capacity = parseInt(document.getElementById(`cap-${zoneId}`).value);
+  await api(`/api/admin/zones/${zoneId}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capacity }),
+  });
+  await loadZones();
+}
+
+async function loadUsers() {
+  const users = await api("/api/admin/users");
+  document.getElementById("users").innerHTML = users.length
+    ? users.map(u => row(`
+        <div class="flex-1 font-mono text-sm">${u.email}</div>
+        <div class="text-muted text-xs">${u.role}</div>
+        <button class="btn-danger rounded-lg px-3 py-1.5 text-[11px]" onclick="deleteUser(${u.id})">REMOVE</button>
+      `)).join("")
+    : `<p class="text-xs text-muted m-0">No one has signed in yet.</p>`;
+}
+
+async function deleteUser(id) {
+  await api(`/api/admin/users/${id}`, { method: "DELETE" });
+  await loadUsers();
+}
+
+loadEvent();
+loadZones();
+loadUsers();
+</script>
+</body>
+</html>

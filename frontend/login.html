@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", border: "#2C3E56",
+          muted: "#90A4AE", accent: "#00E5FF", accentDim: "#008B99",
+          warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "sans-serif"],
+          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(0,229,255,.05), transparent 55%),
+      linear-gradient(#2C3E56 1px, transparent 1px),
+      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
+    background-size:auto, 36px 36px, 36px 36px;
+    background-color:#0F1722;
+  }
+  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
+  input[type=email], select{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:10px; }
+  input[type=email]:focus, select:focus{ outline:none; border-color:#00E5FF; }
+  select{ appearance:none; }
+  .selectwrap{ position:relative; }
+  .selectwrap::after{ content:'▾'; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:#90A4AE; font-size:11px; pointer-events:none; }
+  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.08em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+</style>
+</head>
+<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen flex items-center justify-center px-4">
+
+<div class="max-w-sm w-full">
+  <div class="flex items-center gap-2.5 justify-center mb-8">
+    <span class="tick"></span>
+    <span class="text-lg font-black tracking-[0.14em]">KAIRO</span>
+  </div>
+
+  <div class="bg-panel border border-border rounded-2xl p-6">
+    <h1 class="text-xl font-extrabold m-0 mb-1">Sign In</h1>
+    <p id="event-subtitle" class="text-muted text-xs m-0 mb-6">Loading event…</p>
+
+    <label class="eyebrow block mb-1.5">Email ID</label>
+    <input type="email" id="email" placeholder="you@example.com" class="w-full p-3 text-sm mb-4" />
+
+    <label class="eyebrow block mb-1.5">Role</label>
+    <div class="selectwrap mb-5">
+      <select id="role" class="w-full p-3 text-sm">
+        <option value="Administrator">Administrator</option>
+        <option value="Attendee">Attendee</option>
+        <option value="Event Command Operator" selected>Event Command Operator</option>
+        <option value="Hospitality Operator">Hospitality Operator</option>
+        <option value="Transport Operator">Transport Operator</option>
+        <option value="Venue Manager">Venue Manager</option>
+      </select>
+    </div>
+
+    <button class="btn-primary w-full p-3.5 rounded-lg text-sm" onclick="doLogin()">SIGN IN</button>
+    <div id="error" class="text-danger text-xs mt-3 hidden"></div>
+    <div id="status" class="text-muted text-xs mt-3 font-mono"></div>
+  </div>
+
+  <p class="text-muted text-[10.5px] text-center mt-5 leading-relaxed">
+    Demo login only &mdash; matches your email + role against our records, no password yet.<br>
+    First time signing in with a role creates that record automatically.
+  </p>
+</div>
+
+<script>
+const ROLE_DEST = {
+  "Administrator": "admin.html",
+  "Attendee": "attendee.html",
+  "Event Command Operator": "command-center.html?role=command",
+  "Hospitality Operator": "command-center.html?role=hospitality",
+  "Transport Operator": "command-center.html?role=transport",
+  "Venue Manager": "command-center.html?role=venue",
+};
+
+async function doLogin() {
+  const email = document.getElementById("email").value.trim();
+  const role = document.getElementById("role").value;
+  const errorEl = document.getElementById("error");
+  const statusEl = document.getElementById("status");
+  errorEl.classList.add("hidden");
+  statusEl.textContent = "";
+
+  if (!email) {
+    errorEl.textContent = "Enter an email address to continue.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  statusEl.textContent = "Signing in…";
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, role }),
+    });
+    if (!res.ok) throw new Error("Login failed");
+    const data = await res.json();
+    sessionStorage.setItem("kairo_email", data.email);
+    sessionStorage.setItem("kairo_role", data.role);
+    statusEl.textContent = data.status === "signup"
+      ? `Welcome — new ${data.role} account created for ${data.email}.`
+      : `Welcome back, ${data.email}.`;
+    setTimeout(() => { window.location.href = ROLE_DEST[data.role]; }, 400);
+  } catch (e) {
+    statusEl.textContent = "";
+    errorEl.textContent = "Something went wrong signing in. Please try again.";
+    errorEl.classList.remove("hidden");
+  }
+}
+
+document.getElementById("email").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+const preselect = new URLSearchParams(window.location.search).get("role");
+if (preselect && ROLE_DEST[preselect]) document.getElementById("role").value = preselect;
+
+(async function loadEvent() {
+  const el = document.getElementById("event-subtitle");
+  try {
+    const res = await fetch("/api/event");
+    const data = await res.json();
+    el.textContent = data.configured ? data.name : "No event configured yet — an Administrator sets this up first.";
+  } catch (e) {
+    el.textContent = "KAIRO";
+  }
+})();
+</script>
+</body>
+</html>

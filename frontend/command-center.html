@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", panel2: "#162232",
+          border: "#2C3E56", muted: "#90A4AE", accent: "#00E5FF", accentDim: "#008B99",
+          warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "sans-serif"],
+          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(0,229,255,.04), transparent 45%),
+      linear-gradient(#2C3E56 1px, transparent 1px),
+      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
+    background-size:auto, 36px 36px, 36px 36px;
+    background-color:#0F1722;
+    background-attachment:fixed;
+  }
+  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.02;
+    background:repeating-linear-gradient(to bottom, #fff 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; flex-shrink:0; }
+  .tab-btn{ color:#90A4AE; border-color:transparent; letter-spacing:.03em; }
+  .tab-btn.active{ color:#00E5FF; border-color:#00E5FF; }
+  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.06em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-ghost{ background:#1E2D42; border:1px solid #2C3E56; color:#e2e8f0; transition:.15s; }
+  .btn-ghost:hover{ border-color:#008B99; }
+  .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; font-weight:700; letter-spacing:.05em; transition:.15s; }
+  .btn-danger:hover{ background:rgba(255,82,82,.2); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+  input[type=number], input[type=text], select{
+    background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:10px;
+  }
+  input[type=number]:focus, input[type=text]:focus, select:focus{ outline:none; border-color:#00E5FF; }
+  .live-dot{ width:6px; height:6px; border-radius:50%; background:#69F0AE; box-shadow:0 0 6px #69F0AE; animation:blink 1.6s ease-in-out infinite; }
+  @keyframes blink{ 50%{ opacity:.35; } }
+  .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; transition:.12s; }
+  .row-card.clickable{ cursor:pointer; }
+  .row-card.clickable:hover{ border-color:#008B99; }
+  .ack-pill{ font-size:9px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:20px; }
+  .modal-veil{ position:fixed; inset:0; background:rgba(2,6,10,.72); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-veil.show{ display:flex; }
+  .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); }
+  .ai-box{ background:#0F1722; border:1px solid #2C3E56; border-radius:10px; padding:12px; margin-top:10px; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:#00E5FF; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
+</style>
+</head>
+<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen relative">
+<div class="scanlines"></div>
+
+<div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-4 sm:px-6 py-3">
+    <div class="flex items-center gap-3">
+      <a href="/" class="tick"></a>
+      <div>
+        <h1 class="text-sm font-extrabold m-0 leading-tight tracking-[0.1em] uppercase flex items-center gap-2">
+          <span id="event-title">KAIRO</span>
+          <span id="role-badge" class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5"></span>
+        </h1>
+        <p class="text-xs text-muted font-mono m-0 flex items-center gap-1.5 mt-0.5"><span class="live-dot"></span><span id="clock-label">14:00</span></p>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center">
+      <span id="sim-controls" class="flex flex-wrap gap-2 items-center">
+        <button class="btn-danger rounded-lg px-3 py-2 text-xs" onclick="triggerScenario()" title="Simulates a big rush of people leaving one session at once">Simulate a Crowd Rush</button>
+        <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium" onclick="advanceTick()">Skip Forward 1 Minute</button>
+        <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium" onclick="resetSim()">Start Over</button>
+      </span>
+      <span id="readonly-note" class="text-xs text-muted italic hidden">Live event clock is run by the Event Command Operator</span>
+      <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
+      <a href="/login.html" class="text-xs text-muted hover:text-slate-200 hover:underline font-medium">Switch role →</a>
+    </div>
+  </div>
+  <nav class="flex gap-1 px-4 sm:px-6 overflow-x-auto">
+    <button data-tab="overview" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Command Centre</button>
+    <button data-tab="whatif" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">What-If Simulator</button>
+    <button data-tab="actions" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Suggested Actions</button>
+  </nav>
+</div>
+
+<main class="p-3 sm:p-6 max-w-6xl mx-auto relative z-[1]">
+
+  <div id="tab-overview" class="tab-panel">
+    <section class="bg-panel border border-border rounded-xl p-4 mb-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">Risk Register</h2>
+        <div class="flex items-center gap-2">
+          <span class="text-[10.5px] text-muted font-mono">updates every 4 sec · click a zone for detail</span>
+          <button id="ai-advisor-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold hidden" onclick="runAiAdvisor()">✨ AI Advisor</button>
+        </div>
+      </div>
+      <div id="zones"></div>
+      <div id="ai-advisor-box" class="ai-box hidden"></div>
+    </section>
+  </div>
+
+  <div id="tab-whatif" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-5 max-w-xl">
+      <h2 class="eyebrow mb-4">Test a Plan Before You Use It</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div id="field-redirect">
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Redirect visitors from Gate 2</label>
+          <input type="number" id="redirect" value="2000" class="w-full p-2.5" />
+        </div>
+        <div id="field-buses">
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Add buses to Corridor B</label>
+          <input type="number" id="buses" value="4" class="w-full p-2.5" />
+        </div>
+        <div id="field-staff">
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Move staff</label>
+          <input type="number" id="staff" value="6" class="w-full p-2.5" />
+        </div>
+        <label id="field-gate3" class="flex items-center gap-2 text-sm text-muted self-end pb-2.5">
+          <input type="checkbox" id="open_gate3" checked class="w-4 h-4 accent-accent" /> Open Gate 3
+        </label>
+      </div>
+      <button class="btn-danger mt-4 w-full rounded-lg px-3 py-2.5 text-sm" onclick="runWhatIf()">See What Would Happen</button>
+      <div id="whatif-result" class="mt-4"></div>
+    </section>
+  </div>
+
+  <div id="tab-actions" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-xl">
+      <h2 class="eyebrow mb-3">What To Do Right Now</h2>
+      <div id="recs"></div>
+    </section>
+  </div>
+
+</main>
+
+<div class="modal-veil" id="riskModal" onclick="if(event.target===this) closeRiskModal()">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-4 border-b border-border">
+      <h3 id="modal-zone-name" class="text-base font-extrabold m-0"></h3>
+      <button onclick="closeRiskModal()" class="text-muted hover:text-slate-200 text-lg">✕</button>
+    </div>
+    <div class="p-4">
+      <div class="flex items-center gap-3 mb-4">
+        <div id="modal-score" class="font-mono text-2xl font-black"></div>
+        <div id="modal-level" class="ack-pill"></div>
+        <div id="modal-ack-status" class="text-[10.5px] text-muted font-mono ml-auto"></div>
+      </div>
+      <h4 class="eyebrow mb-2">Causal Chain</h4>
+      <ol id="modal-chain" class="text-sm text-muted leading-7 list-decimal list-inside mb-4"></ol>
+
+      <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium w-full" onclick="explainWithAi()">✨ Explain with AI</button>
+      <div id="modal-ai-box" class="ai-box hidden"></div>
+
+      <div id="modal-ack-actions" class="flex gap-2 mt-4"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
+const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-orange-400", CRITICAL: "text-danger" };
+
+// Every operator role sees a scoped slice of the same Command Centre: which
+// zone domains, which What-If fields, and whether they can drive the shared
+// event clock (only the Event Command Operator can).
+const ROLE_CONFIG = {
+  command:     { label: "EVENT COMMAND OPERATOR", tabs: ["overview", "whatif", "actions"], showSimControls: true,  showAiAdvisor: true, domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
+  venue:       { label: "VENUE MANAGER",          tabs: ["overview", "whatif", "actions"], showSimControls: false, showAiAdvisor: false, domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
+  transport:   { label: "TRANSPORT OPERATOR",     tabs: ["overview", "whatif", "actions"], showSimControls: false, showAiAdvisor: false, domain: "transport",   whatifFields: ["buses"] },
+  hospitality: { label: "HOSPITALITY OPERATOR",   tabs: ["overview", "actions"],           showSimControls: false, showAiAdvisor: false, domain: "hospitality", whatifFields: [] },
+};
+const roleParam = new URLSearchParams(location.search).get("role");
+const roleKey = ROLE_CONFIG[roleParam] ? roleParam : "command";
+const roleCfg = ROLE_CONFIG[roleKey];
+
+document.getElementById("role-badge").textContent = roleCfg.label;
+if (!roleCfg.showSimControls) {
+  document.getElementById("sim-controls").classList.add("hidden");
+  document.getElementById("readonly-note").classList.remove("hidden");
+}
+if (roleCfg.showAiAdvisor) document.getElementById("ai-advisor-btn").classList.remove("hidden");
+
+const ALL_WHATIF_FIELDS = ["redirect", "buses", "staff", "gate3"];
+ALL_WHATIF_FIELDS.forEach(f => {
+  if (!roleCfg.whatifFields.includes(f)) document.getElementById("field-" + f).classList.add("hidden");
+});
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  if (!roleCfg.tabs.includes(btn.dataset.tab)) { btn.classList.add("hidden"); return; }
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+  });
+});
+document.querySelector('.tab-btn[data-tab="overview"]').classList.add("active");
+
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  return res.json();
+}
+
+function groundedTag(list) {
+  return list && list.length ? `<span class="grounded-tag">GROUNDED IN: ${list.join(", ")}</span>` : "";
+}
+
+function renderAiBox(el, result) {
+  if (result.error) {
+    el.innerHTML = `<p class="text-xs text-muted italic m-0">${result.error}</p>`;
+  } else {
+    el.innerHTML = `<p class="text-sm m-0 leading-relaxed">${result.text || "No response."}</p>${groundedTag(result.grounded_in)}`;
+  }
+  el.classList.remove("hidden");
+}
+
+let currentZones = [];
+
+function renderZones(state) {
+  document.getElementById("clock-label").textContent = state.clock + (state.scenario_active ? " — crowd rush in progress" : "");
+  currentZones = roleCfg.domain ? state.zones.filter(z => z.domain === roleCfg.domain) : state.zones;
+  document.getElementById("zones").innerHTML = currentZones.map(z => `
+    <div class="row-card clickable flex items-center gap-3 px-3 py-2.5 mb-2 text-sm" onclick="openRiskModal(${z.id})">
+      <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${LEVEL_COLOR[z.level]}" style="box-shadow:0 0 6px currentColor;"></div>
+      <div class="flex-1">${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+      ${z.ack_status !== "open" ? `<span class="ack-pill ${z.ack_status === 'escalated' ? 'bg-danger/20 text-danger' : 'bg-ok/20 text-ok'}">${z.ack_status.toUpperCase()}</span>` : ""}
+      <div class="text-muted font-mono tabular-nums w-16 text-right">${z.capacity_pressure_pct}%</div>
+      <div class="font-mono tabular-nums w-32 text-right text-[11px] px-2.5 py-1 rounded-full bg-surface border border-border ${LEVEL_TEXT[z.level]} font-bold">${z.score} · ${z.level}</div>
+    </div>
+  `).join("");
+}
+
+async function refresh() {
+  const state = await api("/api/state");
+  renderZones(state);
+  const allRecs = await api("/api/recommendations");
+  const recs = roleCfg.domain ? allRecs.filter(r => r.domain === roleCfg.domain) : allRecs;
+  document.getElementById("recs").innerHTML = recs.map(r => `
+    <div class="row-card p-3 mb-2 text-sm flex items-center justify-between">
+      <span>${r.label}</span>
+      <span class="text-ok font-mono font-bold tabular-nums">${r.action_score}</span>
+    </div>
+  `).join("") || `<div class="text-xs text-muted">No feasible actions in your area right now.</div>`;
+}
+
+async function triggerScenario() { await api("/api/scenario/trigger", { method: "POST" }); await refresh(); }
+async function advanceTick() { await api("/api/tick", { method: "POST" }); await refresh(); }
+async function resetSim() { await api("/api/reset", { method: "POST" }); await refresh(); }
+
+async function runWhatIf() {
+  const body = {
+    redirect_count: parseInt(document.getElementById("redirect").value) || 0,
+    open_gate3: document.getElementById("open_gate3").checked,
+    add_buses: parseInt(document.getElementById("buses").value) || 0,
+    move_staff: parseInt(document.getElementById("staff").value) || 0,
+  };
+  const result = await api("/api/simulate/whatif", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const b = result.before, a = result.after;
+  document.getElementById("whatif-result").innerHTML = `
+    <div class="grid grid-cols-2 gap-3 text-sm bg-surface border border-border rounded-lg p-4 font-mono">
+      <div class="text-[10.5px] uppercase tracking-[.1em] text-muted font-sans font-semibold">Before</div><div class="text-[10.5px] uppercase tracking-[.1em] text-muted font-sans font-semibold">After</div>
+      <div>Gate 2: ${b.gate2.capacity_pressure_pct}% (${b.gate2.level})</div>
+      <div>Gate 2: ${a.gate2.capacity_pressure_pct}% (${a.gate2.level})</div>
+      <div>Gate 3: ${b.gate3.capacity_pressure_pct}% (${b.gate3.level})</div>
+      <div>Gate 3: ${a.gate3.capacity_pressure_pct}% (${a.gate3.level})</div>
+      <div>Corridor B: ${b.corridor_b_pct}%</div>
+      <div>Corridor B: ${a.corridor_b_pct}%</div>
+    </div>
+    ${result.warnings.map(w => `<div class="text-warn text-xs mt-2">${w}</div>`).join("")}
+  `;
+}
+
+async function runAiAdvisor() {
+  const box = document.getElementById("ai-advisor-box");
+  box.classList.remove("hidden");
+  box.innerHTML = `<p class="text-xs text-muted italic m-0">Thinking…</p>`;
+  const result = await api("/api/ai/advisor");
+  renderAiBox(box, result);
+}
+
+// --- Risk Detail modal ---------------------------------------------------
+let modalZoneId = null;
+
+async function openRiskModal(zoneId) {
+  modalZoneId = zoneId;
+  const zone = currentZones.find(z => z.id === zoneId);
+  if (!zone) return;
+  document.getElementById("modal-zone-name").textContent = zone.name;
+  document.getElementById("modal-score").textContent = zone.score;
+  document.getElementById("modal-score").className = "font-mono text-2xl font-black " + LEVEL_TEXT[zone.level];
+  document.getElementById("modal-level").textContent = zone.level;
+  document.getElementById("modal-level").className = "ack-pill " + LEVEL_COLOR[zone.level] + " text-black";
+  document.getElementById("modal-ack-status").textContent = zone.ack_status !== "open" ? zone.ack_status.toUpperCase() : "";
+  document.getElementById("modal-ai-box").classList.add("hidden");
+
+  const chain = await api(`/api/risks/causal-chain/${zoneId}`);
+  document.getElementById("modal-chain").innerHTML = chain.chain.map(c => `<li class="mb-1">${c}</li>`).join("");
+
+  const ackActions = document.getElementById("modal-ack-actions");
+  if (zone.can_ack) {
+    ackActions.innerHTML = `
+      <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium flex-1" onclick="setAck('acknowledged')">Acknowledge</button>
+      <button class="btn-danger rounded-lg px-3 py-2 text-xs flex-1" onclick="setAck('escalated')">Escalate</button>
+    `;
+  } else {
+    ackActions.innerHTML = `<p class="text-[10.5px] text-muted italic m-0">Acknowledge/Escalate unlocks once risk score reaches 65.</p>`;
+  }
+
+  document.getElementById("riskModal").classList.add("show");
+}
+
+function closeRiskModal() { document.getElementById("riskModal").classList.remove("show"); modalZoneId = null; }
+
+async function explainWithAi() {
+  const box = document.getElementById("modal-ai-box");
+  box.classList.remove("hidden");
+  box.innerHTML = `<p class="text-xs text-muted italic m-0">Thinking…</p>`;
+  const result = await api(`/api/ai/explain/${modalZoneId}`);
+  renderAiBox(box, result);
+}
+
+async function setAck(status) {
+  await api(`/api/zones/${modalZoneId}/ack`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+  });
+  await refresh();
+  closeRiskModal();
+}
+
+(async function loadEvent() {
+  try {
+    const data = await api("/api/event");
+    document.getElementById("event-title").textContent = data.configured ? `KAIRO — ${data.name}` : "KAIRO — no event configured";
+  } catch (e) {}
+})();
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

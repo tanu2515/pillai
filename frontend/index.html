@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Mega-Event Orchestration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#0F1722",
+          surface: "#162232",
+          panel: "#1E2D42",
+          panel2: "#162232",
+          border: "#2C3E56",
+          muted: "#90A4AE",
+          accent: "#00E5FF",
+          accentDim: "#008B99",
+          warn: "#FFD54F",
+          ok: "#69F0AE",
+          danger: "#FF5252",
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "sans-serif"],
+          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(0,229,255,.05), transparent 55%),
+      linear-gradient(#2C3E56 1px, transparent 1px),
+      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
+    background-size: auto, 36px 36px, 36px 36px;
+    background-color:#0F1722;
+    background-attachment:fixed;
+  }
+  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.025;
+    background:repeating-linear-gradient(to bottom, #fff 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
+  .role-card{ transition:.15s; }
+  .role-card:hover{ border-color:rgba(0,229,255,.6); background:rgba(0,229,255,.06); }
+  .role-card:hover .chev{ transform:translateX(3px); color:#00E5FF; }
+  .role-icon{ background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.3); }
+  .glow-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(0,229,255,.45),transparent); }
+  .corner{ position:absolute; width:20px; height:20px; border-color:rgba(0,229,255,.4); border-style:solid; border-width:0; }
+  .corner.tl{ top:20px; left:20px; border-top-width:2px; border-left-width:2px; }
+  .corner.tr{ top:20px; right:20px; border-top-width:2px; border-right-width:2px; }
+  .corner.bl{ bottom:20px; left:20px; border-bottom-width:2px; border-left-width:2px; }
+  .corner.br{ bottom:20px; right:20px; border-bottom-width:2px; border-right-width:2px; }
+</style>
+</head>
+<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+<div class="scanlines"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+
+<div class="max-w-lg w-full relative z-10">
+  <div class="flex flex-col items-center text-center mb-10">
+    <div class="w-[92px] h-[92px] rounded-full flex items-center justify-center mb-7 relative"
+         style="background:linear-gradient(140deg, rgba(76,123,125,.25), rgba(0,229,255,.08)); border:1.5px solid rgba(0,229,255,.5); box-shadow:0 0 45px rgba(0,229,255,.25);">
+      <span class="text-4xl">📡</span>
+    </div>
+    <h1 class="text-4xl font-black m-0 tracking-[0.18em]">KAIRO</h1>
+    <div class="glow-divider w-12 my-3"></div>
+    <span class="uppercase text-[10px] font-bold tracking-[0.22em] text-accent bg-accent/10 border border-accent/30 rounded-full px-4 py-1.5 mt-1">
+      Smart Crowd &amp; Event Management
+    </span>
+    <p class="text-muted text-xs mt-4 max-w-sm leading-relaxed">
+      Helps event staff see crowded areas early, test fixes before using them, and keep guests moving safely — built for a mega-event in Panvel, Navi Mumbai.
+    </p>
+  </div>
+
+  <div class="flex flex-col gap-3">
+    <a href="/login.html?role=Event%20Command%20Operator" class="role-card flex items-center gap-4 bg-panel border border-border rounded-2xl p-5 no-underline">
+      <div class="role-icon w-12 h-12 rounded-xl flex items-center justify-center text-accent text-xl flex-shrink-0">🛰️</div>
+      <div class="flex-1 text-left">
+        <div class="text-accent text-sm font-extrabold tracking-[0.12em]">STAFF SIGN IN</div>
+        <div class="text-muted text-xs mt-1 leading-relaxed">Sign in as an operator, venue manager, transport, or hospitality role.</div>
+      </div>
+      <div class="chev text-accent/50 text-xl transition">›</div>
+    </a>
+    <a href="/login.html?role=Attendee" class="role-card flex items-center gap-4 bg-panel border border-border rounded-2xl p-5 no-underline">
+      <div class="role-icon w-12 h-12 rounded-xl flex items-center justify-center text-accent text-xl flex-shrink-0">🎫</div>
+      <div class="flex-1 text-left">
+        <div class="text-accent text-sm font-extrabold tracking-[0.12em]">GUEST SIGN IN</div>
+        <div class="text-muted text-xs mt-1 leading-relaxed">Check gate wait times, sign up for entry, and check in with your code.</div>
+      </div>
+      <div class="chev text-accent/50 text-xl transition">›</div>
+    </a>
+  </div>
+
+  <div class="glow-divider mt-10 mb-4"></div>
+  <p class="text-muted text-[10.5px] font-mono text-center tracking-wide">BYTE ALCHEMY &middot; PS-8</p>
+</div>
+
+</body>
+</html>
