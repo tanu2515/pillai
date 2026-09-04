@@ -150,10 +150,14 @@
 <div class="modal-veil" id="riskModal" onclick="if(event.target===this) closeRiskModal()">
   <div class="modal-box">
     <div class="flex items-center justify-between p-4 border-b border-border">
-      <h3 id="modal-zone-name" class="text-base font-extrabold m-0"></h3>
+      <div>
+        <h3 id="modal-zone-name" class="text-base font-extrabold m-0"></h3>
+        <p id="modal-location-note" class="text-muted text-[10.5px] font-mono m-0 mt-0.5"></p>
+      </div>
       <button onclick="closeRiskModal()" class="text-muted hover:text-slate-200 text-lg">✕</button>
     </div>
     <div class="p-4">
+      <div id="modal-flights" class="hidden mb-4"></div>
       <div class="flex items-center gap-3 mb-4">
         <div id="modal-score" class="font-mono text-2xl font-black"></div>
         <div id="modal-level" class="ack-pill"></div>
@@ -224,7 +228,8 @@ function renderAiBox(el, result) {
   if (result.error) {
     el.innerHTML = `<p class="text-xs text-muted italic m-0">${result.error}</p>`;
   } else {
-    el.innerHTML = `<p class="text-sm m-0 leading-relaxed">${result.text || "No response."}</p>${groundedTag(result.grounded_in)}`;
+    const html = (result.text || "No response.").split("\n").map(l => `<p class="text-sm m-0 leading-relaxed">${l}</p>`).join("");
+    el.innerHTML = html + groundedTag(result.grounded_in);
   }
   el.classList.remove("hidden");
 }
@@ -237,7 +242,10 @@ function renderZones(state) {
   document.getElementById("zones").innerHTML = currentZones.map(z => `
     <div class="row-card clickable flex items-center gap-3 px-3 py-2.5 mb-2 text-sm" onclick="openRiskModal(${z.id})">
       <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${LEVEL_COLOR[z.level]}" style="box-shadow:0 0 6px currentColor;"></div>
-      <div class="flex-1">${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+      <div class="flex-1">
+        <div>${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+        ${z.location_note ? `<div class="text-muted text-[10.5px] font-mono">${z.location_note}</div>` : ""}
+      </div>
       ${z.ack_status !== "open" ? `<span class="ack-pill ${z.ack_status === 'escalated' ? 'bg-danger/20 text-danger' : 'bg-ok/20 text-ok'}">${z.ack_status.toUpperCase()}</span>` : ""}
       <div class="text-muted font-mono tabular-nums w-16 text-right">${z.capacity_pressure_pct}%</div>
       <div class="font-mono tabular-nums w-32 text-right text-[11px] px-2.5 py-1 rounded-full bg-surface border border-border ${LEVEL_TEXT[z.level]} font-bold">${z.score} · ${z.level}</div>
@@ -309,6 +317,26 @@ async function openRiskModal(zoneId) {
   document.getElementById("modal-level").className = "ack-pill " + LEVEL_COLOR[zone.level] + " text-black";
   document.getElementById("modal-ack-status").textContent = zone.ack_status !== "open" ? zone.ack_status.toUpperCase() : "";
   document.getElementById("modal-ai-box").classList.add("hidden");
+  document.getElementById("modal-location-note").textContent = zone.location_note || "";
+
+  const flightsBox = document.getElementById("modal-flights");
+  if (zone.name === "Transport Hub") {
+    const flights = await api("/api/transport/flights");
+    flightsBox.classList.remove("hidden");
+    flightsBox.innerHTML = `
+      <div class="ai-box">
+        <p class="text-[10.5px] text-muted italic m-0 mb-2">${flights.note}</p>
+        ${flights.arrivals.map(a => `
+          <div class="flex items-center justify-between text-sm py-1">
+            <span>${a.airline} from ${a.origin}</span>
+            <span class="font-mono text-muted">in ${a.arrives_in_min} min</span>
+          </div>
+        `).join("")}
+      </div>`;
+  } else {
+    flightsBox.classList.add("hidden");
+    flightsBox.innerHTML = "";
+  }
 
   const chain = await api(`/api/risks/causal-chain/${zoneId}`);
   document.getElementById("modal-chain").innerHTML = chain.chain.map(c => `<li class="mb-1">${c}</li>`).join("");
