@@ -214,6 +214,11 @@ def ai_attendee_advisory(db: Session = Depends(get_db)):
     return engine.attendee_advisory(db)
 
 
+@app.get("/api/transport/flights")
+def transport_flights(db: Session = Depends(get_db)):
+    return engine.transport_hub_arrivals(db)
+
+
 # --- Administrator: event configuration only, no live-ops access ----------
 
 @app.patch("/api/admin/event")
