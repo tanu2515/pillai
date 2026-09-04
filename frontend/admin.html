@@ -128,7 +128,10 @@ async function loadZones() {
   document.getElementById("zones").innerHTML = state.zones
     .sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name))
     .map(z => row(`
-      <div class="flex-1">${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+      <div class="flex-1">
+        <div>${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+        ${z.location_note ? `<div class="text-muted text-[10px] font-mono">${z.location_note}</div>` : ""}
+      </div>
       <div class="text-muted font-mono text-xs">${z.current_count.toLocaleString()} in use</div>
       <input type="number" class="cap-input" id="cap-${z.id}" value="${z.capacity}" />
       <button class="btn-primary rounded-lg px-3 py-1.5 text-[11px]" onclick="saveCapacity(${z.id})">SAVE</button>
