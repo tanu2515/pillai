@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from . import models
+from .regions import DEFAULT_REGION
 
 
 def seed_if_empty(db: Session):
@@ -9,6 +10,7 @@ def seed_if_empty(db: Session):
 
     event = models.Event(
         name="Panvel Mega Fest — Navi Mumbai",
+        region=DEFAULT_REGION,
         expected_attendance=50000,
         safe_capacity=60000,
         status="active",

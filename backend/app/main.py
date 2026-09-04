@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from . import engine, models
+from .regions import INDIA_REGIONS
 from .database import Base, SessionLocal, engine as db_engine, get_db
 from .seed import seed_if_empty
 
@@ -64,16 +65,33 @@ class EventUpdate(BaseModel):
     safe_capacity: int
 
 
+class RegionUpdate(BaseModel):
+    state: str
+
+
 @app.get("/api/event")
 def get_event(db: Session = Depends(get_db)):
     event = db.query(models.Event).first()
     if not event:
         return {"configured": False}
     return {
-        "configured": True, "id": event.id, "name": event.name,
+        "configured": True, "id": event.id, "name": event.name, "region": event.region,
         "expected_attendance": event.expected_attendance,
         "safe_capacity": event.safe_capacity, "status": event.status,
     }
+
+
+@app.get("/api/regions")
+def list_regions():
+    return [{"state": k, "city": v["city"]} for k, v in INDIA_REGIONS.items()]
+
+
+@app.post("/api/admin/region")
+def admin_apply_region(req: RegionUpdate, db: Session = Depends(get_db)):
+    result = engine.apply_region(db, req.state)
+    if result is None:
+        raise HTTPException(404, "unknown state/UT")
+    return result
 
 
 @app.get("/api/state")
@@ -243,6 +261,29 @@ def admin_update_zone_capacity(zone_id: int, req: ZoneCapacityUpdate, db: Sessio
     zone.capacity = req.capacity
     db.commit()
     return {"id": zone.id, "name": zone.name, "capacity": zone.capacity}
+
+
+@app.get("/api/admin/raw-tables")
+def admin_raw_tables(db: Session = Depends(get_db)):
+    """Every row of every table, straight from the DB — for the raw table
+    viewer page. Debug/inspection only, not used by any real screen."""
+    tables = {
+        "events": models.Event,
+        "zones": models.Zone,
+        "resources": models.Resource,
+        "visitor_profiles": models.VisitorProfile,
+        "user_accounts": models.UserAccount,
+        "sim_state": models.SimState,
+    }
+    out = {}
+    for name, model in tables.items():
+        cols = [c.name for c in model.__table__.columns]
+        rows = db.query(model).all()
+        out[name] = {
+            "columns": cols,
+            "rows": [{c: getattr(r, c) for c in cols} for r in rows],
+        }
+    return out
 
 
 @app.get("/api/admin/users")

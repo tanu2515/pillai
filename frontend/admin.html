@@ -37,6 +37,8 @@
   .btn-primary:hover{ filter:brightness(1.08); }
   .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; }
   .cap-input{ width:110px; text-align:right; padding:6px 8px; font-family:'JetBrains Mono',monospace; }
+  .gauge{ height:5px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; margin-top:6px; width:100%; max-width:160px; }
+  .gauge-fill{ height:100%; border-radius:4px; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 min-h-screen">
@@ -84,6 +86,19 @@
   </div>
 
   <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <h2 class="eyebrow mb-1">Event Region</h2>
+    <p class="text-[10.5px] text-muted mb-3">
+      Re-anchors every zone below to a real venue, transport hub, airport and hotel for the selected
+      state/UT — same 10-zone structure and risk engine, just grounded in a different real place.
+    </p>
+    <div class="flex gap-3 items-center flex-wrap">
+      <select id="region-select" class="p-2.5 text-sm min-w-[220px]"></select>
+      <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="applyRegion()">APPLY REGION</button>
+      <span id="region-status" class="text-xs text-ok"></span>
+    </div>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
     <h2 class="eyebrow mb-3">Zones &amp; Capacities</h2>
     <div id="zones"></div>
   </div>
@@ -97,6 +112,7 @@
 <script>
 async function api(path, opts) { const res = await fetch(path, opts); return res.json(); }
 function row(inner) { return `<div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2 text-sm">${inner}</div>`; }
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
 
 async function loadEvent() {
   const ev = await api("/api/event");
@@ -131,8 +147,9 @@ async function loadZones() {
       <div class="flex-1">
         <div>${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
         ${z.location_note ? `<div class="text-muted text-[10px] font-mono">${z.location_note}</div>` : ""}
+        <div class="gauge"><div class="gauge-fill ${LEVEL_COLOR[z.level]}" style="width:${Math.min(z.capacity_pressure_pct, 100)}%"></div></div>
       </div>
-      <div class="text-muted font-mono text-xs">${z.current_count.toLocaleString()} in use</div>
+      <div class="text-muted font-mono text-xs">${z.current_count.toLocaleString()} in use · ${z.capacity_pressure_pct}%</div>
       <input type="number" class="cap-input" id="cap-${z.id}" value="${z.capacity}" />
       <button class="btn-primary rounded-lg px-3 py-1.5 text-[11px]" onclick="saveCapacity(${z.id})">SAVE</button>
     `)).join("");
@@ -162,9 +179,33 @@ async function deleteUser(id) {
   await loadUsers();
 }
 
+async function loadRegions() {
+  const regions = await api("/api/regions");
+  const select = document.getElementById("region-select");
+  select.innerHTML = regions
+    .sort((a, b) => a.state.localeCompare(b.state))
+    .map(r => `<option value="${r.state}">${r.state} — ${r.city}</option>`).join("");
+  const ev = await api("/api/event");
+  if (ev.configured && ev.region) select.value = ev.region;
+}
+
+async function applyRegion() {
+  const state = document.getElementById("region-select").value;
+  const status = document.getElementById("region-status");
+  status.textContent = "Applying…";
+  await api("/api/admin/region", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }),
+  });
+  status.textContent = "Applied.";
+  setTimeout(() => status.textContent = "", 2000);
+  await loadEvent();
+  await loadZones();
+}
+
 loadEvent();
 loadZones();
 loadUsers();
+loadRegions();
 </script>
 </body>
 </html>

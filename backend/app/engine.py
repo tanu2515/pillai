@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from . import models
+from .regions import INDIA_REGIONS
 
 # --- risk engine (SRS Section 8.2) ------------------------------------
 
@@ -179,6 +180,8 @@ def full_state(db):
             "id": z.id, "name": z.name, "type": z.type, "domain": z.domain,
             "location_note": z.location_note,
             "capacity": z.capacity, "current_count": z.current_count,
+            "linked_transport_zone_id": z.linked_transport_zone_id,
+            "linked_hospitality_zone_id": z.linked_hospitality_zone_id,
             # HIGH/CRITICAL is the operator-facing signal (color-coded, stable);
             # the raw score can dip briefly right when a ramp's per-tick delta
             # hits zero (flow-instability spike), so a HIGH/CRITICAL zone stays
@@ -322,16 +325,31 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
 # approve/override use case).
 CANDIDATE_ACTIONS = [
     dict(id="redirect", label="Redirect 2,000 visitors to Gate 3", domain="venue", resource_type=None, required=0,
-         risk_reduction=40, capacity_balance=70, visitor_experience=55, time_to_impact=95, cost_efficiency=100),
+         risk_reduction=40, capacity_balance=70, visitor_experience=55, time_to_impact=95, cost_efficiency=100,
+         target_zones=["Gate 2"]),
     dict(id="open_gate3", label="Open Gate 3 additional lane", domain="venue", resource_type="staff", required=2,
-         risk_reduction=15, capacity_balance=60, visitor_experience=80, time_to_impact=85, cost_efficiency=80),
+         risk_reduction=15, capacity_balance=60, visitor_experience=80, time_to_impact=85, cost_efficiency=80,
+         target_zones=["Gate 2"]),
     dict(id="dispatch_buses", label="Dispatch 4 buses to Corridor B", domain="transport", resource_type="bus", required=4,
-         risk_reduction=25, capacity_balance=50, visitor_experience=70, time_to_impact=60, cost_efficiency=50),
+         risk_reduction=25, capacity_balance=50, visitor_experience=70, time_to_impact=60, cost_efficiency=50,
+         target_zones=["Corridor B"]),
     dict(id="move_staff", label="Move 6 staff to Gate 2/Gate 3", domain="venue", resource_type="staff", required=6,
-         risk_reduction=10, capacity_balance=40, visitor_experience=65, time_to_impact=70, cost_efficiency=60),
+         risk_reduction=10, capacity_balance=40, visitor_experience=65, time_to_impact=70, cost_efficiency=60,
+         target_zones=["Gate 2", "Gate 3"]),
     dict(id="recommend_hotel_b", label="Recommend Hotel B for new demand", domain="hospitality", resource_type=None, required=0,
-         risk_reduction=12, capacity_balance=55, visitor_experience=75, time_to_impact=90, cost_efficiency=100),
+         risk_reduction=12, capacity_balance=55, visitor_experience=75, time_to_impact=90, cost_efficiency=100,
+         target_zones=["Hotel A"]),
 ]
+
+
+def _action_urgency(db, action):
+    """How hot the zone(s) this action actually affects are right now — lets
+    ranking reflect live state instead of only the action's fixed properties,
+    so e.g. dispatching buses ranks higher once Corridor B is actually under
+    pressure, not just because it's generically a decent action."""
+    zones_by_name = {z.name: z for z in db.query(models.Zone).all()}
+    scores = [zone_risk(zones_by_name[n], db)["score"] for n in action["target_zones"] if n in zones_by_name]
+    return max(scores) if scores else 0
 
 
 def generate_recommendations(db):
@@ -347,15 +365,17 @@ def generate_recommendations(db):
         else:
             feasibility = 100
 
+        urgency = _action_urgency(db, action)
         score = (
-            0.35 * action["risk_reduction"]
-            + 0.20 * action["capacity_balance"]
-            + 0.15 * action["visitor_experience"]
-            + 0.15 * feasibility
-            + 0.10 * action["time_to_impact"]
-            + 0.05 * action["cost_efficiency"]
+            0.28 * action["risk_reduction"]
+            + 0.16 * action["capacity_balance"]
+            + 0.12 * action["visitor_experience"]
+            + 0.12 * feasibility
+            + 0.08 * action["time_to_impact"]
+            + 0.04 * action["cost_efficiency"]
+            + 0.20 * urgency
         )
-        ranked.append({**action, "feasibility": feasibility, "action_score": round(score, 1)})
+        ranked.append({**action, "feasibility": feasibility, "urgency": round(urgency, 1), "action_score": round(score, 1)})
 
     ranked.sort(key=lambda a: a["action_score"], reverse=True)
     return ranked
@@ -427,6 +447,60 @@ def zone_capacity(db, zone_id):
         "current_count": zone.current_count,
         "remaining": max(zone.capacity - zone.current_count, 0),
     }
+
+
+# --- India region grounding (Administrator: Event Configuration) -----------
+# Re-anchors the fixed 10-zone template to a real venue/transport hub/airport/
+# hotel for whichever Indian state/UT is selected — one real-world skin over
+# the same structure and risk engine, not a separate simulation per state.
+
+def apply_region(db, state_name):
+    region = INDIA_REGIONS.get(state_name)
+    if not region:
+        return None
+
+    event = db.query(models.Event).first()
+    city = region["city"]
+    venue = region["venue"] or "the venue"
+
+    event.name = f"{city} Mega Fest"
+    event.region = state_name
+    db.flush()
+
+    zones = {z.name: z for z in db.query(models.Zone).all()}
+
+    if "Main Hall" in zones:
+        mh = zones["Main Hall"]
+        mh.location_note = (f"{venue}, {city}" if region["venue"] else f"Local venue, {city} (not independently confirmed)")
+        if region["venue_capacity"]:
+            ratio = mh.current_count / mh.capacity if mh.capacity else 0
+            mh.capacity = region["venue_capacity"]
+            mh.current_count = round(mh.capacity * ratio)
+            mh.last_count = mh.current_count
+    if "VIP Zone" in zones:
+        zones["VIP Zone"].location_note = f"{venue} VIP stand, {city}"
+    for gate_name in ("Gate 1", "Gate 2", "Gate 3"):
+        if gate_name in zones:
+            zones[gate_name].location_note = f"{venue} {gate_name}, {city}"
+    if "Corridor A" in zones:
+        zones["Corridor A"].location_note = f"Route to {region['airport']}"
+    if "Corridor B" in zones:
+        hub_note = region["transport_hub"] or f"{city}'s transport hub"
+        zones["Corridor B"].location_note = f"Route to {hub_note}"
+    if "Transport Hub" in zones:
+        zones["Transport Hub"].location_note = (
+            region["transport_hub"] if region["transport_hub"] else f"{city} transport hub (not independently confirmed)"
+        )
+    if "Hotel A" in zones:
+        zones["Hotel A"].location_note = region["hotel"] or f"A hotel in {city} (not independently confirmed)"
+    if "Hotel B" in zones:
+        zones["Hotel B"].location_note = (
+            f"{region['hotel']} — second property, {city} (only one hotel independently verified for this region)"
+            if region["hotel"] else f"A second hotel in {city} (not independently confirmed)"
+        )
+
+    db.commit()
+    return {"region": state_name, "event_name": event.name}
 
 
 def gate_advisory(db):
