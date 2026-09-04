@@ -26,6 +26,7 @@ class Event(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
+    region = Column(String, nullable=True)  # key into regions.INDIA_REGIONS
     expected_attendance = Column(Integer, nullable=False)
     safe_capacity = Column(Integer, nullable=False)
     status = Column(String, default="active")

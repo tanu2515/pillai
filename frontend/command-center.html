@@ -62,6 +62,11 @@
   .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); }
   .ai-box{ background:#0F1722; border:1px solid #2C3E56; border-radius:10px; padding:12px; margin-top:10px; }
   .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:#00E5FF; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
+  .gauge{ height:6px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; }
+  .gauge-fill{ height:100%; border-radius:4px; transition:width .4s ease; }
+  .gauge-fill.overflow{ box-shadow:0 0 6px 1px #FF5252 inset; }
+  .flow-pill{ background:#1E2D42; border:1px solid #2C3E56; border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
+  .flow-arrow{ color:#2C3E56; font-size:14px; flex-shrink:0; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 min-h-screen relative">
@@ -110,6 +115,11 @@
       </div>
       <div id="zones"></div>
       <div id="ai-advisor-box" class="ai-box hidden"></div>
+    </section>
+
+    <section class="bg-panel border border-border rounded-xl p-4 mb-4">
+      <h2 class="eyebrow mb-3">Venue Flow Map</h2>
+      <div id="flow-map" class="flex flex-col gap-2.5"></div>
     </section>
   </div>
 
@@ -236,6 +246,15 @@ function renderAiBox(el, result) {
 
 let currentZones = [];
 
+function gaugeBar(z, widthClass) {
+  const pct = Math.min(z.capacity_pressure_pct, 100);
+  const over = z.capacity_pressure_pct > 100;
+  return `
+    <div class="gauge ${widthClass}">
+      <div class="gauge-fill ${LEVEL_COLOR[z.level]} ${over ? "overflow" : ""}" style="width:${pct}%"></div>
+    </div>`;
+}
+
 function renderZones(state) {
   document.getElementById("clock-label").textContent = state.clock + (state.scenario_active ? " — crowd rush in progress" : "");
   currentZones = roleCfg.domain ? state.zones.filter(z => z.domain === roleCfg.domain) : state.zones;
@@ -245,12 +264,55 @@ function renderZones(state) {
       <div class="flex-1">
         <div>${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
         ${z.location_note ? `<div class="text-muted text-[10.5px] font-mono">${z.location_note}</div>` : ""}
+        ${gaugeBar(z, "mt-1.5 w-full max-w-[220px]")}
       </div>
       ${z.ack_status !== "open" ? `<span class="ack-pill ${z.ack_status === 'escalated' ? 'bg-danger/20 text-danger' : 'bg-ok/20 text-ok'}">${z.ack_status.toUpperCase()}</span>` : ""}
       <div class="text-muted font-mono tabular-nums w-16 text-right">${z.capacity_pressure_pct}%</div>
       <div class="font-mono tabular-nums w-32 text-right text-[11px] px-2.5 py-1 rounded-full bg-surface border border-border ${LEVEL_TEXT[z.level]} font-bold">${z.score} · ${z.level}</div>
     </div>
   `).join("");
+  renderFlowMap(state.zones);
+}
+
+// Static gate → transport → hospitality chains from the seed data (a gate's
+// linked_transport/hospitality_zone_id), rendered as connected pills so the
+// spatial relationship between domains is visible, not just a flat list.
+function renderFlowMap(zones) {
+  const byId = Object.fromEntries(zones.map(z => [z.id, z]));
+  const chained = new Set();
+  const chains = [];
+  zones.filter(z => z.type === "gate").forEach(gate => {
+    const chain = [gate];
+    chained.add(gate.id);
+    if (gate.linked_transport_zone_id && byId[gate.linked_transport_zone_id]) {
+      chain.push(byId[gate.linked_transport_zone_id]);
+      chained.add(gate.linked_transport_zone_id);
+    }
+    if (gate.linked_hospitality_zone_id && byId[gate.linked_hospitality_zone_id]) {
+      chain.push(byId[gate.linked_hospitality_zone_id]);
+      chained.add(gate.linked_hospitality_zone_id);
+    }
+    chains.push(chain);
+  });
+  const standalone = zones.filter(z => !chained.has(z.id));
+
+  const pill = z => `
+    <div class="flow-pill" onclick="openRiskModal(${z.id})" style="cursor:pointer">
+      <span class="${LEVEL_TEXT[z.level]} font-bold">${z.name}</span>
+      <span class="text-muted"> · ${z.capacity_pressure_pct}%</span>
+    </div>`;
+
+  const rows = chains.map(chain => `
+    <div class="flex items-center gap-2 flex-wrap">
+      ${chain.map((z, i) => (i > 0 ? `<span class="flow-arrow">→</span>` : "") + pill(z)).join("")}
+    </div>`).join("");
+
+  const standaloneRow = standalone.length ? `
+    <div class="flex items-center gap-2 flex-wrap pt-2 border-t border-border mt-1">
+      ${standalone.map(pill).join("")}
+    </div>` : "";
+
+  document.getElementById("flow-map").innerHTML = rows + standaloneRow;
 }
 
 async function refresh() {
@@ -260,7 +322,10 @@ async function refresh() {
   const recs = roleCfg.domain ? allRecs.filter(r => r.domain === roleCfg.domain) : allRecs;
   document.getElementById("recs").innerHTML = recs.map(r => `
     <div class="row-card p-3 mb-2 text-sm flex items-center justify-between">
-      <span>${r.label}</span>
+      <div>
+        <div>${r.label}</div>
+        <div class="text-muted text-[10px] font-mono mt-0.5">target zone urgency: ${r.urgency}</div>
+      </div>
       <span class="text-ok font-mono font-bold tabular-nums">${r.action_score}</span>
     </div>
   `).join("") || `<div class="text-xs text-muted">No feasible actions in your area right now.</div>`;
