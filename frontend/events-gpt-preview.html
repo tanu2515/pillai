@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Home</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { colors: {
+      bg: "#F5FAFF", panel: "#FFFFFF", surface: "#FFFFFF", border: "#E7EEF7",
+      muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+      green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E", high: "#F87171", danger: "#DC2626",
+      pastelBlue: "#E4F1FF", pastelGreen: "#DFFBF1", pastelMint: "#EAFBF6",
+    }, fontFamily: { sans: ["Manrope","system-ui","sans-serif"], mono: ["JetBrains Mono","ui-monospace","monospace"] } } },
+  };
+</script>
+<style>
+  body{
+    background:
+      radial-gradient(circle at 12% 8%, rgba(25,118,210,.06), transparent 45%),
+      radial-gradient(circle at 88% 92%, rgba(32,201,151,.07), transparent 45%),
+      #F5FAFF;
+    padding-bottom:40px;
+  }
+  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  input[type=text]{ background:#FFFFFF; border:1px solid #E7EEF7; color:#123B6D; border-radius:14px; transition:.15s; }
+  input[type=text]:focus{ outline:none; border-color:#1976D2; box-shadow:0 0 0 4px rgba(25,118,210,.1); }
+  .eyebrow{ font-size:11px; font-weight:800; letter-spacing:.14em; color:#123B6D; }
+
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+  .fade-up{ animation: fadeUp .5s cubic-bezier(.2,.8,.2,1) both; }
+
+  .top-nav{ position:sticky; top:0; z-index:40; background:rgba(245,250,255,.85); backdrop-filter:blur(10px); border-bottom:1px solid #E7EEF7; }
+  .nav-link{ font-size:13px; font-weight:700; color:#64748B; text-decoration:none; padding:8px 14px; border-radius:10px; transition:.15s; }
+  .nav-link:hover{ background:#E4F1FF; color:#1976D2; }
+  .nav-link.active{ background:#1976D2; color:#fff; }
+
+  .search-wrap{ position:relative; }
+  .search-wrap .icon{ position:absolute; left:16px; top:50%; transform:translateY(-50%); color:#64748B; pointer-events:none; }
+  .search-wrap input{ padding-left:44px !important; }
+
+  .chip{ flex-shrink:0; padding:8px 16px; border-radius:20px; font-size:12px; font-weight:700; background:#FFFFFF; border:1px solid #E7EEF7; color:#123B6D; cursor:pointer; white-space:nowrap; transition:.15s; }
+  .chip:hover{ border-color:#1976D2; transform:translateY(-1px); }
+  .chip.active{ background:#123B6D; border-color:#123B6D; color:#fff; }
+  .chip-row{ display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
+  .chip-row::-webkit-scrollbar{ display:none; }
+
+  .event-card{ background:#FFFFFF; border:1px solid #E7EEF7; border-radius:18px; box-shadow:0 2px 8px rgba(18,59,109,.05); transition:.2s cubic-bezier(.2,.8,.2,1); cursor:pointer; overflow:hidden; }
+  .event-card:hover{ transform:translateY(-4px); box-shadow:0 14px 28px rgba(18,59,109,.12); border-color:#1976D2; }
+  .event-banner{ height:110px; display:flex; align-items:center; justify-content:center; font-size:42px; background:linear-gradient(135deg, #E4F1FF, #DFFBF1); transition:.3s; }
+  .event-card:hover .event-banner{ background:linear-gradient(135deg, #DFFBF1, #E4F1FF); }
+  .live-pill{ font-size:9.5px; font-weight:800; letter-spacing:.06em; color:#fff; background:#22C55E; border-radius:20px; padding:3px 9px; }
+  .cat-pill{ font-size:9.5px; font-weight:700; letter-spacing:.03em; color:#1976D2; background:#E4F1FF; border-radius:20px; padding:3px 9px; }
+  .empty-state{ text-align:center; padding:36px 16px; color:#64748B; font-size:13px; grid-column:1/-1; }
+
+  .chat-fab{ position:fixed; bottom:26px; right:26px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#1976D2,#20C997); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 8px 24px rgba(25,118,210,.35); z-index:60; border:none; transition:.2s; }
+  .chat-fab:hover{ transform:scale(1.08) rotate(8deg); }
+  .chat-panel{ position:fixed; bottom:94px; right:26px; width:340px; max-width:calc(100vw - 40px); height:420px; max-height:calc(100vh - 160px); background:#FFFFFF; border:1.5px solid rgba(25,118,210,.25); border-radius:18px; box-shadow:0 24px 60px rgba(18,59,109,.18); z-index:60; display:none; flex-direction:column; overflow:hidden; transform-origin:bottom right; }
+  .chat-panel.show{ display:flex; animation: popIn .25s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes popIn{ from{ opacity:0; transform:scale(.9) translateY(8px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+  .chat-header{ padding:14px 16px; border-bottom:1px solid #E7EEF7; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#123B6D; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; background:#EAFBF6; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:9px; }
+  .chat-msg{ max-width:85%; padding:9px 12px; border-radius:12px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
+  .chat-msg.user{ align-self:flex-end; background:#1976D2; color:#fff; font-weight:600; }
+  .chat-msg.bot{ align-self:flex-start; background:#F5FAFF; border:1px solid #E7EEF7; color:#123B6D; }
+  .chat-input-row{ display:flex; gap:6px; padding:12px; border-top:1px solid #E7EEF7; flex-shrink:0; }
+  .chat-input-row input{ flex:1; padding:9px 12px !important; font-size:12.5px; border-radius:10px; }
+  .chat-input-row button{ background:#1976D2; color:#fff; border:none; border-radius:10px; padding:0 16px; font-weight:800; font-size:12px; cursor:pointer; transition:.15s; }
+  .chat-input-row button:hover{ background:#123B6D; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#1976D2; background:#E4F1FF; border:1px solid rgba(25,118,210,.25); border-radius:20px; padding:2px 7px; margin-top:6px; }
+</style>
+</head>
+<body class="bg-bg text-ink font-sans m-0 min-h-screen">
+
+<nav class="top-nav">
+  <div class="max-w-7xl mx-auto px-6 lg:px-10 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-9 h-9 rounded-lg" />
+      <span class="brand-mark text-lg font-extrabold tracking-[0.02em]">VYAVASTHA</span>
+    </div>
+    <div class="hidden md:flex items-center gap-1">
+      <a href="events.html" class="nav-link active">Home</a>
+      <a href="events.html?explore=1" class="nav-link">Explore</a>
+      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="notifications.html" class="nav-link">Alerts</a>
+      <a href="attendee.html" class="nav-link">Live Status</a>
+    </div>
+    <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
+  </div>
+</nav>
+
+<header class="max-w-7xl mx-auto px-6 lg:px-10 pt-8 pb-2 fade-up">
+  <h1 class="text-2xl font-extrabold m-0">Discover events near you</h1>
+  <p class="text-muted text-sm mt-1">Find, register, and stay safe — from the moment you book to the moment you leave.</p>
+</header>
+
+<section class="max-w-7xl mx-auto px-6 lg:px-10 mt-5 fade-up" style="animation-delay:.04s">
+  <div class="rounded-3xl overflow-hidden border border-[#DCEAF7] shadow-sm" style="background:linear-gradient(135deg,#123B6D 0%,#1976D2 58%,#20C997 100%);">
+    <div class="px-6 py-7 md:px-8 md:py-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      <div class="text-white max-w-2xl">
+        <div class="text-[10px] font-extrabold tracking-[.18em] uppercase opacity-80">VYAVASTHA · SMART EVENT EXPERIENCE</div>
+        <h2 class="text-2xl md:text-3xl font-black mt-2">Book your event. We’ll help you through the day.</h2>
+        <p class="text-sm mt-2 text-white/85 max-w-xl">Discover events, register in seconds, get your QR pass, and receive live gate, crowd, transport and safety updates.</p>
+        <div class="flex flex-wrap gap-2 mt-4">
+          <span class="px-3 py-1.5 rounded-full bg-white/15 text-[10px] font-bold">🎟️ Easy registration</span>
+          <span class="px-3 py-1.5 rounded-full bg-white/15 text-[10px] font-bold">📍 Live venue status</span>
+          <span class="px-3 py-1.5 rounded-full bg-white/15 text-[10px] font-bold">🤖 AI assistance</span>
+        </div>
+      </div>
+      <a href="events.html?explore=1" class="self-start md:self-center bg-white text-[#123B6D] px-5 py-3 rounded-xl text-xs font-extrabold shadow-lg hover:scale-[1.02] transition">EXPLORE EVENTS →</a>
+    </div>
+  </div>
+</section>
+
+<section class="max-w-7xl mx-auto px-6 lg:px-10 mt-5 fade-up" style="animation-delay:.05s">
+  <div class="search-wrap max-w-xl">
+    <span class="icon">🔍</span>
+    <input type="text" id="search" placeholder="Search events, venues, cities..." class="w-full p-3.5 text-sm" oninput="onSearchInput()" />
+  </div>
+</section>
+
+<section class="max-w-7xl mx-auto px-6 lg:px-10 mt-5 fade-up" style="animation-delay:.1s">
+  <div class="chip-row" id="category-chips"></div>
+</section>
+
+<section class="max-w-7xl mx-auto px-6 lg:px-10 mt-4">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="rounded-2xl bg-white border border-[#E7EEF7] px-4 py-3"><div class="text-lg">🎫</div><div class="font-extrabold text-xs mt-1">Digital Pass</div><div class="text-[10px] text-muted mt-0.5">QR ready after registration</div></div>
+    <div class="rounded-2xl bg-white border border-[#E7EEF7] px-4 py-3"><div class="text-lg">🚦</div><div class="font-extrabold text-xs mt-1">Live Crowd</div><div class="text-[10px] text-muted mt-0.5">See gate conditions</div></div>
+    <div class="rounded-2xl bg-white border border-[#E7EEF7] px-4 py-3"><div class="text-lg">🚌</div><div class="font-extrabold text-xs mt-1">Transport</div><div class="text-[10px] text-muted mt-0.5">Updates when it matters</div></div>
+    <div class="rounded-2xl bg-white border border-[#E7EEF7] px-4 py-3"><div class="text-lg">🤖</div><div class="font-extrabold text-xs mt-1">Ask Vyavastha</div><div class="text-[10px] text-muted mt-0.5">Natural-language help</div></div>
+  </div>
+</section>
+
+<div id="explore-view" class="hidden max-w-7xl mx-auto px-6 lg:px-10">
+  <section class="my-6 flex items-center justify-between">
+    <h2 class="eyebrow m-0">All events</h2>
+  </section>
+  <section id="explore-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></section>
+</div>
+
+<div id="home-view" class="max-w-7xl mx-auto px-6 lg:px-10">
+  <section class="my-6 fade-up" style="animation-delay:.15s">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="eyebrow m-0">Upcoming events</h2>
+      <a href="events.html?explore=1" class="text-accent text-xs font-bold uppercase hover:underline">See all →</a>
+    </div>
+    <div id="rail-upcoming" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+  </section>
+
+  <section class="my-6 fade-up" style="animation-delay:.2s">
+    <h2 class="eyebrow mb-3">Popular events</h2>
+    <div id="rail-popular" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+  </section>
+
+  <section class="my-6 fade-up" style="animation-delay:.25s">
+    <h2 class="eyebrow mb-3">Events near you</h2>
+    <div id="rail-near" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+  </section>
+
+  <section class="my-6 fade-up" style="animation-delay:.3s">
+    <h2 class="eyebrow mb-3">Recommended for you</h2>
+    <div id="rail-recommended" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+  </section>
+
+  <section class="my-6 fade-up" style="animation-delay:.35s">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="eyebrow m-0">Live now</h2>
+      <a href="attendee.html" class="text-accent text-xs font-bold uppercase hover:underline">Live gate status →</a>
+    </div>
+    <div id="rail-live" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+  </section>
+</div>
+
+<!-- Mobile bottom nav (laptop view uses the top nav above) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-40" style="border-color:#E7EEF7;">
+  <a href="events.html" class="flex flex-col items-center text-[9.5px] font-bold text-accent">🏠 Home</a>
+  <a href="events.html?explore=1" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🔍 Explore</a>
+  <a href="my-events.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🎟️ Events</a>
+  <a href="notifications.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🔔 Alerts</a>
+  <a href="profile.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">👤 Profile</a>
+</nav>
+
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask Vyavastha">💬</button>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <span>Ask Vyavastha</span>
+    <button onclick="toggleChat()" style="background:none;border:none;color:#64748B;font-size:16px;cursor:pointer;">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages">
+    <div class="chat-msg bot">Ask me about a gate, hotel, or transport for the live event — or try "where is my event", "which gate should I use".</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendChat()" />
+    <button onclick="sendChat()">Send</button>
+  </div>
+</div>
+
+<script>
+const API = "";
+async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+
+function fmtDate(e) {
+  if (!e.event_date) return "Date TBA";
+  const d = new Date(e.event_date);
+  const dateStr = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return e.event_time ? `${dateStr} · ${e.event_time}` : dateStr;
+}
+function fmtPrice(e) {
+  if (e.min_price == null) return "";
+  return e.min_price === e.max_price ? `₹${e.min_price.toLocaleString()}` : `From ₹${e.min_price.toLocaleString()}`;
+}
+
+function eventCard(e, i) {
+  return `
+    <div class="event-card fade-up" style="animation-delay:${Math.min(i * 0.05, 0.4)}s" onclick="location.href='event-detail.html?id=${e.id}'">
+      <div class="event-banner">${e.banner_emoji}</div>
+      <div class="p-4">
+        <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+          ${e.status === "live" ? '<span class="live-pill">LIVE</span>' : ""}
+          ${e.category ? `<span class="cat-pill">${e.category}</span>` : ""}
+        </div>
+        <div class="font-bold text-sm leading-tight">${e.name}</div>
+        <div class="text-muted text-xs mt-1.5 font-mono">${fmtDate(e)}</div>
+        <div class="text-muted text-xs">${e.venue_name || ""}${e.city ? (e.venue_name ? " · " : "") + e.city : ""}</div>
+        <div class="flex items-center justify-between mt-3">
+          <span class="text-accent font-mono font-bold text-sm">${fmtPrice(e)}</span>
+          <span class="text-[10px] ${e.registration_status === "Sold Out" ? "text-high" : "text-ok"} font-bold uppercase">${e.registration_status}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderRail(id, events, emptyMsg) {
+  const el = document.getElementById(id);
+  el.innerHTML = events.length ? events.map(eventCard).join("") : `<div class="empty-state">${emptyMsg}</div>`;
+}
+
+async function loadCategories() {
+  const cats = await api("/api/event-categories");
+  const wrap = document.getElementById("category-chips");
+  wrap.innerHTML = ['All', ...cats].map(c =>
+    `<div class="chip ${c === 'All' && !activeCategory ? 'active' : (c === activeCategory ? 'active' : '')}" data-cat="${c === 'All' ? '' : c}" onclick="selectCategory(this)">${c}</div>`
+  ).join("");
+}
+
+let activeCategory = new URLSearchParams(location.search).get("category") || "";
+
+function selectCategory(el) {
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  el.classList.add("active");
+  activeCategory = el.dataset.cat;
+  // Category filtering only makes sense against the full/searchable list, not the
+  // curated Home rails — so picking one always takes you into Explore, same as search.
+  const url = new URLSearchParams({ explore: "1" });
+  if (activeCategory) url.set("category", activeCategory);
+  if (isExploreMode()) {
+    history.replaceState(null, "", `events.html?${url}`);
+    loadExplore();
+  } else {
+    location.href = `events.html?${url}`;
+  }
+}
+
+function isExploreMode() {
+  return new URLSearchParams(location.search).get("explore") === "1";
+}
+
+async function loadExplore() {
+  document.getElementById("home-view").classList.add("hidden");
+  document.getElementById("explore-view").classList.remove("hidden");
+  document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
+  document.querySelector('.nav-link[href="events.html?explore=1"]')?.classList.add("active");
+  const search = document.getElementById("search").value.trim();
+  const qs = new URLSearchParams();
+  if (search) qs.set("search", search);
+  if (activeCategory) qs.set("category", activeCategory);
+  const events = await api(`/api/events?${qs}`);
+  document.getElementById("explore-list").innerHTML = events.length
+    ? events.map(eventCard).join("")
+    : `<div class="empty-state">No events found${activeCategory ? " in " + activeCategory : ""}${search ? ` for "${search}"` : ""}.</div>`;
+}
+
+async function loadHomeSections() {
+  const [upcoming, popular, near, recommended, all] = await Promise.all([
+    api("/api/events?section=upcoming"),
+    api("/api/events?section=popular"),
+    api("/api/events?section=near_you"),
+    api("/api/events?section=recommended"),
+    api("/api/events"),
+  ]);
+  renderRail("rail-upcoming", upcoming.slice(0, 8), "No upcoming events right now.");
+  renderRail("rail-popular", popular, "No popular events yet.");
+  renderRail("rail-near", near.filter(e => e.status !== "live"), "No events near you yet.");
+  renderRail("rail-recommended", recommended.slice().reverse(), "Nothing recommended yet.");
+  renderRail("rail-live", all.filter(e => e.status === "live"), "No event is live right now.");
+}
+
+let searchTimer;
+function onSearchInput() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (!isExploreMode()) { location.href = "events.html?explore=1"; return; }
+    loadExplore();
+  }, 300);
+}
+
+(async function init() {
+  await loadCategories();
+  if (isExploreMode()) { await loadExplore(); } else { await loadHomeSections(); }
+})();
+
+function groundedTag(list) {
+  return list && list.length ? `<span class="grounded-tag">GROUNDED IN: ${list.join(", ")}</span>` : "";
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function toggleChat() {
+  document.getElementById("chat-panel").classList.toggle("show");
+  if (document.getElementById("chat-panel").classList.contains("show")) document.getElementById("chat-input").focus();
+}
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const question = input.value.trim();
+  if (!question) return;
+  const messages = document.getElementById("chat-messages");
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${escapeHtml(question)}</div>`);
+  input.value = "";
+  messages.scrollTop = messages.scrollHeight;
+  const result = await api("/api/chatbot/ask", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }),
+  });
+  const tag = groundedTag(result.grounded_in);
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg bot">${escapeHtml(result.text).replace(/\n/g, "<br>")}${tag}</div>`);
+  messages.scrollTop = messages.scrollHeight;
+}
+</script>
+</body>
+</html>

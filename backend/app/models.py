@@ -97,6 +97,10 @@ class Zone(Base):
     peak_count = Column(Integer, default=0)  # highest current_count ever seen — for post-event analytics
     peak_tick = Column(Integer, default=0)
     price_tier = Column(Integer, nullable=True)  # hotels only: 1 (budget) - 5 (luxury), for the recommendation ranker
+    staff_assigned = Column(Integer, nullable=True)  # gates only: staff headcount, set on the Event Setup Form
+    contact = Column(String, nullable=True)  # hotels/transport: phone or booking contact
+    amenities = Column(String, nullable=True)  # hotels only: comma-separated, e.g. "WiFi, Breakfast, Shuttle"
+    manual_recommended = Column(Boolean, default=False)  # hotels only: operator override — beats the algorithmic pick
     # A gate can point at the transport zone its exiting crowd flows onto, and
     # at the hospitality zone that absorbs same-night overflow demand — used
     # to compute that gate's resource_pressure factor (SRS Section 8.2).

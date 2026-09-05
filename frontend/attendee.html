@@ -3,139 +3,188 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>VYAVASTHA — Attendee</title>
+<title>VYAVASTHA — Live Event Status</title>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          bg: "#EAF7F4",
-          panel: "#FFFFFF",
-          surface: "#FFFFFF",
-          border: "#E2E8F0",
-          muted: "#64748B",
-          ink: "#123B6D",
-          accent: "#1976D2",
-          accentDim: "#123B6D",
-          green: "#20C997",
-          greenLight: "#5BE7A9",
-          warn: "#F59E0B",
-          ok: "#22C55E",
-          high: "#F87171",
-          danger: "#DC2626",
-        },
-        fontFamily: {
-          sans: ["Manrope", "system-ui", "sans-serif"],
-          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
-        },
-      },
-    },
+    theme: { extend: { colors: {
+      bg: "#F5FAFF", panel: "#FFFFFF", surface: "#FFFFFF", border: "#E7EEF7",
+      muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+      green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E", high: "#F87171", danger: "#DC2626",
+      pastelBlue: "#E4F1FF", pastelGreen: "#DFFBF1",
+    }, fontFamily: { sans: ["Manrope","system-ui","sans-serif"], mono: ["JetBrains Mono","ui-monospace","monospace"] } } },
   };
 </script>
 <style>
-  body{
-    background-image:
-      radial-gradient(circle at 50% 0%, rgba(25,118,210,.06), transparent 40%),
-      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 40%),
-      linear-gradient(#E2E8F0 1px, transparent 1px),
-      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
-    background-size:auto, auto, 32px 32px, 32px 32px;
-    background-color:#EAF7F4;
-  }
-  .tick{ width:3px; height:18px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); display:inline-block; vertical-align:-3px; margin-right:8px; }
+  body{ background: radial-gradient(circle at 10% 5%, rgba(25,118,210,.06), transparent 45%), radial-gradient(circle at 90% 90%, rgba(32,201,151,.07), transparent 45%), #F5FAFF; }
   .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  input[type=text]{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:12px; }
-  input[type=text]:focus, select:focus{ outline:none; border-color:#1976D2; }
-  select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:12px; }
+  input[type=text], select{ background:#FFFFFF; border:1px solid #E7EEF7; color:#123B6D; border-radius:12px; transition:.15s; }
+  input[type=text]:focus, select:focus{ outline:none; border-color:#1976D2; box-shadow:0 0 0 4px rgba(25,118,210,.1); }
   select option{ background:#FFFFFF; color:#123B6D; }
-  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.08em; transition:.15s; }
-  .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-secondary{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; font-weight:800; letter-spacing:.08em; transition:.15s; }
-  .btn-secondary:hover{ border-color:#1976D2; }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
-  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
-  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#1976D2; background:rgba(25,118,210,.08); border:1px solid rgba(25,118,210,.3); border-radius:20px; padding:2px 7px; margin-top:6px; }
-  .gauge{ height:5px; border-radius:4px; background:#F1F5F9; border:1px solid #E2E8F0; overflow:hidden; margin-top:6px; }
-  .gauge-fill{ height:100%; border-radius:4px; }
-  .chat-fab{ position:fixed; bottom:20px; right:20px; width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#1976D2,#20C997); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; box-shadow:0 6px 20px rgba(25,118,210,.35); z-index:60; border:none; }
-  .chat-fab:hover{ filter:brightness(1.08); }
-  .chat-panel{ position:fixed; bottom:82px; right:16px; width:300px; max-width:calc(100vw - 32px); height:400px; max-height:calc(100vh - 110px); background:#FFFFFF; border:1.5px solid rgba(25,118,210,.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); z-index:60; display:none; flex-direction:column; overflow:hidden; }
-  .chat-panel.show{ display:flex; }
-  .chat-header{ padding:12px 14px; border-bottom:1px solid #E2E8F0; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#123B6D; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
-  .chat-messages{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
-  .chat-msg{ max-width:85%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.02em; transition:.2s; }
+  .btn-primary:hover{ background:#123B6D; transform:translateY(-1px); box-shadow:0 8px 20px rgba(25,118,210,.3); }
+  .btn-secondary{ background:#E4F1FF; border:1px solid transparent; color:#123B6D; font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:#D2E9FF; }
+  .eyebrow{ font-size:11px; font-weight:800; letter-spacing:.14em; color:#123B6D; }
+  .card{ background:#FFFFFF; border:1px solid #E7EEF7; border-radius:16px; box-shadow:0 2px 8px rgba(18,59,109,.04); }
+  .row-card{ background:#FFFFFF; border:1px solid #E7EEF7; border-radius:12px; box-shadow:0 1px 2px rgba(18,59,109,.04); transition:.15s; }
+  .row-card:hover{ transform:translateY(-2px); box-shadow:0 6px 14px rgba(18,59,109,.08); }
+  .gauge{ height:6px; border-radius:4px; background:#F1F5F9; border:1px solid #E7EEF7; overflow:hidden; margin-top:6px; }
+  .gauge-fill{ height:100%; border-radius:4px; transition:width .5s ease; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#1976D2; background:#E4F1FF; border:1px solid rgba(25,118,210,.25); border-radius:20px; padding:2px 7px; margin-top:6px; }
+
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+  .fade-up{ animation: fadeUp .45s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes alertPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(220,38,38,.25); } 50%{ box-shadow:0 0 0 8px rgba(220,38,38,0); } }
+  .live-alert{ animation: alertPulse 2s ease-in-out infinite; }
+
+  .top-nav{ position:sticky; top:0; z-index:40; background:rgba(245,250,255,.85); backdrop-filter:blur(10px); border-bottom:1px solid #E7EEF7; }
+  .nav-link{ font-size:13px; font-weight:700; color:#64748B; text-decoration:none; padding:8px 14px; border-radius:10px; transition:.15s; }
+  .nav-link:hover{ background:#E4F1FF; color:#1976D2; }
+  .nav-link.active{ background:#1976D2; color:#fff; }
+
+  .stat-tile{ background:#FFFFFF; border:1px solid #E7EEF7; border-radius:14px; padding:16px; text-align:center; }
+  .stat-value{ font-size:20px; font-weight:800; }
+  .sticky-panel{ position:sticky; top:88px; }
+  #map{ height:220px; border-radius:14px; margin-top:12px; }
+
+  .chat-fab{ position:fixed; bottom:26px; right:26px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#1976D2,#20C997); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 8px 24px rgba(25,118,210,.35); z-index:60; border:none; transition:.2s; }
+  .chat-fab:hover{ transform:scale(1.08) rotate(8deg); }
+  .chat-panel{ position:fixed; bottom:94px; right:26px; width:340px; max-width:calc(100vw - 40px); height:420px; max-height:calc(100vh - 160px); background:#FFFFFF; border:1.5px solid rgba(25,118,210,.25); border-radius:18px; box-shadow:0 24px 60px rgba(18,59,109,.18); z-index:60; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel.show{ display:flex; animation: popIn .25s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes popIn{ from{ opacity:0; transform:scale(.9) translateY(8px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+  .chat-header{ padding:14px 16px; border-bottom:1px solid #E7EEF7; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#123B6D; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; background:#EAFBF6; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:9px; }
+  .chat-msg{ max-width:85%; padding:9px 12px; border-radius:12px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
   .chat-msg.user{ align-self:flex-end; background:#1976D2; color:#fff; font-weight:600; }
-  .chat-msg.bot{ align-self:flex-start; background:#F1F5F9; border:1px solid #E2E8F0; color:#123B6D; }
-  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #E2E8F0; flex-shrink:0; }
-  .chat-input-row input{ flex:1; padding:8px 10px !important; font-size:12.5px; }
-  .chat-input-row button{ background:#1976D2; color:#fff; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
+  .chat-msg.bot{ align-self:flex-start; background:#F5FAFF; border:1px solid #E7EEF7; color:#123B6D; }
+  .chat-input-row{ display:flex; gap:6px; padding:12px; border-top:1px solid #E7EEF7; flex-shrink:0; }
+  .chat-input-row input{ flex:1; padding:9px 12px !important; font-size:12.5px; border-radius:10px; }
+  .chat-input-row button{ background:#1976D2; color:#fff; border:none; border-radius:10px; padding:0 16px; font-weight:800; font-size:12px; cursor:pointer; }
 </style>
 </head>
-<body class="bg-bg text-ink font-sans m-0 max-w-md mx-auto pb-8 min-h-screen">
-<header class="px-4 pt-6 pb-2 text-center">
-  <div class="flex items-center justify-between text-xs font-mono">
-    <a href="/" class="text-muted">&larr; HOME</a>
-    <a href="events.html" class="text-accent font-bold">BROWSE EVENTS →</a>
+<body class="bg-bg text-ink font-sans m-0 min-h-screen pb-10">
+
+<nav class="top-nav">
+  <div class="max-w-7xl mx-auto px-6 lg:px-10 py-3 flex items-center justify-between">
+    <a href="events.html" class="flex items-center gap-2.5 no-underline">
+      <img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-9 h-9 rounded-lg" />
+      <span class="brand-mark text-lg font-extrabold tracking-[0.02em]">VYAVASTHA</span>
+    </a>
+    <div class="hidden md:flex items-center gap-1">
+      <a href="events.html" class="nav-link">Home</a>
+      <a href="events.html?explore=1" class="nav-link">Explore</a>
+      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="notifications.html" class="nav-link">Alerts</a>
+      <a href="attendee.html" class="nav-link active">Live Status</a>
+    </div>
+    <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
   </div>
-  <div class="flex items-center justify-center gap-2 mt-4 mb-1">
-    <img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-7 h-7 rounded-lg" />
-    <h1 id="event-title" class="brand-mark text-xl font-extrabold m-0 tracking-[0.03em]">VYAVASTHA</h1>
+</nav>
+
+<header class="max-w-7xl mx-auto px-6 lg:px-10 pt-8 pb-2 fade-up">
+  <div class="flex items-center gap-2 flex-wrap">
+    <h1 class="text-2xl font-extrabold m-0">Live Event Status</h1>
+    <span class="live-dot"></span>
   </div>
-  <p class="text-muted text-xs m-0 font-mono">Visitor Advisory</p>
+  <p id="event-title" class="text-muted text-sm mt-1 font-mono">Loading event…</p>
 </header>
 
-<section id="event-switcher" class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
-  <h2 class="eyebrow mb-3">Your Events</h2>
-  <div id="event-switcher-noemail" class="hidden">
-    <p class="text-muted text-xs mb-2">Sign in to register for events and switch between them.</p>
-    <input type="email" id="switcher-email" placeholder="you@example.com" class="w-full p-2.5 text-sm mb-2" />
-    <button class="btn-secondary w-full p-2.5 rounded-lg text-xs" onclick="saveSwitcherEmail()">CONTINUE</button>
-  </div>
-  <div id="event-switcher-body" class="hidden">
-    <div id="my-events-list" class="mb-3"></div>
-    <button class="btn-primary w-full p-2.5 rounded-lg text-xs" onclick="registerForCurrentEvent()">REGISTER FOR CURRENT EVENT</button>
-    <div id="switcher-status" class="text-xs text-muted mt-2"></div>
-  </div>
-</section>
-
-<section id="suggestion-box" class="mx-4 my-4 bg-accent/10 border border-accent/40 rounded-2xl p-4 hidden">
-  <h2 class="eyebrow mb-2 text-accent">Alternate Gate Suggestion</h2>
-  <p id="suggestion-text" class="text-sm m-0 leading-relaxed"></p>
-</section>
-
-<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
-  <h2 class="eyebrow mb-3">Gate status — spots remaining</h2>
-  <div id="gates"></div>
-  <div id="ai-advisory-box" class="hidden mt-3 pt-3 border-t border-border">
-    <p id="ai-advisory-text" class="text-sm m-0 leading-relaxed text-accent"></p>
-    <div id="ai-advisory-tag"></div>
+<!-- LIVE ALERT banner -->
+<section id="live-alert-banner" class="max-w-7xl mx-auto px-6 lg:px-10 mt-4 hidden fade-up">
+  <div class="live-alert rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap" style="background:#FEF2F2; border:1.5px solid #F87171;">
+    <div class="flex items-start gap-3">
+      <span class="text-2xl">⚠️</span>
+      <div>
+        <div class="font-extrabold text-sm text-danger">LIVE ALERT</div>
+        <p id="live-alert-text" class="text-sm m-0 mt-0.5"></p>
+      </div>
+    </div>
+    <button class="btn-secondary rounded-lg px-4 py-2 text-xs flex-shrink-0" onclick="document.getElementById('map').scrollIntoView({behavior:'smooth', block:'center'})">OPEN MAP</button>
   </div>
 </section>
 
-<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
-  <h2 class="eyebrow mb-3">Register</h2>
-  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Your name</label>
-  <input type="text" id="name" placeholder="Full name" class="w-full p-3 text-base" />
-  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-3 mb-1.5">Which gate will you use?</label>
-  <select id="gate" class="w-full p-3 text-base"></select>
-  <button class="btn-primary w-full mt-4 p-3.5 rounded-xl text-sm" onclick="register()">GET MY ENTRY CODE</button>
-  <div id="reg-result"></div>
-</section>
+<div class="max-w-7xl mx-auto px-6 lg:px-10 mt-6">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-<section class="mx-4 my-4 bg-panel border border-border rounded-2xl p-4">
-  <h2 class="eyebrow mb-3">Check in at the gate</h2>
-  <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Entry code</label>
-  <input type="text" id="code" placeholder="8-character code" class="w-full p-3 text-base font-mono" />
-  <button class="btn-secondary w-full mt-4 p-3.5 rounded-xl text-sm" onclick="checkin()">CHECK IN</button>
-  <div id="checkin-result"></div>
-</section>
+    <div class="lg:col-span-2">
+      <!-- Venue / Crowd / Your Gate summary -->
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 fade-up" style="animation-delay:.05s">
+        <div class="stat-tile">
+          <div class="eyebrow mb-1">Venue</div>
+          <div id="stat-venue" class="stat-value text-ink">—</div>
+        </div>
+        <div class="stat-tile">
+          <div class="eyebrow mb-1">Crowd</div>
+          <div id="stat-crowd" class="stat-value">—</div>
+        </div>
+        <div class="stat-tile">
+          <div class="eyebrow mb-1">Your Gate</div>
+          <div id="stat-your-gate" class="stat-value text-accent">—</div>
+        </div>
+      </section>
 
-<p class="text-center text-muted text-[10px] font-mono tracking-wide mt-6">BYTE ALCHEMY &middot; PS-8</p>
+      <section id="event-switcher" class="card p-5 mt-6 fade-up" style="animation-delay:.1s">
+        <h2 class="eyebrow mb-3">Your Events</h2>
+        <div id="event-switcher-noemail" class="hidden">
+          <p class="text-muted text-xs mb-2">Sign in to register for events and switch between them.</p>
+          <input type="email" id="switcher-email" placeholder="you@example.com" class="w-full p-2.5 text-sm mb-2" />
+          <button class="btn-secondary w-full p-2.5 rounded-lg text-xs" onclick="saveSwitcherEmail()">CONTINUE</button>
+        </div>
+        <div id="event-switcher-body" class="hidden">
+          <div id="my-events-list" class="mb-3"></div>
+          <button class="btn-primary w-full p-2.5 rounded-lg text-xs" onclick="registerForCurrentEvent()">REGISTER FOR CURRENT EVENT</button>
+          <div id="switcher-status" class="text-xs text-muted mt-2"></div>
+        </div>
+      </section>
+
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.15s">
+        <h2 class="eyebrow mb-3">Gate status — spots remaining</h2>
+        <div id="gates" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        <div id="map" class="hidden"></div>
+        <div id="ai-advisory-box" class="hidden mt-3 pt-3 border-t" style="border-color:#E7EEF7;">
+          <p id="ai-advisory-text" class="text-sm m-0 leading-relaxed text-accent"></p>
+          <div id="ai-advisory-tag"></div>
+        </div>
+      </section>
+
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.2s">
+        <h2 class="eyebrow mb-3">🕒 Best time to arrive</h2>
+        <div id="offpeak-list" class="text-sm"></div>
+      </section>
+    </div>
+
+    <div class="lg:col-span-1">
+      <div class="sticky-panel fade-up" style="animation-delay:.1s">
+        <section class="card p-5 mb-5">
+          <h2 class="eyebrow mb-3">Register</h2>
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Your name</label>
+          <input type="text" id="name" placeholder="Full name" class="w-full p-3 text-sm" />
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-3 mb-1.5">Which gate will you use?</label>
+          <select id="gate" class="w-full p-3 text-sm"></select>
+          <button class="btn-primary w-full mt-4 p-3 rounded-xl text-sm" onclick="register()">GET MY ENTRY CODE</button>
+          <div id="reg-result"></div>
+        </section>
+
+        <section class="card p-5">
+          <h2 class="eyebrow mb-3">Check in at the gate</h2>
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mt-2 mb-1.5">Entry code</label>
+          <input type="text" id="code" placeholder="8-character code" class="w-full p-3 text-sm font-mono" />
+          <button class="btn-secondary w-full mt-4 p-3 rounded-xl text-sm" onclick="checkin()">CHECK IN</button>
+          <div id="checkin-result"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="text-center text-muted text-[10px] font-mono tracking-wide mt-8">BYTE ALCHEMY &middot; PS-8</p>
 
 <button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask Vyavastha">💬</button>
 <div id="chat-panel" class="chat-panel">
@@ -155,21 +204,29 @@
 <script>
 const API = "";
 const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
+const LEVEL_HEX = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" };
+const LEVEL_TEXT_CLASS = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
 
 async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+
+let myGateName = null;
+try { myGateName = sessionStorage.getItem("vyavastha_my_gate"); } catch (e) {}
+let mapInstance = null;
 
 async function loadGates() {
   const advisory = await api("/api/advisory");
   const gates = advisory.gates;
+
   document.getElementById("gates").innerHTML = gates.map(g => `
-    <div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2">
+    <div class="row-card flex items-center gap-3 px-3 py-2.5">
       <div class="w-3 h-3 rounded-full flex-shrink-0 ${LEVEL_COLOR[g.level]}" style="box-shadow:0 0 6px currentColor;"></div>
       <div class="flex-1">
-        <div class="flex items-center justify-between text-[15px]">
-          <span>${g.name}</span>
-          <span class="text-muted text-sm font-mono">${g.remaining.toLocaleString()} spots left</span>
+        <div class="flex items-center justify-between text-sm">
+          <span class="font-semibold">${g.name}</span>
+          <span class="text-muted text-xs font-mono">${g.remaining.toLocaleString()} spots left</span>
         </div>
         <div class="gauge"><div class="gauge-fill ${LEVEL_COLOR[g.level]}" style="width:${Math.min(g.capacity_pressure_pct, 100)}%"></div></div>
+        <div class="text-[10.5px] font-mono mt-1 ${LEVEL_TEXT_CLASS[g.level]}">${g.capacity_pressure_pct}% · ${g.level}</div>
       </div>
     </div>`).join("");
 
@@ -179,14 +236,23 @@ async function loadGates() {
     select.dataset.loaded = "1";
   }
 
-  const box = document.getElementById("suggestion-box");
+  // Venue / Crowd / Your Gate stat tiles
+  const worst = gates.reduce((a, b) => (a && a.capacity_pressure_pct >= b.capacity_pressure_pct ? a : b), gates[0]);
+  if (worst) {
+    document.getElementById("stat-crowd").textContent = worst.level;
+    document.getElementById("stat-crowd").className = "stat-value " + LEVEL_TEXT_CLASS[worst.level];
+  }
+  document.getElementById("stat-your-gate").textContent = myGateName || "Not registered";
+
+  // Suggestion → drives the LIVE ALERT banner
+  const banner = document.getElementById("live-alert-banner");
   if (advisory.suggestion) {
-    box.classList.remove("hidden");
-    document.getElementById("suggestion-text").textContent =
-      `${advisory.suggestion.crowded_gate} is at ${advisory.suggestion.crowded_pct}% — ` +
-      `${advisory.suggestion.suggested_gate} is quieter (${advisory.suggestion.suggested_pct}%) and a good alternative.`;
+    banner.classList.remove("hidden");
+    document.getElementById("live-alert-text").textContent =
+      `${advisory.suggestion.crowded_gate} is currently crowded (${advisory.suggestion.crowded_pct}%). ` +
+      `Please use ${advisory.suggestion.suggested_gate} for faster entry (${advisory.suggestion.suggested_pct}%).`;
   } else {
-    box.classList.add("hidden");
+    banner.classList.add("hidden");
   }
 
   const aiRes = await api("/api/ai/attendee-advisory");
@@ -199,6 +265,46 @@ async function loadGates() {
   } else {
     aiBox.classList.add("hidden");
   }
+
+  await renderMap(gates);
+  await renderOffPeak();
+}
+
+const LEVEL_COLOR_OFFPEAK = { NORMAL: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
+async function renderOffPeak() {
+  const recs = await api("/api/offpeak");
+  document.getElementById("offpeak-list").innerHTML = recs.length
+    ? recs.map(o => `
+        <div class="flex items-start gap-2 py-1.5">
+          <span class="${LEVEL_COLOR_OFFPEAK[o.current_level] || "text-muted"}">●</span>
+          <span>${o.recommendation}</span>
+        </div>`).join("")
+    : `<p class="text-muted text-xs m-0">No gates configured yet.</p>`;
+}
+
+async function renderMap(gates) {
+  const state = await api("/api/state");
+  const withCoords = state.zones.filter(z => z.lat != null && z.lng != null);
+  const mapEl = document.getElementById("map");
+  const venueZone = state.zones.find(z => z.type === "arena");
+  document.getElementById("stat-venue").textContent = venueZone ? venueZone.name : "—";
+  if (!withCoords.length) return;
+  mapEl.classList.remove("hidden");
+
+  if (!mapInstance) {
+    mapInstance = L.map("map", { zoomControl: false, dragging: true, scrollWheelZoom: false }).setView([withCoords[0].lat, withCoords[0].lng], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(mapInstance);
+    mapInstance._markers = {};
+  }
+  withCoords.forEach(z => {
+    if (mapInstance._markers[z.id]) {
+      mapInstance._markers[z.id].setStyle({ fillColor: LEVEL_HEX[z.level] || "#1976D2" });
+    } else {
+      mapInstance._markers[z.id] = L.circleMarker([z.lat, z.lng], { radius: 7, color: "#123B6D", weight: 1.5, fillColor: LEVEL_HEX[z.level] || "#1976D2", fillOpacity: 0.9 })
+        .addTo(mapInstance).bindTooltip(`${z.name} · ${z.level}`);
+    }
+  });
+  setTimeout(() => mapInstance.invalidateSize(), 150);
 }
 
 (async function loadEvent() {
@@ -210,9 +316,7 @@ async function loadGates() {
 
 // --- Multi-event registration / switcher ----------------------------------
 
-function getAttendeeEmail() {
-  try { return sessionStorage.getItem("vyavastha_email") || ""; } catch (e) { return ""; }
-}
+function getAttendeeEmail() { try { return sessionStorage.getItem("vyavastha_email") || ""; } catch (e) { return ""; } }
 
 function saveSwitcherEmail() {
   const email = document.getElementById("switcher-email").value.trim();
@@ -268,19 +372,23 @@ loadMyEvents();
 
 async function register() {
   const name = document.getElementById("name").value || "Guest";
-  const gate_zone_id = parseInt(document.getElementById("gate").value);
+  const gateSelect = document.getElementById("gate");
+  const gate_zone_id = parseInt(gateSelect.value);
   const res = await api("/api/register", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, gate_zone_id }),
   });
   document.getElementById("reg-result").innerHTML = `
-    <div class="mt-3 p-3 rounded-lg text-sm bg-ok/10 border border-ok/50">
+    <div class="mt-3 p-3 rounded-lg text-sm" style="background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.4);">
       Registered for ${res.gate}.
       <div class="text-2xl tracking-[4px] text-center font-mono font-bold text-ok my-2">${res.code}</div>
       Show this code at the gate.
     </div>
   `;
   document.getElementById("code").value = res.code;
+  myGateName = res.gate;
+  try { sessionStorage.setItem("vyavastha_my_gate", res.gate); } catch (e) {}
+  document.getElementById("stat-your-gate").textContent = myGateName;
 }
 
 async function checkin() {
@@ -290,14 +398,18 @@ async function checkin() {
     body: JSON.stringify({ code }),
   });
   const el = document.getElementById("checkin-result");
+  const okStyle = 'style="background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.4);"';
+  const warnStyle = 'style="background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.4);"';
   if (res.status === "ok") {
-    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-ok/10 border border-ok/50">Checked in at ${res.zone}. ${res.remaining_capacity} spots now remaining.</div>`;
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm" ${okStyle}>Checked in at ${res.zone}. ${res.remaining_capacity} spots now remaining.</div>`;
   } else if (res.status === "redirect") {
-    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">${res.message} Please use <b>${res.suggested_zone}</b> instead.</div>`;
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm" ${warnStyle}>${res.message} Please use <b>${res.suggested_zone}</b> instead.</div>`;
   } else if (res.status === "already_checked_in") {
-    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">This code has already been used to check in.</div>`;
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm" ${warnStyle}>This code has already been used to check in.</div>`;
+  } else if (res.status === "not_live") {
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm" ${warnStyle}>${res.message}</div>`;
   } else {
-    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">Code not found. Please register first.</div>`;
+    el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm" ${warnStyle}>Code not found. Please register first.</div>`;
   }
   await loadGates();
 }

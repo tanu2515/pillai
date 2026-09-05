@@ -119,6 +119,45 @@ class ZoneLocationUpdate(BaseModel):
     lng: float
 
 
+class GateSetupUpdate(BaseModel):
+    capacity: int
+    staff_assigned: int | None = None
+
+
+class HotelCreate(BaseModel):
+    name: str
+    capacity: int
+    lat: float
+    lng: float
+    price_tier: int | None = None
+    contact: str | None = None
+    amenities: str | None = None
+
+
+class HotelUpdate(BaseModel):
+    capacity: int | None = None
+    occupied_rooms: int | None = None
+    price_tier: int | None = None
+    contact: str | None = None
+    amenities: str | None = None
+    manual_recommended: bool | None = None
+
+
+class TransportZoneCreate(BaseModel):
+    name: str
+    capacity: int
+    lat: float
+    lng: float
+    type: str = "corridor"
+    contact: str | None = None
+
+
+class TransportZoneUpdate(BaseModel):
+    capacity: int | None = None
+    current_count: int | None = None
+    contact: str | None = None
+
+
 class AlertStatusUpdate(BaseModel):
     status: str  # open | acknowledged | resolved
 
@@ -318,6 +357,11 @@ def preventive_alerts(db: Session = Depends(get_db)):
     return engine.preventive_alerts(db)
 
 
+@app.get("/api/offpeak")
+def offpeak(db: Session = Depends(get_db)):
+    return engine.offpeak_recommendations(db)
+
+
 @app.get("/api/risks/escalations")
 def escalations(db: Session = Depends(get_db)):
     return engine.escalations(db)
@@ -470,6 +514,71 @@ def update_zone_location(zone_id: int, req: ZoneLocationUpdate, db: Session = De
 
 @app.delete("/api/zones/{zone_id}")
 def delete_zone(zone_id: int, db: Session = Depends(get_db)):
+    result = engine.delete_zone(db, zone_id)
+    if not result["ok"]:
+        raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))
+    return {"deleted": zone_id}
+
+
+# --- Event Setup Form (Event Command Operator): gates, hotels, transport ---
+
+@app.get("/api/event-setup")
+def get_event_setup(db: Session = Depends(get_db)):
+    return engine.event_setup_summary(db)
+
+
+@app.patch("/api/event-setup/gates/{zone_id}")
+def patch_gate_setup(zone_id: int, req: GateSetupUpdate, db: Session = Depends(get_db)):
+    zone = engine.update_gate_setup(db, zone_id, req.capacity, req.staff_assigned)
+    if zone is None:
+        raise HTTPException(404, "gate not found")
+    return {"id": zone.id}
+
+
+@app.post("/api/event-setup/hotels")
+def post_hotel(req: HotelCreate, db: Session = Depends(get_db)):
+    zone = engine.create_hotel(db, req.name, req.capacity, req.lat, req.lng, req.price_tier, req.contact, req.amenities)
+    if zone is None:
+        raise HTTPException(404, "no event configured yet")
+    return {"id": zone.id}
+
+
+@app.patch("/api/event-setup/hotels/{zone_id}")
+def patch_hotel(zone_id: int, req: HotelUpdate, db: Session = Depends(get_db)):
+    zone = engine.update_hotel(
+        db, zone_id, req.capacity, req.occupied_rooms, req.price_tier, req.contact, req.amenities, req.manual_recommended,
+    )
+    if zone is None:
+        raise HTTPException(404, "hotel not found")
+    return {"id": zone.id}
+
+
+@app.delete("/api/event-setup/hotels/{zone_id}")
+def delete_hotel(zone_id: int, db: Session = Depends(get_db)):
+    result = engine.delete_zone(db, zone_id)
+    if not result["ok"]:
+        raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))
+    return {"deleted": zone_id}
+
+
+@app.post("/api/event-setup/transport")
+def post_transport_zone(req: TransportZoneCreate, db: Session = Depends(get_db)):
+    zone = engine.create_transport_zone(db, req.name, req.capacity, req.lat, req.lng, req.type, req.contact)
+    if zone is None:
+        raise HTTPException(404, "no event configured yet")
+    return {"id": zone.id}
+
+
+@app.patch("/api/event-setup/transport/{zone_id}")
+def patch_transport_zone(zone_id: int, req: TransportZoneUpdate, db: Session = Depends(get_db)):
+    zone = engine.update_transport_zone(db, zone_id, req.capacity, req.current_count, req.contact)
+    if zone is None:
+        raise HTTPException(404, "transport zone not found")
+    return {"id": zone.id}
+
+
+@app.delete("/api/event-setup/transport/{zone_id}")
+def delete_transport_zone(zone_id: int, db: Session = Depends(get_db)):
     result = engine.delete_zone(db, zone_id)
     if not result["ok"]:
         raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))

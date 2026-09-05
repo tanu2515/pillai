@@ -145,11 +145,6 @@
         </section>
       </div>
 
-      <section id="ev-offpeak-section" class="card p-6 mt-6 hidden fade-up" style="animation-delay:.22s">
-        <h3 class="eyebrow mb-2">🕒 Best time to arrive</h3>
-        <div id="ev-offpeak" class="text-sm"></div>
-      </section>
-
       <section id="ev-announcements-section" class="card p-6 mt-6 hidden fade-up" style="animation-delay:.25s">
         <h3 class="eyebrow mb-2">Announcements</h3>
         <div id="ev-announcements" class="text-sm"></div>
@@ -233,23 +228,6 @@ function renderHotels() {
     <div class="flex items-center justify-between py-1.5">
       <span>${h.name} ${h.recommended ? '<span class="text-ok text-[9px] font-bold uppercase ml-1">Recommended</span>' : ""}</span>
       <span class="text-xs font-mono text-muted">${h.available_pct}% avail.${h.distance_km != null ? " · " + h.distance_km + " km" : ""}</span>
-    </div>`).join("");
-}
-
-function renderOffPeak() {
-  const section = document.getElementById("ev-offpeak-section");
-  if (!eventData.off_peak || !eventData.off_peak.length) { section.classList.add("hidden"); return; }
-  section.classList.remove("hidden");
-  if (!eventData.is_live) {
-    // Upcoming event: a single schedule-based heuristic tip, not per-gate data.
-    document.getElementById("ev-offpeak").innerHTML = `<p class="m-0 leading-relaxed">${eventData.off_peak[0].recommendation}</p>`;
-    return;
-  }
-  const LEVEL_COLOR = { NORMAL: "ok", MODERATE: "warn", HIGH: "high", CRITICAL: "danger" };
-  document.getElementById("ev-offpeak").innerHTML = eventData.off_peak.map(o => `
-    <div class="flex items-start gap-2 py-1.5">
-      <span class="text-${LEVEL_COLOR[o.current_level]}">●</span>
-      <span>${o.recommendation}</span>
     </div>`).join("");
 }
 
@@ -341,7 +319,6 @@ async function loadEvent() {
   renderGates();
   renderTransport();
   renderHotels();
-  renderOffPeak();
   renderAnnouncements();
   renderMap();
 }
@@ -469,7 +446,10 @@ function showConfirmation(res) {
       <div class="text-2xl tracking-[5px] text-center font-mono font-bold text-accent my-3">${res.code}</div>
       <p class="text-muted text-xs">${res.tier}${res.seat_label ? " · Seat " + res.seat_label : ""}${res.quantity > 1 ? " · Qty " + res.quantity : ""} · ₹${res.total_price.toLocaleString()}</p>
       <p class="text-muted text-[10.5px] mt-2">Show this code / QR at the gate. Find it anytime under My Events.</p>
-      <button class="btn-primary w-full py-3 rounded-xl text-sm mt-4" onclick="location.href='my-events.html'">GO TO MY EVENTS</button>
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button class="btn-primary py-3 rounded-xl text-sm" onclick="location.href='my-events.html'">MY EVENTS</button>
+        <button class="btn-secondary py-3 rounded-xl text-sm" onclick="location.href='attendee.html?event=${eventId}'">EVENT DAY →</button>
+      </div>
     </div>`;
   try { new QRCode(document.getElementById("qr-code"), { text: res.code, width: 140, height: 140, colorDark: "#123B6D", colorLight: "#ffffff" }); } catch (e) {}
 }

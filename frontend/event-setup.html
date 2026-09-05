@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Event Setup</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
+          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
+          high: "#F87171", danger: "#DC2626",
+        },
+        fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
+      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
+  }
+  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
+  input[type=text], input[type=number], select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; }
+  input:focus, select:focus{ outline:none; border-color:#1976D2; }
+  select option{ background:#FFFFFF; color:#123B6D; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-secondary{ background:#F1F5F9; color:#123B6D; font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:#E2E8F0; }
+  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; }
+  .small-input{ padding:6px 8px; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+  .tab-btn{ padding:9px 16px; font-size:12.5px; font-weight:800; color:#64748B; border-bottom:2px solid transparent; cursor:pointer; }
+  .tab-btn.active{ color:#1976D2; border-color:#1976D2; }
+  .rec-badge{ font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff; background:#22C55E; border-radius:20px; padding:2px 8px; }
+  .toast{ position:fixed; bottom:20px; right:20px; background:#123B6D; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
+  .toast.show{ display:block; }
+</style>
+</head>
+<body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
+
+<div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
+  <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3">
+    <div class="flex items-center gap-3">
+      <a href="/"><img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-8 h-8 rounded-lg" /></a>
+      <h1 class="text-sm font-extrabold m-0 tracking-[0.1em] uppercase flex items-center gap-2">
+        <span id="event-title">EVENT SETUP</span>
+        <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">EVENT COMMAND OPERATOR</span>
+      </h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
+      <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+    </div>
+  </div>
+</div>
+
+<main class="p-4 sm:p-6 max-w-5xl mx-auto">
+  <div class="row-card p-4 mb-4">
+    <p class="text-xs text-muted leading-relaxed m-0">
+      Configure every operational detail for <b id="setup-event-name" class="text-ink"></b> before doors open — gate staffing,
+      which hotels to recommend and their room counts, and transport capacity. Everything here feeds directly into the
+      Command Centre's risk engine, the hotel recommendation ranker, and the attendee-facing event page.
+    </p>
+  </div>
+
+  <div id="not-configured" class="row-card p-6 text-center hidden">
+    <p class="text-sm text-muted m-0">No live event configured yet. Set one up in the Administrator screen first.</p>
+    <a href="admin.html" class="btn-primary inline-block mt-3 px-4 py-2 rounded-lg text-xs">GO TO ADMINISTRATOR</a>
+  </div>
+
+  <div id="setup-body" class="hidden">
+    <div class="flex border-b" style="border-color:#E2E8F0;">
+      <div class="tab-btn active" data-tab="gates" onclick="switchTab(this)">Gates &amp; Staff</div>
+      <div class="tab-btn" data-tab="hotels" onclick="switchTab(this)">Hotels</div>
+      <div class="tab-btn" data-tab="transport" onclick="switchTab(this)">Transport</div>
+    </div>
+
+    <!-- GATES -->
+    <section id="tab-gates" class="mt-4">
+      <div id="gates-list"></div>
+    </section>
+
+    <!-- HOTELS -->
+    <section id="tab-hotels" class="mt-4 hidden">
+      <div id="hotels-list" class="mb-4"></div>
+      <div class="row-card p-4">
+        <h3 class="eyebrow mb-3">Add a hotel</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <input type="text" id="h-name" placeholder="Hotel name" class="p-2.5 text-xs" />
+          <input type="number" id="h-rooms" placeholder="Total rooms" class="p-2.5 text-xs font-mono" />
+          <input type="number" id="h-price" placeholder="Price tier 1-5" class="p-2.5 text-xs font-mono" min="1" max="5" />
+          <input type="text" id="h-contact" placeholder="Contact (phone)" class="p-2.5 text-xs" />
+          <input type="text" id="h-amenities" placeholder="Amenities (comma-separated)" class="p-2.5 text-xs sm:col-span-2" />
+          <input type="number" step="any" id="h-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
+          <input type="number" step="any" id="h-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
+        </div>
+        <button class="btn-primary mt-3 px-4 py-2 rounded-lg text-xs" onclick="addHotel()">ADD HOTEL</button>
+        <div id="hotel-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
+    </section>
+
+    <!-- TRANSPORT -->
+    <section id="tab-transport" class="mt-4 hidden">
+      <div class="row-card p-4 mb-4 flex items-center justify-between">
+        <div>
+          <div class="eyebrow mb-1">Bus fleet</div>
+          <div class="text-sm font-mono" id="bus-fleet-summary">—</div>
+        </div>
+      </div>
+      <div id="transport-list" class="mb-4"></div>
+      <div class="row-card p-4">
+        <h3 class="eyebrow mb-3">Add a transport zone</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <input type="text" id="t-name" placeholder="Zone name" class="p-2.5 text-xs" />
+          <select id="t-type" class="p-2.5 text-xs">
+            <option value="corridor">Corridor</option>
+            <option value="hub">Transport Hub</option>
+          </select>
+          <input type="number" id="t-capacity" placeholder="Capacity" class="p-2.5 text-xs font-mono" />
+          <input type="text" id="t-contact" placeholder="Contact (phone)" class="p-2.5 text-xs" />
+          <input type="number" step="any" id="t-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
+          <input type="number" step="any" id="t-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
+        </div>
+        <button class="btn-primary mt-3 px-4 py-2 rounded-lg text-xs" onclick="addTransport()">ADD TRANSPORT ZONE</button>
+        <div id="transport-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API = "";
+async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+
+let setupData = null;
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+function switchTab(el) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  document.querySelectorAll("main section[id^='tab-']").forEach(s => s.classList.add("hidden"));
+  document.getElementById("tab-" + el.dataset.tab).classList.remove("hidden");
+}
+
+// --- Gates -----------------------------------------------------------------
+
+function gateRow(g) {
+  return `
+    <div class="row-card flex items-center gap-3 px-4 py-3 mb-2 flex-wrap">
+      <div class="flex-1 min-w-[120px]">
+        <div class="font-bold text-sm">${g.name}</div>
+        <div class="text-muted text-[10.5px] font-mono">${g.current_count.toLocaleString()} / ${g.capacity.toLocaleString()} currently</div>
+      </div>
+      <label class="text-[10px] text-muted uppercase tracking-wide">Capacity
+        <input type="number" class="small-input w-24" id="g-cap-${g.id}" value="${g.capacity}" />
+      </label>
+      <label class="text-[10px] text-muted uppercase tracking-wide">Staff assigned
+        <input type="number" class="small-input w-20" id="g-staff-${g.id}" value="${g.staff_assigned ?? ""}" />
+      </label>
+      <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveGate(${g.id})">SAVE</button>
+    </div>`;
+}
+
+async function saveGate(id) {
+  const capacity = parseInt(document.getElementById(`g-cap-${id}`).value);
+  const staffVal = document.getElementById(`g-staff-${id}`).value;
+  const staff_assigned = staffVal === "" ? null : parseInt(staffVal);
+  await api(`/api/event-setup/gates/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capacity, staff_assigned }),
+  });
+  showToast("Gate updated.");
+  await load();
+}
+
+// --- Hotels ------------------------------------------------------------------
+
+function hotelRow(h) {
+  return `
+    <div class="row-card p-4 mb-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sm">${h.name}</span>
+          ${h.recommended ? '<span class="rec-badge">RECOMMENDED</span>' : ""}
+        </div>
+        <button class="btn-danger px-3 py-1 rounded-lg text-[11px]" onclick="removeHotel(${h.id})">DELETE</button>
+      </div>
+      <div class="text-muted text-[10.5px] font-mono mt-1">${h.distance_km != null ? h.distance_km + " km from venue" : "distance unknown (set lat/lng)"}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        <label class="text-[10px] text-muted uppercase tracking-wide">Total rooms
+          <input type="number" class="small-input w-full" id="h-rooms-${h.id}" value="${h.total_rooms}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Occupied rooms
+          <input type="number" class="small-input w-full" id="h-occ-${h.id}" value="${h.occupied_rooms}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Price tier (1-5)
+          <input type="number" min="1" max="5" class="small-input w-full" id="h-price-${h.id}" value="${h.price_tier ?? ""}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Contact
+          <input type="text" class="small-input w-full" id="h-contact-${h.id}" value="${h.contact ?? ""}" />
+        </label>
+      </div>
+      <label class="text-[10px] text-muted uppercase tracking-wide block mt-2">Amenities
+        <input type="text" class="small-input w-full" id="h-amen-${h.id}" value="${h.amenities ?? ""}" />
+      </label>
+      <div class="flex items-center justify-between mt-3">
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" id="h-manual-${h.id}" ${h.manual_recommended ? "checked" : ""} />
+          Manually mark as the recommended hotel (overrides the automatic ranking)
+        </label>
+        <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveHotel(${h.id})">SAVE</button>
+      </div>
+    </div>`;
+}
+
+async function saveHotel(id) {
+  const body = {
+    capacity: parseInt(document.getElementById(`h-rooms-${id}`).value) || null,
+    occupied_rooms: parseInt(document.getElementById(`h-occ-${id}`).value),
+    price_tier: parseInt(document.getElementById(`h-price-${id}`).value) || null,
+    contact: document.getElementById(`h-contact-${id}`).value.trim() || null,
+    amenities: document.getElementById(`h-amen-${id}`).value.trim() || null,
+    manual_recommended: document.getElementById(`h-manual-${id}`).checked,
+  };
+  await api(`/api/event-setup/hotels/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  showToast("Hotel updated.");
+  await load();
+}
+
+async function removeHotel(id) {
+  if (!confirm("Delete this hotel?")) return;
+  const res = await fetch(`/api/event-setup/hotels/${id}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this hotel."); return; }
+  await load();
+}
+
+async function addHotel() {
+  const body = {
+    name: document.getElementById("h-name").value.trim(),
+    capacity: parseInt(document.getElementById("h-rooms").value) || 0,
+    price_tier: parseInt(document.getElementById("h-price").value) || null,
+    contact: document.getElementById("h-contact").value.trim() || null,
+    amenities: document.getElementById("h-amenities").value.trim() || null,
+    lat: parseFloat(document.getElementById("h-lat").value),
+    lng: parseFloat(document.getElementById("h-lng").value),
+  };
+  if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
+    document.getElementById("hotel-add-status").textContent = "Name, total rooms, latitude and longitude are required.";
+    return;
+  }
+  await api("/api/event-setup/hotels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  ["h-name", "h-rooms", "h-price", "h-contact", "h-amenities", "h-lat", "h-lng"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("hotel-add-status").textContent = "";
+  showToast("Hotel added.");
+  await load();
+}
+
+// --- Transport ---------------------------------------------------------------
+
+function transportRow(t) {
+  return `
+    <div class="row-card p-4 mb-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="font-bold text-sm">${t.name} <span class="text-muted text-[10.5px] font-mono uppercase">${t.type}</span></div>
+        <button class="btn-danger px-3 py-1 rounded-lg text-[11px]" onclick="removeTransport(${t.id})">DELETE</button>
+      </div>
+      <div class="text-muted text-[10.5px] font-mono mt-1">${t.occupied_pct}% occupied${t.occupied_pct >= 90 ? " · CRITICAL" : t.occupied_pct >= 80 ? " · HIGH" : t.occupied_pct >= 60 ? " · MODERATE" : " · NORMAL"}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+        <label class="text-[10px] text-muted uppercase tracking-wide">Capacity
+          <input type="number" class="small-input w-full" id="t-cap-${t.id}" value="${t.capacity}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Currently occupied
+          <input type="number" class="small-input w-full" id="t-occ-${t.id}" value="${t.current_count}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Contact
+          <input type="text" class="small-input w-full" id="t-contact-${t.id}" value="${t.contact ?? ""}" />
+        </label>
+      </div>
+      <button class="btn-primary mt-3 px-3 py-1.5 rounded-lg text-[11px]" onclick="saveTransport(${t.id})">SAVE</button>
+    </div>`;
+}
+
+async function saveTransport(id) {
+  const body = {
+    capacity: parseInt(document.getElementById(`t-cap-${id}`).value) || null,
+    current_count: parseInt(document.getElementById(`t-occ-${id}`).value),
+    contact: document.getElementById(`t-contact-${id}`).value.trim() || null,
+  };
+  await api(`/api/event-setup/transport/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  showToast("Transport zone updated.");
+  await load();
+}
+
+async function removeTransport(id) {
+  if (!confirm("Delete this transport zone?")) return;
+  const res = await fetch(`/api/event-setup/transport/${id}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this zone."); return; }
+  await load();
+}
+
+async function addTransport() {
+  const body = {
+    name: document.getElementById("t-name").value.trim(),
+    type: document.getElementById("t-type").value,
+    capacity: parseInt(document.getElementById("t-capacity").value) || 0,
+    contact: document.getElementById("t-contact").value.trim() || null,
+    lat: parseFloat(document.getElementById("t-lat").value),
+    lng: parseFloat(document.getElementById("t-lng").value),
+  };
+  if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
+    document.getElementById("transport-add-status").textContent = "Name, capacity, latitude and longitude are required.";
+    return;
+  }
+  await api("/api/event-setup/transport", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  ["t-name", "t-capacity", "t-contact", "t-lat", "t-lng"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("transport-add-status").textContent = "";
+  showToast("Transport zone added.");
+  await load();
+}
+
+// --- Load ----------------------------------------------------------------
+
+async function load() {
+  setupData = await api("/api/event-setup");
+  if (!setupData.configured) {
+    document.getElementById("not-configured").classList.remove("hidden");
+    document.getElementById("setup-body").classList.add("hidden");
+    return;
+  }
+  document.getElementById("not-configured").classList.add("hidden");
+  document.getElementById("setup-body").classList.remove("hidden");
+  document.getElementById("event-title").textContent = "EVENT SETUP — " + setupData.event_name;
+  document.getElementById("setup-event-name").textContent = setupData.event_name;
+
+  document.getElementById("gates-list").innerHTML = setupData.gates.map(gateRow).join("") ||
+    `<p class="text-xs text-muted">No gates configured.</p>`;
+  document.getElementById("hotels-list").innerHTML = setupData.hotels.map(hotelRow).join("") ||
+    `<p class="text-xs text-muted">No hotels configured yet — add one below.</p>`;
+  document.getElementById("transport-list").innerHTML = setupData.transport.map(transportRow).join("") ||
+    `<p class="text-xs text-muted">No transport zones configured yet — add one below.</p>`;
+  document.getElementById("bus-fleet-summary").textContent = setupData.buses
+    ? `${setupData.buses.available} / ${setupData.buses.total} buses available`
+    : "No bus fleet configured.";
+}
+
+load();
+</script>
+</body>
+</html>
