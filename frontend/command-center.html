@@ -82,6 +82,18 @@
   .leaflet-popup-content input{ background:#1E2D42; border:1px solid #2C3E56; color:#fff; border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
   .map-place-btn.on{ background:rgba(0,229,255,.15); border-color:#00E5FF; color:#00E5FF; }
   #zone-map{ background:#0F1722; }
+  .chat-fab{ position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#00E5FF; color:#05161E; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(0,229,255,.4); z-index:60; border:none; }
+  .chat-fab:hover{ filter:brightness(1.08); }
+  .chat-panel{ position:fixed; bottom:88px; right:20px; width:320px; max-width:calc(100vw - 40px); height:440px; max-height:calc(100vh - 120px); background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); z-index:60; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel.show{ display:flex; }
+  .chat-header{ padding:12px 14px; border-bottom:1px solid #2C3E56; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .chat-msg{ max-width:85%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
+  .chat-msg.user{ align-self:flex-end; background:#00E5FF; color:#05161E; font-weight:600; }
+  .chat-msg.bot{ align-self:flex-start; background:#1E2D42; border:1px solid #2C3E56; color:#e2e8f0; }
+  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #2C3E56; flex-shrink:0; }
+  .chat-input-row input{ flex:1; padding:8px 10px !important; font-size:12.5px; }
+  .chat-input-row button{ background:#00E5FF; color:#05161E; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 min-h-screen relative">
@@ -120,12 +132,21 @@
     <button data-tab="overview" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Command Centre</button>
     <button data-tab="whatif" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">What-If Simulator</button>
     <button data-tab="actions" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Suggested Actions</button>
+    <button data-tab="timeline" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Incident Timeline</button>
   </nav>
 </div>
 
 <main class="p-3 sm:p-6 max-w-6xl mx-auto relative z-[1]">
 
   <div id="tab-overview" class="tab-panel">
+    <section id="preventive-section" class="bg-panel border border-warn/40 rounded-xl p-4 mb-4 hidden">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow text-warn">⏱ Act Before It's Critical</h2>
+        <span class="text-[10.5px] text-muted font-mono">not yet HIGH/CRITICAL, but on track to hit capacity soon</span>
+      </div>
+      <div id="preventive-alerts"></div>
+    </section>
+
     <section class="bg-panel border border-border rounded-xl p-4 mb-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">Risk Register</h2>
@@ -166,6 +187,9 @@
       </div>
       <button class="btn-danger mt-4 w-full rounded-lg px-3 py-2.5 text-sm" onclick="runWhatIf()">See What Would Happen</button>
       <div id="whatif-result" class="mt-4"></div>
+
+      <button class="btn-ghost mt-3 w-full rounded-lg px-3 py-2.5 text-sm font-semibold" onclick="runComparePlans()">Compare: Do Nothing vs Redirect vs Transport Relief vs Combined</button>
+      <div id="compare-result" class="mt-4 overflow-x-auto"></div>
     </section>
 
     <section class="bg-panel border border-border rounded-xl p-4">
@@ -191,9 +215,23 @@
   </div>
 
   <div id="tab-actions" class="tab-panel hidden">
+    <section id="escalation-section" class="bg-panel border border-danger/50 rounded-xl p-4 mb-4 max-w-xl hidden">
+      <h2 class="eyebrow text-danger mb-3">🚨 No Feasible Plan — Needs a Human Call</h2>
+      <div id="escalations"></div>
+    </section>
     <section class="bg-panel border border-border rounded-xl p-4 max-w-xl">
       <h2 class="eyebrow mb-3">What To Do Right Now</h2>
       <div id="recs"></div>
+    </section>
+  </div>
+
+  <div id="tab-timeline" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">Incident Timeline</h2>
+        <span class="text-[10.5px] text-muted font-mono">what happened, when, and how KAIRO responded</span>
+      </div>
+      <div id="timeline-list"></div>
     </section>
   </div>
 
@@ -226,6 +264,21 @@
   </div>
 </div>
 
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask KAIRO">💬</button>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <span>Ask KAIRO</span>
+    <button onclick="toggleChat()" style="background:none;border:none;color:#90A4AE;font-size:16px;cursor:pointer;">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages">
+    <div class="chat-msg bot">Ask me about a gate, hotel, or corridor by name, or try "what should I do" or "what happened".</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendChat()" />
+    <button onclick="sendChat()">Send</button>
+  </div>
+</div>
+
 <script>
 const API = "";
 const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
@@ -235,10 +288,10 @@ const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-orange-
 // zone domains, which What-If fields, and whether they can drive the shared
 // event clock (only the Event Command Operator can).
 const ROLE_CONFIG = {
-  command:     { label: "EVENT COMMAND OPERATOR", tabs: ["overview", "whatif", "actions"], showSimControls: true,  showAiAdvisor: true, domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
-  venue:       { label: "VENUE MANAGER",          tabs: ["overview", "whatif", "actions"], showSimControls: false, showAiAdvisor: false, domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
-  transport:   { label: "TRANSPORT OPERATOR",     tabs: ["overview", "whatif", "actions"], showSimControls: false, showAiAdvisor: false, domain: "transport",   whatifFields: ["buses"] },
-  hospitality: { label: "HOSPITALITY OPERATOR",   tabs: ["overview", "actions"],           showSimControls: false, showAiAdvisor: false, domain: "hospitality", whatifFields: [] },
+  command:     { label: "EVENT COMMAND OPERATOR", tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: true,  showAiAdvisor: true, domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
+  venue:       { label: "VENUE MANAGER",          tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: false, showAiAdvisor: false, domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
+  transport:   { label: "TRANSPORT OPERATOR",     tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: false, showAiAdvisor: false, domain: "transport",   whatifFields: ["buses"] },
+  hospitality: { label: "HOSPITALITY OPERATOR",   tabs: ["overview", "actions", "timeline"],           showSimControls: false, showAiAdvisor: false, domain: "hospitality", whatifFields: [] },
 };
 const roleParam = new URLSearchParams(location.search).get("role");
 const roleKey = ROLE_CONFIG[roleParam] ? roleParam : "command";
@@ -291,6 +344,7 @@ function renderAiBox(el, result) {
 }
 
 let currentZones = [];
+let currentResources = [];
 
 function gaugeBar(z, widthClass) {
   const pct = Math.min(z.capacity_pressure_pct, 100);
@@ -361,19 +415,134 @@ function renderFlowMap(zones) {
   document.getElementById("flow-map").innerHTML = rows + standaloneRow;
 }
 
+function resourceAvail(type) {
+  const res = currentResources.find(r => r.type === type);
+  return res ? `${res.quantity_available}/${res.quantity_total} available` : "availability unknown";
+}
+
+function whyPanel(r) {
+  const resourceLine = r.resource_type
+    ? `<div class="col-span-2">Needs ${r.required} × ${r.resource_type} — <span class="${r.feasibility >= 100 ? 'text-ok' : 'text-danger'}">${resourceAvail(r.resource_type)}</span></div>`
+    : `<div class="col-span-2">Needs no dispatchable resources</div>`;
+  return `
+    <div class="why-panel hidden mt-3 pt-3 border-t border-border grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-mono text-muted">
+      <div>Risk reduction <span class="text-ok float-right">+${r.risk_reduction}</span></div>
+      <div>Capacity balance <span class="float-right">${r.capacity_balance}</span></div>
+      <div>Visitor experience <span class="float-right">${r.visitor_experience}</span></div>
+      <div>Time to impact <span class="float-right">${r.time_to_impact}</span></div>
+      <div>Cost efficiency <span class="float-right">${r.cost_efficiency}</span></div>
+      <div>Zone urgency now <span class="float-right">${r.urgency}</span></div>
+      <div class="col-span-2">Targets: ${r.target_zones.join(", ")}</div>
+      ${resourceLine}
+    </div>`;
+}
+
+function toggleWhy(btn) {
+  const panel = btn.closest(".row-card").querySelector(".why-panel");
+  panel.classList.toggle("hidden");
+  btn.textContent = panel.classList.contains("hidden") ? "Why?" : "Hide";
+}
+
+function renderPreventiveAlerts(alerts) {
+  const scoped = roleCfg.domain ? alerts.filter(a => a.zone_domain === roleCfg.domain) : alerts;
+  const section = document.getElementById("preventive-section");
+  if (!scoped.length) { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  document.getElementById("preventive-alerts").innerHTML = scoped.map(a => `
+    <div class="row-card p-3 mb-2 text-sm">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <div>
+          <span class="font-bold">${a.zone_name}</span>
+          <span class="text-muted"> — projected to hit capacity in ~${a.minutes_to_capacity} min</span>
+        </div>
+        <div class="font-mono text-[11px] tabular-nums">
+          <span class="${LEVEL_TEXT[a.current_level]}">${a.current_score} ${a.current_level}</span>
+          <span class="text-muted mx-1">→</span>
+          <span class="${LEVEL_TEXT[a.projected_level]}">${a.projected_score} ${a.projected_level}</span>
+          <span class="text-muted"> if untouched</span>
+        </div>
+      </div>
+      ${a.recommended_actions.length ? `
+        <div class="text-[10.5px] text-muted mt-1.5">
+          Act now: ${a.recommended_actions.map(r => `${r.label} (score ${r.action_score})`).join(" · ")}
+        </div>` : ""}
+    </div>
+  `).join("");
+}
+
+function renderEscalations(list) {
+  const scoped = roleCfg.domain ? list.filter(e => e.zone_domain === roleCfg.domain) : list;
+  const section = document.getElementById("escalation-section");
+  if (!scoped.length) { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  document.getElementById("escalations").innerHTML = scoped.map(e => `
+    <div class="row-card p-3 mb-2 text-sm flex items-center justify-between">
+      <div><span class="font-bold">${e.zone_name}</span> <span class="text-muted">has no feasible automated action left</span></div>
+      <span class="font-mono text-[11px] text-danger font-bold">${e.score} ${e.level}</span>
+    </div>
+  `).join("");
+}
+
+const TIMELINE_COLOR = {
+  scenario: "text-accent", zone_critical: "text-danger", acknowledged: "text-ok",
+  escalated: "text-danger", action_executed: "text-warn",
+};
+
+function renderTimeline(entries) {
+  const scoped = roleCfg.domain ? entries.filter(e => !e.zone_domain || e.zone_domain === roleCfg.domain) : entries;
+  document.getElementById("timeline-list").innerHTML = scoped.map(e => `
+    <div class="row-card p-3 mb-2 text-sm flex items-start gap-3">
+      <span class="font-mono text-[10.5px] text-muted w-12 flex-shrink-0 pt-0.5">${e.clock}</span>
+      <div class="flex-1">
+        <span class="font-mono text-[9px] uppercase tracking-wide ${TIMELINE_COLOR[e.category] || 'text-muted'}">${e.category.replace('_', ' ')}</span>
+        <div>${e.message}</div>
+      </div>
+    </div>
+  `).join("") || `<div class="text-xs text-muted">Nothing has happened yet — trigger a scenario to see the timeline build up.</div>`;
+}
+
+async function approveAction(id, btn) {
+  btn.disabled = true;
+  btn.textContent = "Executing…";
+  await api("/api/action-plans/approve", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action_ids: [id] }),
+  });
+  await refresh();
+}
+
 async function refresh() {
   const state = await api("/api/state");
+  currentResources = state.resources;
   renderZones(state);
   if (roleCfg.tabs.includes("whatif")) renderMapMarkers(state.zones);
+
+  const preventive = await api("/api/risks/preventive");
+  renderPreventiveAlerts(preventive);
+
+  const escalationList = await api("/api/risks/escalations");
+  renderEscalations(escalationList);
+
+  if (roleCfg.tabs.includes("timeline")) {
+    const timeline = await api("/api/timeline");
+    renderTimeline(timeline);
+  }
+
   const allRecs = await api("/api/recommendations");
   const recs = roleCfg.domain ? allRecs.filter(r => r.domain === roleCfg.domain) : allRecs;
   document.getElementById("recs").innerHTML = recs.map(r => `
-    <div class="row-card p-3 mb-2 text-sm flex items-center justify-between">
-      <div>
-        <div>${r.label}</div>
-        <div class="text-muted text-[10px] font-mono mt-0.5">target zone urgency: ${r.urgency}</div>
+    <div class="row-card p-3 mb-2 text-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <div>${r.label}</div>
+          <div class="text-muted text-[10px] font-mono mt-0.5">target zone urgency: ${r.urgency}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-ok font-mono font-bold tabular-nums">${r.action_score}</span>
+          <button class="btn-ghost rounded px-2 py-1 text-[10px] font-semibold" onclick="toggleWhy(this)">Why?</button>
+        </div>
       </div>
-      <span class="text-ok font-mono font-bold tabular-nums">${r.action_score}</span>
+      ${whyPanel(r)}
+      <button class="btn-danger rounded-lg px-3 py-1.5 text-[11px] font-semibold w-full mt-3" onclick="approveAction('${r.id}', this)">Approve &amp; Execute</button>
     </div>
   `).join("") || `<div class="text-xs text-muted">No feasible actions in your area right now.</div>`;
 }
@@ -441,6 +610,53 @@ async function runWhatIf() {
   `;
 }
 
+async function runComparePlans() {
+  const redirect = parseInt(document.getElementById("redirect").value) || 0;
+  const buses = parseInt(document.getElementById("buses").value) || 0;
+  const staff = parseInt(document.getElementById("staff").value) || 0;
+
+  const plans = [
+    { name: "Do Nothing", redirect_count: 0, open_gate3: false, add_buses: 0, move_staff: 0 },
+    { name: "Redirect Only", redirect_count: redirect, open_gate3: true, add_buses: 0, move_staff: 0 },
+    { name: "Transport Relief Only", redirect_count: 0, open_gate3: false, add_buses: buses, move_staff: staff },
+    { name: "Combined", redirect_count: redirect, open_gate3: true, add_buses: buses, move_staff: staff },
+  ];
+
+  const results = await api("/api/simulate/compare", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plans }),
+  });
+
+  const metric = (label, get) => `
+    <tr class="border-t border-border">
+      <td class="py-2 pr-4 text-muted text-[10.5px] uppercase tracking-wide whitespace-nowrap">${label}</td>
+      ${results.map(r => `<td class="py-2 px-3 font-mono text-center whitespace-nowrap">${get(r)}</td>`).join("")}
+    </tr>`;
+
+  document.getElementById("compare-result").innerHTML = `
+    <table class="w-full text-sm bg-surface border border-border rounded-lg">
+      <thead>
+        <tr>
+          <th class="py-2 pl-4 text-left"></th>
+          ${results.map(r => `
+            <th class="py-2 px-3 text-center ${r.recommended ? 'text-ok' : ''}">
+              ${r.name}${r.recommended ? ' ⭐' : ''}
+            </th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${metric("Gate 2", r => `${r.after.gate2.capacity_pressure_pct}% <span class="${LEVEL_TEXT[r.after.gate2.level]}">${r.after.gate2.level}</span>`)}
+        ${metric("Gate 3", r => `${r.after.gate3.capacity_pressure_pct}% <span class="${LEVEL_TEXT[r.after.gate3.level]}">${r.after.gate3.level}</span>`)}
+        ${metric("Corridor B", r => `${r.after.corridor_b_pct}%`)}
+        ${metric("Visitors moved", r => r.after.actual_redirect_applied)}
+      </tbody>
+    </table>
+    ${results.some(r => r.warnings.length) ? `
+      <div class="mt-2 text-[10.5px] text-muted">
+        ${results.filter(r => r.warnings.length).map(r => `<div><b>${r.name}:</b> ${r.warnings.join(" ")}</div>`).join("")}
+      </div>` : ""}
+  `;
+}
+
 async function runAiAdvisor() {
   const box = document.getElementById("ai-advisor-box");
   box.classList.remove("hidden");
@@ -467,10 +683,14 @@ async function openRiskModal(zoneId) {
 
   const flightsBox = document.getElementById("modal-flights");
   if (zone.name === "Transport Hub") {
-    const flights = await api("/api/transport/flights");
+    const [flights, local] = await Promise.all([
+      api("/api/transport/flights"), api("/api/transport/local"),
+    ]);
     flightsBox.classList.remove("hidden");
-    flightsBox.innerHTML = `
+
+    const flightsHtml = flights.available ? `
       <div class="ai-box">
+        <h4 class="eyebrow mb-2">Flights (NMIA)</h4>
         <p class="text-[10.5px] text-muted italic m-0 mb-2">${flights.note}</p>
         ${flights.arrivals.map(a => `
           <div class="flex items-center justify-between text-sm py-1">
@@ -478,7 +698,46 @@ async function openRiskModal(zoneId) {
             <span class="font-mono text-muted">in ${a.arrives_in_min} min</span>
           </div>
         `).join("")}
-      </div>`;
+      </div>` : `<div class="ai-box"><p class="text-[10.5px] text-muted italic m-0">${flights.note}</p></div>`;
+
+    const localHtml = local.available ? `
+      <div class="ai-box mt-3">
+        <p class="text-[10.5px] text-muted italic m-0 mb-2">${local.note}</p>
+
+        <h4 class="eyebrow mb-2">Suburban Trains</h4>
+        ${local.trains.suburban.map(t => `
+          <div class="flex items-center justify-between text-sm py-1">
+            <span>${t.line} → ${t.destination} <span class="text-muted text-[10.5px]">(${t.via})</span></span>
+            <span class="font-mono text-muted">in ${t.arrives_in_min} min</span>
+          </div>
+        `).join("")}
+
+        <h4 class="eyebrow mt-3 mb-2">Long-Distance Trains</h4>
+        ${local.trains.long_distance.map(t => `
+          <div class="flex items-center justify-between text-sm py-1">
+            <span>${t.train} → ${t.destination} <span class="text-muted text-[10.5px]">(${t.via})</span></span>
+            <span class="font-mono text-muted">in ${t.arrives_in_min} min</span>
+          </div>
+        `).join("")}
+
+        <h4 class="eyebrow mt-3 mb-2">Local Buses (NMMT)</h4>
+        ${local.buses.city.map(b => `
+          <div class="flex items-center justify-between text-sm py-1">
+            <span>Route ${b.route} <span class="text-muted text-[10.5px]">— ${b.description}</span></span>
+            <span class="font-mono text-muted">in ${b.arrives_in_min} min</span>
+          </div>
+        `).join("")}
+
+        <h4 class="eyebrow mt-3 mb-2">Village/Outstation Buses (MSRTC)</h4>
+        ${local.buses.village.map(b => `
+          <div class="flex items-center justify-between text-sm py-1">
+            <span>${b.route} <span class="text-muted text-[10.5px]">— ${b.description}</span></span>
+            <span class="font-mono text-muted">in ${b.arrives_in_min} min</span>
+          </div>
+        `).join("")}
+      </div>` : `<div class="ai-box mt-3"><p class="text-[10.5px] text-muted italic m-0">${local.note}</p></div>`;
+
+    flightsBox.innerHTML = flightsHtml + localHtml;
   } else {
     flightsBox.classList.add("hidden");
     flightsBox.innerHTML = "";
@@ -653,6 +912,33 @@ function renderMapMarkers(zones) {
   Object.keys(mapMarkers).forEach(id => {
     if (!seen.has(Number(id))) { zoneMap.removeLayer(mapMarkers[id]); delete mapMarkers[id]; }
   });
+}
+
+// --- Ask KAIRO: floating chatbot, rule-based over live data, no external API
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function toggleChat() {
+  document.getElementById("chat-panel").classList.toggle("show");
+  if (document.getElementById("chat-panel").classList.contains("show")) document.getElementById("chat-input").focus();
+}
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const question = input.value.trim();
+  if (!question) return;
+  const messages = document.getElementById("chat-messages");
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${escapeHtml(question)}</div>`);
+  input.value = "";
+  messages.scrollTop = messages.scrollHeight;
+
+  const result = await api("/api/chatbot/ask", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }),
+  });
+  const tag = result.grounded_in && result.grounded_in.length ? groundedTag(result.grounded_in) : "";
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg bot">${escapeHtml(result.text).replace(/\n/g, "<br>")}${tag}</div>`);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 if (roleCfg.showSimControls) loadScenarios();

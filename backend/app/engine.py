@@ -101,6 +101,25 @@ def get_state_row(db):
     return state
 
 
+def _log(db, tick, category, message, zone_domain=None):
+    db.add(models.LogEntry(tick=tick, category=category, message=message, zone_domain=zone_domain))
+    db.commit()
+
+
+def recent_log(db, category=None, limit=50):
+    q = db.query(models.LogEntry).order_by(models.LogEntry.id.desc())
+    if category:
+        q = q.filter(models.LogEntry.category == category)
+    entries = list(reversed(q.limit(limit).all()))
+    return [
+        {
+            "id": e.id, "tick": e.tick, "clock": event_clock_label(e.tick),
+            "category": e.category, "message": e.message, "zone_domain": e.zone_domain,
+        }
+        for e in entries
+    ]
+
+
 def trigger_scenario(db, scenario_id):
     scenario = db.get(models.Scenario, scenario_id)
     state = get_state_row(db)
@@ -110,6 +129,7 @@ def trigger_scenario(db, scenario_id):
     state.active_scenario_id = scenario.id
     state.trigger_tick = state.tick
     db.commit()
+    _log(db, state.tick, "scenario", f"Scenario triggered: {scenario.name}" + (f" — {scenario.description}" if scenario.description else ""))
     return state
 
 
@@ -126,6 +146,8 @@ def advance_tick(db):
     ramping = state.scenario_active and 0 <= ticks_since_trigger < duration
 
     zones = db.query(models.Zone).all()
+    old_levels = {z.id: zone_risk(z, db)["level"] for z in zones}
+
     for zone in zones:
         delta = effects.get(zone.name, 0) if ramping else 0
         new_count = zone.current_count + delta
@@ -139,6 +161,15 @@ def advance_tick(db):
         zone.current_count = new_count
 
     db.commit()
+
+    # Incident Timeline: a zone newly crossing into HIGH/CRITICAL is the
+    # moment worth recording — re-scored after commit so linked-resource
+    # pressure reflects every zone's post-tick state, not a half-updated one.
+    for zone in zones:
+        new_level = zone_risk(zone, db)["level"]
+        if old_levels[zone.id] not in ("HIGH", "CRITICAL") and new_level in ("HIGH", "CRITICAL"):
+            _log(db, state.tick, "zone_critical", f"{zone.name} crossed into {new_level}.", zone_domain=zone.domain)
+
     return state
 
 
@@ -148,6 +179,7 @@ def reset_simulation(db):
     db.query(models.Resource).delete()
     db.query(models.VisitorProfile).delete()
     db.query(models.SimState).delete()
+    db.query(models.LogEntry).delete()
     db.commit()
     from .seed import seed_if_empty
     seed_if_empty(db)
@@ -210,6 +242,9 @@ def set_ack_status(db, zone_id, status):
         return None
     zone.ack_status = status
     db.commit()
+    if status in ("acknowledged", "escalated"):
+        state = get_state_row(db)
+        _log(db, state.tick if state else 0, status, f"{zone.name} {status}.", zone_domain=zone.domain)
     return zone
 
 
@@ -376,6 +411,26 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
     return {"before": before, "after": after, "warnings": warnings}
 
 
+def compare_plans(db, plans):
+    """Runs run_whatif once per named plan against the same live baseline.
+    run_whatif never mutates state, so every plan previews against an
+    identical 'now' — that's what makes the results directly comparable
+    side by side instead of each one drifting against a different moment."""
+    results = []
+    for plan in plans:
+        r = run_whatif(db, plan.redirect_count, plan.open_gate3, plan.add_buses, plan.move_staff)
+        if r is None:
+            continue
+        results.append({"name": plan.name, **r})
+
+    if results:
+        best = min(results, key=lambda r: (r["after"]["gate2"]["score"], r["after"]["gate3"]["score"]))
+        for r in results:
+            r["recommended"] = r is best
+
+    return results
+
+
 # --- orchestration / action optimizer (Section 16) -------------------------
 
 # domain = which operator role this action belongs to (Event Command Operator
@@ -440,8 +495,121 @@ def generate_recommendations(db):
     return ranked
 
 
+PREVENTIVE_LOOKAHEAD_MIN = 15  # flag zones on track to hit capacity within this window, before they're already HIGH/CRITICAL
+
+
+def preventive_alerts(db):
+    """'Act before it's critical': a MODERATE zone climbing fast toward capacity
+    looks identical to a MODERATE zone holding steady if you only look at the
+    current score — this surfaces the ones with a short time_to_capacity_min
+    so operators can intervene ahead of the surge instead of reacting to it."""
+    zones_by_name = {z.name: z for z in db.query(models.Zone).all()}
+    recs = generate_recommendations(db)
+
+    alerts = []
+    for zone in zones_by_name.values():
+        r = zone_risk(zone, db)
+        if r["level"] in ("HIGH", "CRITICAL"):
+            continue  # already surfaced by the live Risk Register — nothing "preventive" left to say
+        ttc = r["time_to_capacity_min"]
+        if ttc is None or ttc > PREVENTIVE_LOOKAHEAD_MIN:
+            continue
+
+        # Projected risk if this zone is left alone until it hits capacity —
+        # same delta/prev_delta/resource pressure, just current_count at 100%.
+        projected = risk_factors(
+            zone.capacity, zone.capacity,
+            zone.current_count - zone.last_count, zone.prev_delta,
+            r["resource_pressure"],
+        )
+        recs_for_zone = [rec for rec in recs if zone.name in rec["target_zones"]]
+
+        alerts.append({
+            "zone_id": zone.id,
+            "zone_name": zone.name,
+            "zone_domain": zone.domain,
+            "minutes_to_capacity": ttc,
+            "current_score": r["score"],
+            "current_level": r["level"],
+            "projected_score": projected["score"],
+            "projected_level": projected["level"],
+            "recommended_actions": [
+                {"id": rec["id"], "label": rec["label"], "action_score": rec["action_score"]}
+                for rec in recs_for_zone[:2]
+            ],
+        })
+
+    alerts.sort(key=lambda a: a["minutes_to_capacity"])
+    return alerts
+
+
+GATE3_LANE_CAPACITY_BOOST = 500  # "open an additional lane" as a persisted capacity increase
+STAFF_PROCESSING_RELIEF = 150  # per zone queue drained faster once staff arrive — demo-scale, not physically derived
+HOTEL_B_REDIRECT_FRACTION = 0.10  # cap how much of Hotel A's current guests get moved in one approval
+
+
+def _rebaseline(zone):
+    """A planned, approved move isn't an organic arrival surge — without this,
+    the risk engine would read the jump in current_count as a huge delta next
+    time it scores the zone and immediately flag it CRITICAL right after the
+    intervention that was supposed to relieve it (same reasoning run_whatif
+    already applies via its 'natural delta', just persisted here instead of
+    only previewed)."""
+    zone.last_count = zone.current_count
+    zone.prev_delta = 0
+
+
+def _execute_action_effect(db, action):
+    """Applies a candidate action's effect to the *live* simulation state —
+    this is what makes 'Approve' real orchestration instead of only a
+    resource-ledger deduction. Mirrors the same math run_whatif already
+    previews, just persisted instead of discarded after the request."""
+    gate2 = db.query(models.Zone).filter(models.Zone.name == "Gate 2").first()
+    gate3 = db.query(models.Zone).filter(models.Zone.name == "Gate 3").first()
+    corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id) if gate2 else None
+    hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id) if gate2 else None
+    hotel_b = db.query(models.Zone).filter(models.Zone.name == "Hotel B").first()
+
+    if action["id"] == "redirect" and gate2 and gate3:
+        room = max(gate3.capacity - gate3.current_count, 0)
+        moved = max(min(2000, gate2.current_count, room), 0)
+        gate2.current_count -= moved
+        gate3.current_count += moved
+        _rebaseline(gate2)
+        _rebaseline(gate3)
+        return f"Moved {moved} visitors from Gate 2 to Gate 3."
+
+    if action["id"] == "open_gate3" and gate3:
+        gate3.capacity += GATE3_LANE_CAPACITY_BOOST
+        return f"Gate 3 capacity increased by {GATE3_LANE_CAPACITY_BOOST} (additional lane opened)."
+
+    if action["id"] == "dispatch_buses" and corridor_b:
+        added = action["required"] * BUS_CAPACITY_EACH
+        corridor_b.capacity += added
+        return f"Corridor B transport capacity increased by {added} ({action['required']} buses dispatched)."
+
+    if action["id"] == "move_staff":
+        targets = [z for z in (gate2, gate3) if z]
+        for z in targets:
+            z.current_count = max(0, z.current_count - STAFF_PROCESSING_RELIEF)
+            _rebaseline(z)
+        return "Staff moved to Gate 2/Gate 3 — faster processing drained the queue backlog." if targets else "No target zones found."
+
+    if action["id"] == "recommend_hotel_b" and hotel_a and hotel_b:
+        room = max(hotel_b.capacity - hotel_b.current_count, 0)
+        moved = max(min(hotel_a.current_count, room, round(hotel_a.capacity * HOTEL_B_REDIRECT_FRACTION)), 0)
+        hotel_a.current_count -= moved
+        hotel_b.current_count += moved
+        _rebaseline(hotel_a)
+        _rebaseline(hotel_b)
+        return f"Redirected {moved} guests from Hotel A to Hotel B."
+
+    return "No live-state effect model for this action — resource reserved only."
+
+
 def approve_actions(db, action_ids):
     resources = {r.type: r for r in db.query(models.Resource).all()}
+    state = get_state_row(db)
     applied = []
     for action in CANDIDATE_ACTIONS:
         if action["id"] not in action_ids:
@@ -451,9 +619,25 @@ def approve_actions(db, action_ids):
             if not res or res.quantity_available < action["required"]:
                 continue
             res.quantity_available -= action["required"]
+        effect_note = _execute_action_effect(db, action)
+        db.commit()
+        _log(db, state.tick if state else 0, "action_executed", f"{action['label']} — {effect_note}", zone_domain=action["domain"])
         applied.append(action["id"])
-    db.commit()
     return applied
+
+
+def escalations(db):
+    """Zones already HIGH/CRITICAL with zero feasible recommended action
+    targeting them — surfaces the 'nothing safe left to suggest, this needs a
+    human call' case instead of the UI silently showing an empty list."""
+    state = full_state(db)
+    recs = generate_recommendations(db)
+    covered = {zn for rec in recs for zn in rec["target_zones"]}
+    return [
+        {"zone_id": z["id"], "zone_name": z["name"], "zone_domain": z["domain"], "score": z["score"], "level": z["level"]}
+        for z in state["zones"]
+        if z["level"] in ("HIGH", "CRITICAL") and z["name"] not in covered
+    ]
 
 
 # --- registration & check-in (Section 7.2) ---------------------------------
@@ -568,6 +752,7 @@ def create_event(db, name, region, expected_attendance, safe_capacity):
     db.query(models.Resource).delete()
     db.query(models.VisitorProfile).delete()
     db.query(models.Event).delete()
+    db.query(models.LogEntry).delete()
     db.commit()
 
     event = models.Event(
@@ -605,6 +790,7 @@ def delete_event(db):
     db.query(models.VisitorProfile).delete()
     db.query(models.Event).delete()
     db.query(models.SimState).delete()
+    db.query(models.LogEntry).delete()
     db.commit()
 
 
@@ -776,14 +962,121 @@ def attendee_advisory(db):
     return {"text": text, "grounded_in": ["state:gates"], "error": None}
 
 
-# --- Transport Hub: illustrative arrivals feed ------------------------------
+# --- Chatbot: keyword-routed Q&A over our own grounded data ----------------
+# Not a third-party/paid LLM call — a small intent router over the exact same
+# structured fields explain_zone/ai_advisor already use, so it carries the
+# same "never invent a number" guarantee while answering free-form questions.
+
+def chatbot_answer(db, question):
+    q = (question or "").strip().lower()
+    if not q:
+        return {"text": "Ask me about a gate, a hotel, or a corridor by name, or try \"what should I do\" or \"what happened\".", "grounded_in": []}
+
+    zones = db.query(models.Zone).all()
+    for zone in zones:
+        if zone.name.lower() in q:
+            r = zone_risk(zone, db)
+            dominant = _dominant_factor(r)
+            sentence = _factor_sentence(zone, r, dominant)
+            return {"text": f"{sentence} Current score: {r['score']} ({r['level']}).", "grounded_in": [f"zone:{zone.name}"]}
+
+    if any(k in q for k in ("what should i do", "recommend", "action", "plan")):
+        recs = generate_recommendations(db)
+        if not recs:
+            return {"text": "No feasible actions right now — every candidate action is blocked by a resource or capacity constraint.", "grounded_in": ["state:recommendations"]}
+        top = recs[0]
+        return {
+            "text": (f"Top recommendation: {top['label']} (score {top['action_score']}, targets "
+                     f"{', '.join(top['target_zones'])}, expected risk reduction +{top['risk_reduction']})."),
+            "grounded_in": [f"action:{top['id']}"],
+        }
+
+    if any(k in q for k in ("hotel", "occupancy", "room", "accommodation")):
+        hotels = [z for z in zones if z.type == "hotel"]
+        if not hotels:
+            return {"text": "No hotel zones are configured for this event.", "grounded_in": []}
+        lines = [f"{h.name}: {round(h.current_count / h.capacity * 100, 1)}% occupied ({h.current_count}/{h.capacity})" for h in hotels]
+        return {"text": " · ".join(lines), "grounded_in": [f"zone:{h.name}" for h in hotels]}
+
+    if any(k in q for k in ("long distance", "express train", "outstation train", "konkan")):
+        local = local_transit_feed(db)
+        if not local["available"]:
+            return {"text": local["note"], "grounded_in": []}
+        lines = [f"{t['train']} → {t['destination']} ({t['via']}) in {t['arrives_in_min']} min" for t in local["trains"]["long_distance"]]
+        return {"text": "Next long-distance trains: " + " · ".join(lines), "grounded_in": ["state:local_transit"]}
+
+    if any(k in q for k in ("train", "railway", "harbour line", "local train")):
+        local = local_transit_feed(db)
+        if not local["available"]:
+            return {"text": local["note"], "grounded_in": []}
+        lines = [f"{t['line']} → {t['destination']} in {t['arrives_in_min']} min" for t in local["trains"]["suburban"]]
+        return {"text": "Next local trains: " + " · ".join(lines), "grounded_in": ["state:local_transit"]}
+
+    if any(k in q for k in ("village", "msrtc", "outstation bus", "state transport", "st bus")):
+        local = local_transit_feed(db)
+        if not local["available"]:
+            return {"text": local["note"], "grounded_in": []}
+        lines = [f"{b['route']} ({b['description']}) in {b['arrives_in_min']} min" for b in local["buses"]["village"]]
+        return {"text": "Next MSRTC village/outstation buses: " + " · ".join(lines), "grounded_in": ["state:local_transit"]}
+
+    if any(k in q for k in ("bus", "transport", "corridor")):
+        corridors = [z for z in zones if z.type == "corridor"]
+        resources = {r.type: r for r in db.query(models.Resource).all()}
+        bus = resources.get("bus")
+        bus_line = f"Buses available: {bus.quantity_available}/{bus.quantity_total}. " if bus else ""
+        local = local_transit_feed(db)
+        if local["available"] and local["buses"]["city"]:
+            next_bus = local["buses"]["city"][0]
+            bus_line += f"Next NMMT bus: Route {next_bus['route']} in {next_bus['arrives_in_min']} min. "
+        lines = [f"{c.name}: {round(c.current_count / c.capacity * 100, 1)}% loaded" for c in corridors]
+        grounded = [f"zone:{c.name}" for c in corridors] + (["resource:bus"] if bus else [])
+        return {"text": bus_line + " · ".join(lines), "grounded_in": grounded}
+
+    if any(k in q for k in ("escalat", "no feasible", "stuck", "human")):
+        esc = escalations(db)
+        if not esc:
+            return {"text": "No zone is currently stuck without a feasible action.", "grounded_in": ["state:escalations"]}
+        return {
+            "text": "Needs a human call: " + ", ".join(f"{e['zone_name']} ({e['level']})" for e in esc),
+            "grounded_in": [f"zone:{e['zone_name']}" for e in esc],
+        }
+
+    if any(k in q for k in ("happen", "timeline", "history", "log")):
+        log = recent_log(db, limit=5)
+        if not log:
+            return {"text": "Nothing has happened yet — trigger a scenario to see activity build up.", "grounded_in": ["state:timeline"]}
+        return {"text": " | ".join(f"[{e['clock']}] {e['message']}" for e in log), "grounded_in": ["state:timeline"]}
+
+    if any(k in q for k in ("gate", "queue", "wait", "entry")):
+        advisory = gate_advisory(db)
+        text = " · ".join(f"{g['name']}: {g['capacity_pressure_pct']}% ({g['level']})" for g in advisory["gates"])
+        if advisory["suggestion"]:
+            s = advisory["suggestion"]
+            text += f". {s['crowded_gate']} is busier — try {s['suggested_gate']} instead."
+        return {"text": text, "grounded_in": [f"zone:{g['name']}" for g in advisory["gates"]]}
+
+    # Fallback: the same event-wide summary the AI Advisor button gives.
+    advisor = ai_advisor(db)
+    return {
+        "text": advisor["text"] + "\n\n(Try asking about a specific gate/hotel/corridor by name, or \"what should I do\".)",
+        "grounded_in": advisor["grounded_in"],
+    }
+
+
+# --- Transport Hub: illustrative arrivals feeds (region-gated) -------------
 # Panvel Railway Station (our Transport Hub zone) really does interconnect to
-# Navi Mumbai International Airport, which opened 25 Dec 2025 with IndiGo, Air
-# India Express and Akasa Air flying real routes to these destinations. We
-# have no live aviation-data feed here, so this schedule is illustrative and
-# deterministic (seeded by tick, not random each call) — clearly not a claim
-# of live flight tracking, same honest synthetic-vs-real framing as the rest
-# of the crowd data.
+# Navi Mumbai International Airport (opened 25 Dec 2025, IndiGo/Air India
+# Express/Akasa Air), sits on the real Central Railway Mumbai Suburban
+# network as a terminus of both the Harbour Line (to CSMT via Vashi/Nerul)
+# and the Trans-Harbour Line (to Thane), and is served locally by NMMT
+# (Navi Mumbai Municipal Transport) buses — verified via web search, not
+# invented. None of these are live feeds, so every schedule below is
+# illustrative and deterministic (seeded by tick, not random each call),
+# same honest synthetic-vs-real framing as the rest of the crowd data.
+#
+# Only Maharashtra/Navi Mumbai has been researched to this level of detail —
+# every other region gets an explicit "not available" note instead of a
+# guessed schedule for a station we haven't actually looked up.
 NMIA_ROUTES = [
     ("IndiGo", "Bengaluru"), ("IndiGo", "Jaipur"), ("IndiGo", "Nagpur"), ("IndiGo", "Patna"),
     ("IndiGo", "Indore"), ("IndiGo", "Ahmedabad"), ("Air India Express", "Delhi"),
@@ -791,8 +1084,55 @@ NMIA_ROUTES = [
     ("Akasa Air", "Delhi"), ("Akasa Air", "Ahmedabad"),
 ]
 
+LOCAL_TRAIN_LINES = [
+    ("Harbour Line", "CSMT", "via Vashi, Nerul, Kharghar"),
+    ("Harbour Line", "Goregaon", "via Vashi, Nerul, Kharghar"),
+    ("Trans-Harbour Line", "Thane", "via Vashi, Koparkhairane"),
+]
+
+# Panvel Junction also carries Central Railway mainline/Konkan Railway
+# long-distance services (platforms 5-7) — separate from the suburban
+# Harbour/Trans-Harbour services above, and the reason it's called one of
+# Central Railway's most important junctions, not just a suburban terminus.
+LONG_DISTANCE_TRAINS = [
+    ("Solapur Vande Bharat Express", "Solapur", "Panvel–Karjat–Pune corridor"),
+    ("Panvel–Hazur Sahib Nanded Express", "Hazur Sahib Nanded", "Panvel–Karjat–Pune corridor"),
+    ("Deccan Express", "Pune", "Panvel–Karjat–Pune corridor"),
+    ("Pragati Express", "Pune", "Panvel–Karjat–Pune corridor"),
+    ("Konkan Railway Express", "Ratnagiri/Goa direction", "via Roha, platform 7"),
+]
+
+NMMT_BUS_ROUTES = [
+    ("24", "Panvel Railway Station ↔ Thane, via Ghansoli Depot"),
+    ("59", "Usarli Khurd ↔ Panvel Railway Station"),
+    ("Kharghar–Panvel", "Kharghar ↔ Panvel — every 10–15 min at peak"),
+    ("Vashi–Belapur", "Vashi ↔ Belapur — every 10–15 min at peak"),
+]
+
+# MSRTC (state transport) village/outstation routes out of Panvel ST Depot —
+# Panvel is the headquarters of Raigad district's largest sub-division by
+# village count, and the depot is the real gateway from Navi Mumbai into
+# interior Raigad/Konkan, distinct from NMMT's local city routes above.
+MSRTC_VILLAGE_ROUTES = [
+    ("Panvel–Alibaug", "via Pen — Raigad district"),
+    ("Panvel–Pen", "Raigad district"),
+    ("Panvel–Roha", "Raigad district, Konkan gateway"),
+    ("Panvel–Mangaon", "Raigad district"),
+    ("Panvel–Khopoli", "Raigad district"),
+    ("Panvel–Karjat", "Raigad district"),
+    ("Panvel–Uran", "Raigad district"),
+]
+
+
+def _region_gated(db):
+    event = db.query(models.Event).first()
+    return bool(event and event.region == "Maharashtra")
+
 
 def transport_hub_arrivals(db):
+    if not _region_gated(db):
+        return {"available": False, "arrivals": [],
+                "note": "No independently verified flight schedule for this region's airport yet."}
     state = get_state_row(db)
     rnd = random.Random(state.tick)  # deterministic per tick, not per request
     picks = rnd.sample(NMIA_ROUTES, k=4)
@@ -801,7 +1141,53 @@ def transport_hub_arrivals(db):
         for i, (airline, origin) in enumerate(picks)
     ]
     return {
+        "available": True,
         "note": "Illustrative schedule, not live tracking — reflects NMIA's real Dec-2025 launch "
                 "route network (IndiGo, Air India Express, Akasa Air).",
         "arrivals": arrivals,
+    }
+
+
+def local_transit_feed(db):
+    if not _region_gated(db):
+        return {
+            "available": False,
+            "trains": {"suburban": [], "long_distance": []},
+            "buses": {"city": [], "village": []},
+            "note": "No independently verified local train/bus schedule for this region yet — "
+                    "only Maharashtra/Navi Mumbai (Panvel) has been researched in detail.",
+        }
+    state = get_state_row(db)
+    rnd = random.Random((state.tick if state else 0) + 1)  # offset from the flight feed's seed so picks differ
+
+    suburban_picks = rnd.sample(LOCAL_TRAIN_LINES, k=len(LOCAL_TRAIN_LINES))
+    suburban = [
+        {"line": line, "destination": dest, "via": via, "arrives_in_min": 4 + i * 6}
+        for i, (line, dest, via) in enumerate(suburban_picks)
+    ]
+    long_distance_picks = rnd.sample(LONG_DISTANCE_TRAINS, k=len(LONG_DISTANCE_TRAINS))
+    long_distance = [
+        {"train": name, "destination": dest, "via": via, "arrives_in_min": 15 + i * 25}
+        for i, (name, dest, via) in enumerate(long_distance_picks)
+    ]
+
+    city_picks = rnd.sample(NMMT_BUS_ROUTES, k=len(NMMT_BUS_ROUTES))
+    city_buses = [
+        {"route": route, "description": desc, "arrives_in_min": 3 + i * 5}
+        for i, (route, desc) in enumerate(city_picks)
+    ]
+    village_picks = rnd.sample(MSRTC_VILLAGE_ROUTES, k=len(MSRTC_VILLAGE_ROUTES))
+    village_buses = [
+        {"route": route, "description": desc, "arrives_in_min": 10 + i * 15}
+        for i, (route, desc) in enumerate(village_picks)
+    ]
+
+    return {
+        "available": True,
+        "note": "Illustrative schedule, not live tracking — reflects Panvel's real Central Railway "
+                "Harbour/Trans-Harbour Line and Konkan Railway/mainline services, NMMT's real city "
+                "route network, and MSRTC's real outstation routes from Panvel ST Depot into Raigad "
+                "district's villages and towns.",
+        "trains": {"suburban": suburban, "long_distance": long_distance},
+        "buses": {"city": city_buses, "village": village_buses},
     }

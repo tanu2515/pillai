@@ -32,6 +32,18 @@ class WhatIfRequest(BaseModel):
     move_staff: int = 0
 
 
+class PlanSpec(BaseModel):
+    name: str
+    redirect_count: int = 0
+    open_gate3: bool = False
+    add_buses: int = 0
+    move_staff: int = 0
+
+
+class ComparePlansRequest(BaseModel):
+    plans: list[PlanSpec]
+
+
 class ApproveRequest(BaseModel):
     action_ids: list[str]
 
@@ -53,6 +65,10 @@ class LoginRequest(BaseModel):
 
 class AckRequest(BaseModel):
     status: str  # open | acknowledged | escalated
+
+
+class ChatRequest(BaseModel):
+    question: str
 
 
 class ZoneCapacityUpdate(BaseModel):
@@ -200,9 +216,39 @@ def whatif(req: WhatIfRequest, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/simulate/compare")
+def simulate_compare(req: ComparePlansRequest, db: Session = Depends(get_db)):
+    return engine.compare_plans(db, req.plans)
+
+
 @app.get("/api/recommendations")
 def recommendations(db: Session = Depends(get_db)):
     return engine.generate_recommendations(db)
+
+
+@app.get("/api/risks/preventive")
+def preventive_alerts(db: Session = Depends(get_db)):
+    return engine.preventive_alerts(db)
+
+
+@app.get("/api/risks/escalations")
+def escalations(db: Session = Depends(get_db)):
+    return engine.escalations(db)
+
+
+@app.get("/api/timeline")
+def timeline(db: Session = Depends(get_db)):
+    return engine.recent_log(db)
+
+
+@app.get("/api/execution-status")
+def execution_status(db: Session = Depends(get_db)):
+    return engine.recent_log(db, category="action_executed")
+
+
+@app.post("/api/chatbot/ask")
+def chatbot_ask(req: ChatRequest, db: Session = Depends(get_db)):
+    return engine.chatbot_answer(db, req.question)
 
 
 @app.post("/api/action-plans/approve")
@@ -324,6 +370,11 @@ def ai_attendee_advisory(db: Session = Depends(get_db)):
 @app.get("/api/transport/flights")
 def transport_flights(db: Session = Depends(get_db)):
     return engine.transport_hub_arrivals(db)
+
+
+@app.get("/api/transport/local")
+def transport_local(db: Session = Depends(get_db)):
+    return engine.local_transit_feed(db)
 
 
 # --- Administrator: event configuration only, no live-ops access ----------

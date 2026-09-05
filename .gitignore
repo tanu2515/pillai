@@ -1,5 +1,7 @@
 backend/kairo.db
 backend/server.log
+backend/server_run.log
+backend/.env
 __pycache__/
 *.pyc
 .venv/
