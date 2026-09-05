@@ -22,14 +22,61 @@ DOMAINS = ["venue", "transport", "hospitality"]
 
 
 class Event(Base):
+    """Multiple rows now coexist (the BookMyShow-style catalog an attendee
+    browses/searches) — but only ONE ever has status="live" at a time, and
+    every existing crowd-monitoring/risk-engine function (zones, alerts,
+    scenarios, the simulation clock) only ever operates on that one, via
+    engine.get_live_event(). status: upcoming | live | completed."""
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    event_date = Column(String, nullable=True)  # ISO date, e.g. "2026-09-15"
+    event_time = Column(String, nullable=True)  # e.g. "18:00"
+    category = Column(String, nullable=True)  # College Event | Concert | Conference | Sports | Festival | Workshop
+    city = Column(String, nullable=True)
+    venue_name = Column(String, nullable=True)
+    venue_address = Column(String, nullable=True)
+    banner_emoji = Column(String, nullable=True)  # stand-in for a real uploaded banner image
+    is_featured = Column(Boolean, default=False)  # drives the Home screen's "Popular"/"Recommended" sections
     region = Column(String, nullable=True)  # key into regions.INDIA_REGIONS
     expected_attendance = Column(Integer, nullable=False)
     safe_capacity = Column(Integer, nullable=False)
-    status = Column(String, default="active")
+    status = Column(String, default="live")  # upcoming | live | completed
+
+
+class EventTier(Base):
+    """A bookable price tier for an event's catalog listing (General/VIP/
+    Premium etc) — independent of the live simulation's Zone model, so an
+    'upcoming' event can be browsed and booked before it ever goes live and
+    gets real zones. gate_name is just a label (e.g. "Gate 1") resolved
+    against the live event's actual Zone by name at check-in time — it does
+    not need a Zone to exist yet."""
+    __tablename__ = "event_tiers"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    name = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+    capacity = Column(Integer, nullable=False)
+    booked_count = Column(Integer, default=0)  # aggregate-tracked tier capacity (below the numbered-seat threshold)
+    uses_seats = Column(Boolean, default=False)  # capacity >= 10,000: also has a bounded block of EventSeat rows
+    gate_name = Column(String, nullable=True)  # e.g. "Gate 1" — which zone this tier routes to once the event is live
+
+
+class EventSeat(Base):
+    """Individually numbered seats — only generated for a bounded 'named'
+    block within a large (uses_seats) tier, not one row per physical seat at
+    stadium scale (e.g. 50,000) — see engine.SEATS_PER_LARGE_TIER. The rest
+    of a large tier's capacity stays aggregate-tracked on EventTier itself,
+    same as a normal tier."""
+    __tablename__ = "event_seats"
+
+    id = Column(Integer, primary_key=True)
+    tier_id = Column(Integer, ForeignKey("event_tiers.id"), nullable=False)
+    seat_label = Column(String, nullable=False)  # e.g. "A1"
+    status = Column(String, default="available")  # available | booked
 
 
 class Zone(Base):
@@ -68,14 +115,26 @@ class Resource(Base):
 
 
 class VisitorProfile(Base):
+    """A booking/registration. gate_zone_id is the original direct-gate flow
+    (still used for the live event's day-of registration); event_id/tier_id/
+    seat_id are set instead when booked through the event catalog — gate_name
+    on the tier is resolved to an actual live Zone only at check-in time."""
     __tablename__ = "visitor_profiles"
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    gate_zone_id = Column(Integer, ForeignKey("zones.id"))
+    email = Column(String, nullable=True)  # ties a booking to My Events / the attendee's account
+    gate_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
+    tier_id = Column(Integer, ForeignKey("event_tiers.id"), nullable=True)
+    seat_id = Column(Integer, ForeignKey("event_seats.id"), nullable=True)
+    quantity = Column(Integer, default=1)
+    hotel_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)  # optional add-on picked at booking time
+    wants_transport = Column(Boolean, default=False)  # optional add-on: request a shuttle/bus assignment
     code = Column(String, default=lambda: uuid.uuid4().hex[:8])
     checked_in = Column(Boolean, default=False)
     walk_in = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class UserAccount(Base):
@@ -177,6 +236,25 @@ class EventAttendee(Base):
     event_date = Column(String, nullable=True)
     registration_status = Column(String, default="registered")
     registration_time = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class TransitRoute(Base):
+    """Train/bus/flight reference data the chatbot and Transport Hub feed
+    read from — previously hardcoded Python lists in engine.py, now real rows
+    so they're visible in the raw-tables viewer and editable without a code
+    change. mode groups them: suburban_train | long_distance_train | city_bus
+    | village_bus | flight. region gates which event sees this route at all
+    (only Maharashtra has independently-verified data as of writing) — same
+    honest synthetic-vs-real framing as before, just data instead of code."""
+    __tablename__ = "transit_routes"
+
+    id = Column(Integer, primary_key=True)
+    region = Column(String, nullable=False)
+    mode = Column(String, nullable=False)
+    name = Column(String, nullable=False)  # line/train name, bus route number, or airline
+    destination = Column(String, nullable=True)
+    description = Column(String, nullable=True)  # "via Vashi, Nerul, Kharghar" / NMMT route description
+    base_arrival_min = Column(Integer, nullable=False, default=10)  # base minutes-out before per-pick offset is added
 
 
 class LogEntry(Base):

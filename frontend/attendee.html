@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Attendee</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -77,9 +78,12 @@
 </head>
 <body class="bg-bg text-ink font-sans m-0 max-w-md mx-auto pb-8 min-h-screen">
 <header class="px-4 pt-6 pb-2 text-center">
-  <a href="/" class="text-muted text-xs font-mono">&larr; HOME</a>
+  <div class="flex items-center justify-between text-xs font-mono">
+    <a href="/" class="text-muted">&larr; HOME</a>
+    <a href="events.html" class="text-accent font-bold">BROWSE EVENTS →</a>
+  </div>
   <div class="flex items-center justify-center gap-2 mt-4 mb-1">
-    <span class="tick"></span>
+    <img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-7 h-7 rounded-lg" />
     <h1 id="event-title" class="brand-mark text-xl font-extrabold m-0 tracking-[0.03em]">VYAVASTHA</h1>
   </div>
   <p class="text-muted text-xs m-0 font-mono">Visitor Advisory</p>

@@ -137,6 +137,39 @@ class SetCurrentEvent(BaseModel):
     event_attendee_id: int
 
 
+class TierSpec(BaseModel):
+    name: str
+    price: float
+    capacity: int
+    gate_name: str | None = None
+
+
+class EventListingCreate(BaseModel):
+    name: str
+    description: str = ""
+    event_date: str | None = None
+    event_time: str | None = None
+    category: str | None = None
+    city: str | None = None
+    venue_name: str | None = None
+    venue_address: str | None = None
+    banner_emoji: str | None = None
+    is_featured: bool = False
+    region: str | None = None
+    expected_attendance: int
+    safe_capacity: int
+    tiers: list[TierSpec]
+
+
+class BookTierRequest(BaseModel):
+    name: str
+    email: str | None = None
+    seat_id: int | None = None
+    quantity: int = 1
+    hotel_zone_id: int | None = None
+    wants_transport: bool = False
+
+
 # --- role enforcement (backward-compatible) ---------------------------------
 # Reads an optional X-User-Role header. Absent header = full access (every
 # client that predates this change keeps working exactly as before); a
@@ -169,7 +202,7 @@ def require_admin(role: str | None):
 
 @app.get("/api/event")
 def get_event(db: Session = Depends(get_db)):
-    event = db.query(models.Event).first()
+    event = engine.get_live_event(db)
     if not event:
         return {"configured": False}
     return {
@@ -329,6 +362,57 @@ def checkin(req: CheckinRequest, db: Session = Depends(get_db)):
     return engine.checkin(db, req.code)
 
 
+# --- event catalog: browse, book a tier/seat (BookMyShow-style) ------------
+
+@app.get("/api/event-categories")
+def list_categories():
+    return engine.CATEGORIES
+
+
+@app.get("/api/events")
+def list_events(search: str | None = None, category: str | None = None, section: str | None = None, db: Session = Depends(get_db)):
+    return engine.list_events(db, search=search, category=category, section=section)
+
+
+@app.get("/api/events/{event_id}")
+def get_event_detail(event_id: int, db: Session = Depends(get_db)):
+    result = engine.event_detail(db, event_id)
+    if result is None:
+        raise HTTPException(404, "event not found")
+    return result
+
+
+@app.get("/api/events/{event_id}/tiers/{tier_id}/seats")
+def get_tier_seats(event_id: int, tier_id: int, db: Session = Depends(get_db)):
+    result = engine.tier_seats(db, tier_id)
+    if result is None:
+        raise HTTPException(404, "tier not found or doesn't use numbered seats")
+    return result
+
+
+@app.post("/api/events")
+def create_event_listing(req: EventListingCreate, db: Session = Depends(get_db)):
+    event = engine.create_event_listing(
+        db, req.name, req.description, req.event_date, req.region,
+        req.expected_attendance, req.safe_capacity, [t.model_dump() for t in req.tiers],
+        event_time=req.event_time, category=req.category, city=req.city, venue_name=req.venue_name,
+        venue_address=req.venue_address, banner_emoji=req.banner_emoji, is_featured=req.is_featured,
+    )
+    return {"id": event.id, "name": event.name}
+
+
+@app.post("/api/events/{event_id}/tiers/{tier_id}/book")
+def book_tier(event_id: int, tier_id: int, req: BookTierRequest, db: Session = Depends(get_db)):
+    return engine.book_tier(
+        db, event_id, tier_id, req.name, req.seat_id, req.email, req.quantity, req.hotel_zone_id, req.wants_transport,
+    )
+
+
+@app.get("/api/my-bookings")
+def my_bookings(email: str, db: Session = Depends(get_db)):
+    return engine.list_my_bookings(db, email.strip().lower())
+
+
 @app.get("/api/auth/roles")
 def list_roles():
     return models.ROLES
@@ -443,7 +527,7 @@ def transport_local(db: Session = Depends(get_db)):
 @app.patch("/api/admin/event")
 def admin_update_event(req: EventUpdate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
     require_admin(role)
-    event = db.query(models.Event).first()
+    event = engine.get_live_event(db)
     if not event:
         raise HTTPException(404, "no event configured yet")
     event.name = req.name.strip() or event.name
@@ -501,6 +585,9 @@ def admin_raw_tables(db: Session = Depends(get_db), role: str | None = Depends(g
         "notifications": models.Notification,
         "attendees": models.Attendee,
         "event_attendees": models.EventAttendee,
+        "transit_routes": models.TransitRoute,
+        "event_tiers": models.EventTier,
+        "event_seats": models.EventSeat,
     }
     out = {}
     for name, model in tables.items():

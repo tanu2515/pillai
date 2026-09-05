@@ -99,6 +99,14 @@ def zone_risk(zone, db):
 
 # --- simulation clock ---------------------------------------------------
 
+def get_live_event(db):
+    """The one Event (of potentially many catalog rows) the crowd-monitoring/
+    risk-engine side actually operates on. Every zone/alert/scenario/chatbot
+    function in this file uses this instead of 'the only Event row' now that
+    Event is a real multi-row catalog (see models.Event)."""
+    return db.query(models.Event).filter(models.Event.status == "live").first()
+
+
 def get_state_row(db):
     state = db.query(models.SimState).first()
     return state
@@ -198,7 +206,7 @@ def _open_alert(db, zone, risk):
         existing.impact_score = risk["score"]
         db.commit()
         return existing
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     alert = models.Alert(
         event_id=event.id if event else None, zone_id=zone.id, alert_type="crowd",
         severity=risk["level"], impact_score=risk["score"],
@@ -284,10 +292,16 @@ def mark_notification_read(db, notification_id):
 
 
 def reset_simulation(db):
-    db.query(models.Event).delete()
-    db.query(models.Zone).delete()
+    """Wipes only the live event and its zones/bookings — catalog events
+    (upcoming/completed, browsable via the event listing) are untouched."""
+    live = get_live_event(db)
+    if live:
+        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete()
+        db.query(models.VisitorProfile).filter(
+            (models.VisitorProfile.event_id == live.id) | (models.VisitorProfile.event_id.is_(None))
+        ).delete(synchronize_session=False)
+        db.query(models.Event).filter(models.Event.id == live.id).delete()
     db.query(models.Resource).delete()
-    db.query(models.VisitorProfile).delete()
     db.query(models.SimState).delete()
     db.query(models.LogEntry).delete()
     db.commit()
@@ -799,13 +813,32 @@ def register_visitor(db, name, gate_zone_id, walk_in=False):
 
 
 def checkin(db, code):
+    """Resolves either the original direct-gate flow (gate_zone_id set) or a
+    catalog booking (tier_id set) — a tier booking only resolves to an actual
+    Zone once its event is the live one (gate assignment tied to tier, per
+    the tier's gate_name label); otherwise there's nothing to check into yet."""
     visitor = db.query(models.VisitorProfile).filter(models.VisitorProfile.code == code).first()
     if not visitor:
         return {"status": "not_found"}
     if visitor.checked_in:
         return {"status": "already_checked_in"}
 
-    zone = db.get(models.Zone, visitor.gate_zone_id)
+    zone = None
+    if visitor.gate_zone_id:
+        zone = db.get(models.Zone, visitor.gate_zone_id)
+    elif visitor.tier_id:
+        tier = db.get(models.EventTier, visitor.tier_id)
+        live = get_live_event(db)
+        if not tier or not live or tier.event_id != live.id:
+            return {"status": "not_live", "message": "This event hasn't gone live yet — check-in opens on the event day."}
+        if tier.gate_name:
+            zone = db.query(models.Zone).filter(
+                models.Zone.event_id == live.id, models.Zone.name == tier.gate_name,
+            ).first()
+
+    if not zone:
+        return {"status": "not_found"}
+
     remaining = zone.capacity - zone.current_count
     if remaining <= 0:
         alternate = (
@@ -850,7 +883,7 @@ def _get_or_create_attendee(db, email):
 
 
 def register_attendee_for_event(db, email):
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     if not event:
         return None
     account, attendee = _get_or_create_attendee(db, email)
@@ -873,7 +906,7 @@ def register_attendee_for_event(db, email):
 
 def list_my_events(db, email):
     account, attendee = _get_or_create_attendee(db, email)
-    live_event = db.query(models.Event).first()
+    live_event = get_live_event(db)
     regs = db.query(models.EventAttendee).filter(models.EventAttendee.attendee_id == attendee.id).order_by(models.EventAttendee.id.desc()).all()
     return [
         {
@@ -911,6 +944,230 @@ def current_event_context(db, email):
         return {"status": "ok", "event_name": current["event_name"]}
     return {"status": "ambiguous", "message": "You are registered for multiple events. Which event do you mean?",
             "events": [r["event_name"] for r in regs]}
+
+
+# --- event catalog: browse, book a tier/seat (BookMyShow-style) ------------
+# Independent of the live simulation's Zone model — an "upcoming" event can
+# be listed, searched, and booked long before it ever goes live. A tier's
+# gate_name is only resolved to a real Zone at check-in time (see checkin()),
+# once that event is actually the live one.
+
+SEAT_TIER_THRESHOLD = 10_000  # capacity at/above this also gets a bounded numbered-seat block
+SEATS_PER_LARGE_TIER = 200  # Row A1..D50 — a representative numbered block, not one row per physical seat
+SEAT_ROWS = "ABCD"
+SEAT_COLS = 50
+
+
+def _tier_available(tier):
+    return max(tier.capacity - tier.booked_count, 0)
+
+
+CATEGORIES = ["College Event", "Concert", "Conference", "Sports", "Festival", "Workshop"]
+
+
+def _event_summary(db, e, tiers=None):
+    tiers = tiers if tiers is not None else db.query(models.EventTier).filter(models.EventTier.event_id == e.id).all()
+    prices = [t.price for t in tiers]
+    total_available = sum(_tier_available(t) for t in tiers)
+    return {
+        "id": e.id, "name": e.name, "description": e.description, "event_date": e.event_date,
+        "event_time": e.event_time, "category": e.category, "city": e.city, "venue_name": e.venue_name,
+        "banner_emoji": e.banner_emoji or "🎉", "is_featured": e.is_featured,
+        "region": e.region, "status": e.status,
+        "min_price": min(prices) if prices else None, "max_price": max(prices) if prices else None,
+        "total_available": total_available,
+        "registration_status": "Sold Out" if tiers and total_available <= 0 else "Registration Open",
+    }
+
+
+def list_events(db, search=None, category=None, section=None):
+    """section: None (all) | "popular" (featured) | "recommended" (featured,
+    different slice) | "near_you" (same region as whichever event is live —
+    a stand-in for real geolocation) | "upcoming" (status=upcoming, soonest first)."""
+    q = db.query(models.Event)
+    if search:
+        q = q.filter(models.Event.name.ilike(f"%{search}%"))
+    if category:
+        q = q.filter(models.Event.category == category)
+
+    if section == "near_you":
+        live = get_live_event(db)
+        if live and live.region:
+            q = q.filter(models.Event.region == live.region)
+    elif section == "upcoming":
+        q = q.filter(models.Event.status == "upcoming").order_by(models.Event.event_date.is_(None), models.Event.event_date)
+    elif section in ("popular", "recommended"):
+        q = q.filter(models.Event.is_featured.is_(True))
+
+    events = q.all()
+    if section not in ("upcoming",):
+        events.sort(key=lambda e: (e.event_date is None, e.event_date or ""))
+    return [_event_summary(db, e) for e in events]
+
+
+def event_detail(db, event_id):
+    event = db.get(models.Event, event_id)
+    if not event:
+        return None
+    tiers = db.query(models.EventTier).filter(models.EventTier.event_id == event_id).all()
+    live = get_live_event(db)
+    is_live = bool(live and live.id == event.id)
+
+    gates, crowd_status, transport_info, hotels, announcements = [], None, None, [], []
+    if is_live:
+        state = full_state(db)
+        gates = [
+            {"name": z["name"], "occupancy_pct": z["capacity_pressure_pct"], "level": z["level"]}
+            for z in state["zones"] if z["type"] == "gate"
+        ]
+        if gates:
+            worst = max(gates, key=lambda g: g["occupancy_pct"])
+            crowd_status = worst["level"]
+        transport_info = transport_demand_prediction(db)
+        hotels = hotel_recommendations(db)
+        announcements = [
+            {"severity": a["severity"], "message": a["message"], "created_at": a["created_at"]}
+            for a in list_alerts(db)[:5]
+        ]
+
+    return {
+        "id": event.id, "name": event.name, "description": event.description, "event_date": event.event_date,
+        "event_time": event.event_time, "category": event.category, "city": event.city,
+        "venue_name": event.venue_name, "venue_address": event.venue_address,
+        "banner_emoji": event.banner_emoji or "🎉",
+        "region": event.region, "status": event.status, "expected_attendance": event.expected_attendance,
+        "safe_capacity": event.safe_capacity,
+        "is_live": is_live,
+        "gates": gates, "crowd_status": crowd_status, "transport_info": transport_info,
+        "hotels": hotels, "announcements": announcements,
+        "tiers": [
+            {
+                "id": t.id, "name": t.name, "price": t.price, "capacity": t.capacity,
+                "available": _tier_available(t), "uses_seats": t.uses_seats, "gate_name": t.gate_name,
+            }
+            for t in tiers
+        ],
+    }
+
+
+def tier_seats(db, tier_id):
+    tier = db.get(models.EventTier, tier_id)
+    if not tier or not tier.uses_seats:
+        return None
+    seats = db.query(models.EventSeat).filter(models.EventSeat.tier_id == tier_id).order_by(models.EventSeat.id).all()
+    return [{"id": s.id, "seat_label": s.seat_label, "status": s.status} for s in seats]
+
+
+def create_event_listing(
+    db, name, description, event_date, region, expected_attendance, safe_capacity, tiers,
+    event_time=None, category=None, city=None, venue_name=None, venue_address=None,
+    banner_emoji=None, is_featured=False,
+):
+    """Adds a new browsable/bookable event to the catalog — status defaults
+    to 'upcoming', so it never interferes with whichever event is live.
+    tiers: [{"name", "price", "capacity", "gate_name"}, ...]"""
+    event = models.Event(
+        name=name, description=description, event_date=event_date, event_time=event_time,
+        category=category, city=city, venue_name=venue_name, venue_address=venue_address,
+        banner_emoji=banner_emoji, is_featured=is_featured, region=region,
+        expected_attendance=expected_attendance, safe_capacity=safe_capacity, status="upcoming",
+    )
+    db.add(event)
+    db.flush()
+
+    for t in tiers:
+        uses_seats = t["capacity"] >= SEAT_TIER_THRESHOLD
+        tier = models.EventTier(
+            event_id=event.id, name=t["name"], price=t["price"], capacity=t["capacity"],
+            gate_name=t.get("gate_name"), uses_seats=uses_seats,
+        )
+        db.add(tier)
+        db.flush()
+        if uses_seats:
+            seat_count = 0
+            for row in SEAT_ROWS:
+                for col in range(1, SEAT_COLS + 1):
+                    if seat_count >= SEATS_PER_LARGE_TIER:
+                        break
+                    db.add(models.EventSeat(tier_id=tier.id, seat_label=f"{row}{col}"))
+                    seat_count += 1
+    db.commit()
+    return event
+
+
+def book_tier(db, event_id, tier_id, name, seat_id=None, email=None, quantity=1, hotel_zone_id=None, wants_transport=False):
+    """seat_id is optional even for a uses_seats tier — most of a large
+    tier's capacity is general admission (only SEATS_PER_LARGE_TIER seats are
+    individually numbered), so booking without one just draws from the same
+    shared capacity pool. Passing seat_id reserves that specific numbered
+    seat (always quantity 1); quantity only applies to general admission."""
+    tier = db.get(models.EventTier, tier_id)
+    if not tier or tier.event_id != event_id:
+        return {"status": "not_found"}
+    quantity = max(1, quantity)
+
+    seat = None
+    if seat_id is not None:
+        if not tier.uses_seats:
+            return {"status": "not_found", "message": "This tier doesn't offer numbered seats."}
+        seat = db.get(models.EventSeat, seat_id)
+        if not seat or seat.tier_id != tier_id:
+            return {"status": "not_found"}
+        if seat.status == "booked":
+            return {"status": "seat_taken", "message": f"Seat {seat.seat_label} is already booked."}
+        quantity = 1
+
+    if _tier_available(tier) < quantity:
+        return {"status": "sold_out", "message": f"Only {_tier_available(tier)} left in {tier.name}."}
+
+    booking = models.VisitorProfile(
+        name=name, email=email, event_id=event_id, tier_id=tier_id, seat_id=seat.id if seat else None,
+        quantity=quantity, hotel_zone_id=hotel_zone_id, wants_transport=wants_transport,
+    )
+    db.add(booking)
+    if seat:
+        seat.status = "booked"
+    tier.booked_count += quantity  # a seat still draws from the tier's overall capacity, not tracked separately
+    db.commit()
+    db.refresh(booking)
+    return {
+        "status": "ok", "code": booking.code, "tier": tier.name, "quantity": quantity,
+        "seat_label": seat.seat_label if seat else None, "price": tier.price, "total_price": tier.price * quantity,
+    }
+
+
+def list_my_bookings(db, email):
+    """My Events: every catalog booking (tier_id set) for this email, split
+    into Upcoming (event not live/completed yet), Active (event is live),
+    and Past (event completed) — mirrors the spec's three tabs directly."""
+    bookings = (
+        db.query(models.VisitorProfile)
+        .filter(models.VisitorProfile.email == email, models.VisitorProfile.tier_id.isnot(None))
+        .order_by(models.VisitorProfile.id.desc())
+        .all()
+    )
+    live = get_live_event(db)
+    out = {"upcoming": [], "active": [], "past": []}
+    for b in bookings:
+        tier = db.get(models.EventTier, b.tier_id)
+        event = db.get(models.Event, b.event_id) if b.event_id else None
+        if not tier or not event:
+            continue
+        seat = db.get(models.EventSeat, b.seat_id) if b.seat_id else None
+        hotel = db.get(models.Zone, b.hotel_zone_id) if b.hotel_zone_id else None
+        row = {
+            "code": b.code, "event_id": event.id, "event_name": event.name, "event_date": event.event_date,
+            "venue_name": event.venue_name, "tier_name": tier.name, "seat_label": seat.seat_label if seat else None,
+            "quantity": b.quantity, "checked_in": b.checked_in, "gate_name": tier.gate_name,
+            "hotel_name": hotel.name if hotel else None, "wants_transport": b.wants_transport,
+        }
+        if event.status == "completed":
+            out["past"].append(row)
+        elif live and live.id == event.id:
+            out["active"].append(row)
+        else:
+            out["upcoming"].append(row)
+    return out
 
 
 def zone_capacity(db, zone_id):
@@ -1048,7 +1305,7 @@ def trigger_emergency(db, zone_id, message):
     state.emergency_message = message
     db.commit()
 
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     alert = models.Alert(
         event_id=event.id if event else None, zone_id=zone_id, alert_type="emergency",
         severity="CRITICAL", impact_score=100, message=f"EMERGENCY at {zone.name}: {message}",
@@ -1099,7 +1356,7 @@ def emergency_status(db):
 # --- post-event analytics / historical learning (Sections 31-32) ----------
 
 def event_analytics(db):
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     zones = db.query(models.Zone).all()
     visitors = db.query(models.VisitorProfile).all()
     checked_in = [v for v in visitors if v.checked_in]
@@ -1154,7 +1411,7 @@ PROTECTED_ZONE_NAMES = {"Gate 2", "Gate 3", "Corridor B", "Hotel A", "Main Hall"
 
 
 def create_zone(db, name, lat, lng, capacity, domain="venue", type_="gate"):
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     if not event:
         return None
     zone = models.Zone(
@@ -1199,17 +1456,23 @@ def delete_zone(db, zone_id):
 # only ever being able to edit the single event seeding created.
 
 def create_event(db, name, region, expected_attendance, safe_capacity):
-    db.query(models.Zone).delete()
+    """Replaces only the current live event — any other catalog events
+    (upcoming/completed) are untouched."""
+    old_live = get_live_event(db)
+    if old_live:
+        db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete()
+        db.query(models.VisitorProfile).filter(
+            (models.VisitorProfile.event_id == old_live.id) | (models.VisitorProfile.event_id.is_(None))
+        ).delete(synchronize_session=False)
+        db.query(models.Event).filter(models.Event.id == old_live.id).delete()
     db.query(models.Resource).delete()
-    db.query(models.VisitorProfile).delete()
-    db.query(models.Event).delete()
     db.query(models.LogEntry).delete()
     db.commit()
 
     event = models.Event(
         name=name, region=region,
         expected_attendance=expected_attendance, safe_capacity=safe_capacity,
-        status="active",
+        status="live",
     )
     db.add(event)
     db.flush()
@@ -1232,14 +1495,18 @@ def create_event(db, name, region, expected_attendance, safe_capacity):
 
 
 def delete_event(db):
-    """Wipes the event entirely — the app falls back to its already-built
+    """Wipes only the live event — the app falls back to its already-built
     'no event configured yet' state (login/attendee/command-center all
-    handle {"configured": false} gracefully) until an Administrator creates
-    a new one. Scenarios and user accounts are reference data and survive."""
-    db.query(models.Zone).delete()
+    handle {"configured": false} gracefully) until a new one goes live.
+    Scenarios, user accounts, and other catalog events are untouched."""
+    live = get_live_event(db)
+    if live:
+        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete()
+        db.query(models.VisitorProfile).filter(
+            (models.VisitorProfile.event_id == live.id) | (models.VisitorProfile.event_id.is_(None))
+        ).delete(synchronize_session=False)
+        db.query(models.Event).filter(models.Event.id == live.id).delete()
     db.query(models.Resource).delete()
-    db.query(models.VisitorProfile).delete()
-    db.query(models.Event).delete()
     db.query(models.SimState).delete()
     db.query(models.LogEntry).delete()
     db.commit()
@@ -1255,7 +1522,7 @@ def apply_region(db, state_name, rename=True):
     if not region:
         return None
 
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     city = region["city"]
     venue = region["venue"] or "the venue"
 
@@ -1479,7 +1746,7 @@ def chatbot_answer(db, question):
 
     if any(k in q for k in ("where is", "venue", "located", "location", "my event")) or \
             _fuzzy_word_match(q, ["where", "venue", "located", "location"]):
-        event = db.query(models.Event).first()
+        event = get_live_event(db)
         main_hall = db.query(models.Zone).filter(models.Zone.type == "arena").first()
         if event:
             text = (
@@ -1571,7 +1838,7 @@ def chatbot_answer(db, question):
     }
 
 
-# --- Transport Hub: illustrative arrivals feeds (region-gated) -------------
+# --- Transport Hub: illustrative arrivals feeds (region-gated, DB-backed) --
 # Panvel Railway Station (our Transport Hub zone) really does interconnect to
 # Navi Mumbai International Airport (opened 25 Dec 2025, IndiGo/Air India
 # Express/Akasa Air), sits on the real Central Railway Mumbai Suburban
@@ -1582,59 +1849,21 @@ def chatbot_answer(db, question):
 # illustrative and deterministic (seeded by tick, not random each call),
 # same honest synthetic-vs-real framing as the rest of the crowd data.
 #
-# Only Maharashtra/Navi Mumbai has been researched to this level of detail —
-# every other region gets an explicit "not available" note instead of a
-# guessed schedule for a station we haven't actually looked up.
-NMIA_ROUTES = [
-    ("IndiGo", "Bengaluru"), ("IndiGo", "Jaipur"), ("IndiGo", "Nagpur"), ("IndiGo", "Patna"),
-    ("IndiGo", "Indore"), ("IndiGo", "Ahmedabad"), ("Air India Express", "Delhi"),
-    ("Air India Express", "Bengaluru"), ("Akasa Air", "Goa"), ("Akasa Air", "Kochi"),
-    ("Akasa Air", "Delhi"), ("Akasa Air", "Ahmedabad"),
-]
-
-LOCAL_TRAIN_LINES = [
-    ("Harbour Line", "CSMT", "via Vashi, Nerul, Kharghar"),
-    ("Harbour Line", "Goregaon", "via Vashi, Nerul, Kharghar"),
-    ("Trans-Harbour Line", "Thane", "via Vashi, Koparkhairane"),
-]
-
-# Panvel Junction also carries Central Railway mainline/Konkan Railway
-# long-distance services (platforms 5-7) — separate from the suburban
-# Harbour/Trans-Harbour services above, and the reason it's called one of
-# Central Railway's most important junctions, not just a suburban terminus.
-LONG_DISTANCE_TRAINS = [
-    ("Solapur Vande Bharat Express", "Solapur", "Panvel–Karjat–Pune corridor"),
-    ("Panvel–Hazur Sahib Nanded Express", "Hazur Sahib Nanded", "Panvel–Karjat–Pune corridor"),
-    ("Deccan Express", "Pune", "Panvel–Karjat–Pune corridor"),
-    ("Pragati Express", "Pune", "Panvel–Karjat–Pune corridor"),
-    ("Konkan Railway Express", "Ratnagiri/Goa direction", "via Roha, platform 7"),
-]
-
-NMMT_BUS_ROUTES = [
-    ("24", "Panvel Railway Station ↔ Thane, via Ghansoli Depot"),
-    ("59", "Usarli Khurd ↔ Panvel Railway Station"),
-    ("Kharghar–Panvel", "Kharghar ↔ Panvel — every 10–15 min at peak"),
-    ("Vashi–Belapur", "Vashi ↔ Belapur — every 10–15 min at peak"),
-]
-
-# MSRTC (state transport) village/outstation routes out of Panvel ST Depot —
-# Panvel is the headquarters of Raigad district's largest sub-division by
-# village count, and the depot is the real gateway from Navi Mumbai into
-# interior Raigad/Konkan, distinct from NMMT's local city routes above.
-MSRTC_VILLAGE_ROUTES = [
-    ("Panvel–Alibaug", "via Pen — Raigad district"),
-    ("Panvel–Pen", "Raigad district"),
-    ("Panvel–Roha", "Raigad district, Konkan gateway"),
-    ("Panvel–Mangaon", "Raigad district"),
-    ("Panvel–Khopoli", "Raigad district"),
-    ("Panvel–Karjat", "Raigad district"),
-    ("Panvel–Uran", "Raigad district"),
-]
-
+# The actual route rows live in models.TransitRoute (seeded once in seed.py)
+# rather than as Python constants — same content, just queryable/editable as
+# real data instead of code. Only Maharashtra/Navi Mumbai has been researched
+# to this level of detail — every other region gets an explicit "not
+# available" note instead of a guessed schedule for a station not looked up.
 
 def _region_gated(db):
-    event = db.query(models.Event).first()
+    event = get_live_event(db)
     return bool(event and event.region == "Maharashtra")
+
+
+def _routes_for(db, region, mode):
+    return db.query(models.TransitRoute).filter(
+        models.TransitRoute.region == region, models.TransitRoute.mode == mode,
+    ).order_by(models.TransitRoute.id).all()
 
 
 def transport_hub_arrivals(db):
@@ -1642,11 +1871,12 @@ def transport_hub_arrivals(db):
         return {"available": False, "arrivals": [],
                 "note": "No independently verified flight schedule for this region's airport yet."}
     state = get_state_row(db)
+    routes = _routes_for(db, "Maharashtra", "flight")
     rnd = random.Random(state.tick)  # deterministic per tick, not per request
-    picks = rnd.sample(NMIA_ROUTES, k=4)
+    picks = rnd.sample(routes, k=min(4, len(routes)))
     arrivals = [
-        {"airline": airline, "origin": origin, "arrives_in_min": 8 + i * 12}
-        for i, (airline, origin) in enumerate(picks)
+        {"airline": r.name, "origin": r.destination, "arrives_in_min": r.base_arrival_min + i * 12}
+        for i, r in enumerate(picks)
     ]
     return {
         "available": True,
@@ -1668,26 +1898,30 @@ def local_transit_feed(db):
     state = get_state_row(db)
     rnd = random.Random((state.tick if state else 0) + 1)  # offset from the flight feed's seed so picks differ
 
-    suburban_picks = rnd.sample(LOCAL_TRAIN_LINES, k=len(LOCAL_TRAIN_LINES))
+    suburban_routes = _routes_for(db, "Maharashtra", "suburban_train")
+    suburban_picks = rnd.sample(suburban_routes, k=len(suburban_routes))
     suburban = [
-        {"line": line, "destination": dest, "via": via, "arrives_in_min": 4 + i * 6}
-        for i, (line, dest, via) in enumerate(suburban_picks)
+        {"line": r.name, "destination": r.destination, "via": r.description, "arrives_in_min": r.base_arrival_min + i * 6}
+        for i, r in enumerate(suburban_picks)
     ]
-    long_distance_picks = rnd.sample(LONG_DISTANCE_TRAINS, k=len(LONG_DISTANCE_TRAINS))
+    long_distance_routes = _routes_for(db, "Maharashtra", "long_distance_train")
+    long_distance_picks = rnd.sample(long_distance_routes, k=len(long_distance_routes))
     long_distance = [
-        {"train": name, "destination": dest, "via": via, "arrives_in_min": 15 + i * 25}
-        for i, (name, dest, via) in enumerate(long_distance_picks)
+        {"train": r.name, "destination": r.destination, "via": r.description, "arrives_in_min": r.base_arrival_min + i * 25}
+        for i, r in enumerate(long_distance_picks)
     ]
 
-    city_picks = rnd.sample(NMMT_BUS_ROUTES, k=len(NMMT_BUS_ROUTES))
+    city_routes = _routes_for(db, "Maharashtra", "city_bus")
+    city_picks = rnd.sample(city_routes, k=len(city_routes))
     city_buses = [
-        {"route": route, "description": desc, "arrives_in_min": 3 + i * 5}
-        for i, (route, desc) in enumerate(city_picks)
+        {"route": r.name, "description": r.description, "arrives_in_min": r.base_arrival_min + i * 5}
+        for i, r in enumerate(city_picks)
     ]
-    village_picks = rnd.sample(MSRTC_VILLAGE_ROUTES, k=len(MSRTC_VILLAGE_ROUTES))
+    village_routes = _routes_for(db, "Maharashtra", "village_bus")
+    village_picks = rnd.sample(village_routes, k=len(village_routes))
     village_buses = [
-        {"route": route, "description": desc, "arrives_in_min": 10 + i * 15}
-        for i, (route, desc) in enumerate(village_picks)
+        {"route": r.name, "description": r.description, "arrives_in_min": r.base_arrival_min + i * 15}
+        for i, r in enumerate(village_picks)
     ]
 
     return {
