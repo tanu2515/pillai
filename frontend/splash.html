@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{ --navy:#123B6D; --blue:#1976D2; --green:#20C997; --lgreen:#5BE7A9; --bg:#F8FAFC; --muted:#64748B; }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:var(--bg); font-family:'Manrope',system-ui,sans-serif; overflow:hidden; cursor:pointer;
+    background-image:
+      radial-gradient(circle at 20% 15%, rgba(25,118,210,.08), transparent 50%),
+      radial-gradient(circle at 80% 85%, rgba(32,201,151,.08), transparent 50%);
+  }
+  .logo-wrap{ animation: rise .7s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(18px) scale(.94); } to{ opacity:1; transform:translateY(0) scale(1); } }
+  .logo-img{ width:150px; height:150px; object-fit:contain; filter:drop-shadow(0 10px 30px rgba(25,118,210,.25)); }
+  .tagline{
+    margin-top:18px; font-weight:800; font-size:14px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--navy); opacity:0; animation: fadeIn .6s ease .5s forwards;
+  }
+  .tagline .dot{ color:var(--green); }
+  @keyframes fadeIn{ to{ opacity:1; } }
+  .pulse-ring{
+    position:absolute; width:220px; height:220px; border-radius:50%;
+    border:2px solid rgba(25,118,210,.25); animation: pulse 2.2s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%{ transform:scale(.7); opacity:.7; }
+    100%{ transform:scale(1.3); opacity:0; }
+  }
+  .tap-hint{ position:absolute; bottom:36px; color:var(--muted); font-size:11px; font-family:'Manrope',sans-serif; opacity:0; animation: fadeIn .6s ease 1.4s forwards; }
+</style>
+</head>
+<body onclick="goNext()">
+<div class="pulse-ring"></div>
+<div class="logo-wrap">
+  <img src="/assets/vyavastha-logo.png" alt="VYAVASTHA" class="logo-img" />
+</div>
+<p class="tap-hint">Tap to continue</p>
+
+<script>
+function goNext() {
+  const dest = sessionStorage.getItem("vyavastha_email") ? "events.html" : "login.html?role=Attendee";
+  window.location.href = dest;
+}
+setTimeout(goNext, 2200);
+</script>
+</body>
+</html>
