@@ -631,19 +631,23 @@ def apply_region(db, state_name, rename=True):
 
     zones = {z.name: z for z in db.query(models.Zone).all()}
 
+    # venue strings already carry their own locality (e.g. "D Y Patil Stadium,
+    # Nerul"), so appending ", {city}" again produced redundant/awkward text
+    # like "D Y Patil Stadium, Nerul Gate 2, Navi Mumbai / Panvel" — an em-dash
+    # separator instead of a second city clause reads cleanly for every region.
     if "Main Hall" in zones:
         mh = zones["Main Hall"]
-        mh.location_note = (f"{venue}, {city}" if region["venue"] else f"Local venue, {city} (not independently confirmed)")
+        mh.location_note = venue if region["venue"] else f"Local venue, {city} (not independently confirmed)"
         if region["venue_capacity"]:
             ratio = mh.current_count / mh.capacity if mh.capacity else 0
             mh.capacity = region["venue_capacity"]
             mh.current_count = round(mh.capacity * ratio)
             mh.last_count = mh.current_count
     if "VIP Zone" in zones:
-        zones["VIP Zone"].location_note = f"{venue} VIP stand, {city}"
+        zones["VIP Zone"].location_note = f"{venue} — VIP Stand"
     for gate_name in ("Gate 1", "Gate 2", "Gate 3"):
         if gate_name in zones:
-            zones[gate_name].location_note = f"{venue} {gate_name}, {city}"
+            zones[gate_name].location_note = f"{venue} — {gate_name}"
     if "Corridor A" in zones:
         zones["Corridor A"].location_note = f"Route to {region['airport']}"
     if "Corridor B" in zones:
