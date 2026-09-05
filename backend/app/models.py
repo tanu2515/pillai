@@ -108,3 +108,17 @@ class SimState(Base):
     scenario_active = Column(Boolean, default=False)
     active_scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True)
     trigger_tick = Column(Integer, default=-1)
+
+
+class LogEntry(Base):
+    """Incident Timeline: what happened, when (by event tick), and how KAIRO
+    responded — scenario triggers, zone acknowledgements/escalations, zones
+    newly crossing into HIGH/CRITICAL, and executed actions."""
+    __tablename__ = "log_entries"
+
+    id = Column(Integer, primary_key=True)
+    tick = Column(Integer, nullable=False)
+    category = Column(String, nullable=False)  # scenario | zone_critical | acknowledged | escalated | action_executed
+    message = Column(String, nullable=False)
+    zone_domain = Column(String, nullable=True)  # venue | transport | hospitality | null = event-wide
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

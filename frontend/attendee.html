@@ -54,6 +54,18 @@
   .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#00E5FF; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.3); border-radius:20px; padding:2px 7px; margin-top:6px; }
   .gauge{ height:5px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; margin-top:6px; }
   .gauge-fill{ height:100%; border-radius:4px; }
+  .chat-fab{ position:fixed; bottom:20px; right:20px; width:52px; height:52px; border-radius:50%; background:#00E5FF; color:#05161E; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; box-shadow:0 6px 20px rgba(0,229,255,.4); z-index:60; border:none; }
+  .chat-fab:hover{ filter:brightness(1.08); }
+  .chat-panel{ position:fixed; bottom:82px; right:16px; width:300px; max-width:calc(100vw - 32px); height:400px; max-height:calc(100vh - 110px); background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); z-index:60; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel.show{ display:flex; }
+  .chat-header{ padding:12px 14px; border-bottom:1px solid #2C3E56; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .chat-msg{ max-width:85%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
+  .chat-msg.user{ align-self:flex-end; background:#00E5FF; color:#05161E; font-weight:600; }
+  .chat-msg.bot{ align-self:flex-start; background:#1E2D42; border:1px solid #2C3E56; color:#e2e8f0; }
+  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #2C3E56; flex-shrink:0; }
+  .chat-input-row input{ flex:1; padding:8px 10px !important; font-size:12.5px; }
+  .chat-input-row button{ background:#00E5FF; color:#05161E; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 max-w-md mx-auto pb-8 min-h-screen">
@@ -99,6 +111,21 @@
 </section>
 
 <p class="text-center text-muted text-[10px] font-mono tracking-wide mt-6">BYTE ALCHEMY &middot; PS-8</p>
+
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask KAIRO">💬</button>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <span>Ask KAIRO</span>
+    <button onclick="toggleChat()" style="background:none;border:none;color:#90A4AE;font-size:16px;cursor:pointer;">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages">
+    <div class="chat-msg bot">Ask me about a gate or hotel by name, or try "which gate should I use".</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendChat()" />
+    <button onclick="sendChat()">Send</button>
+  </div>
+</div>
 
 <script>
 const API = "";
@@ -190,6 +217,35 @@ async function checkin() {
     el.innerHTML = `<div class="mt-3 p-3 rounded-lg text-sm bg-warn/10 border border-warn/50">Code not found. Please register first.</div>`;
   }
   await loadGates();
+}
+
+function groundedTag(list) {
+  return list && list.length ? `<span class="grounded-tag">GROUNDED IN: ${list.join(", ")}</span>` : "";
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function toggleChat() {
+  document.getElementById("chat-panel").classList.toggle("show");
+  if (document.getElementById("chat-panel").classList.contains("show")) document.getElementById("chat-input").focus();
+}
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const question = input.value.trim();
+  if (!question) return;
+  const messages = document.getElementById("chat-messages");
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${escapeHtml(question)}</div>`);
+  input.value = "";
+  messages.scrollTop = messages.scrollHeight;
+
+  const result = await api("/api/chatbot/ask", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }),
+  });
+  const tag = groundedTag(result.grounded_in);
+  messages.insertAdjacentHTML("beforeend", `<div class="chat-msg bot">${escapeHtml(result.text).replace(/\n/g, "<br>")}${tag}</div>`);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 loadGates();
