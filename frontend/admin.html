@@ -31,14 +31,23 @@
   .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
   .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; }
   .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
-  input[type=text], input[type=number]{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; }
-  input:focus{ outline:none; border-color:#00E5FF; }
+  input[type=text], input[type=number], select{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; }
+  input:focus, select:focus{ outline:none; border-color:#00E5FF; }
+  select option{ background:#162232; color:#fff; }
   .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.04em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
   .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; }
   .cap-input{ width:110px; text-align:right; padding:6px 8px; font-family:'JetBrains Mono',monospace; }
   .gauge{ height:5px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; margin-top:6px; width:100%; max-width:160px; }
   .gauge-fill{ height:100%; border-radius:4px; }
+  .dropdown{ position:relative; min-width:220px; }
+  .dropdown-btn{ width:100%; text-align:left; background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:#008B99; }
+  .dropdown-caret{ color:#90A4AE; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; max-height:200px; overflow-y:auto; background:#162232; border:1px solid #2C3E56; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+  .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
+  .dropdown-item:hover{ background:rgba(0,229,255,.1); }
+  .dropdown-item.selected{ background:rgba(0,229,255,.15); color:#00E5FF; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 min-h-screen">
@@ -81,8 +90,11 @@
         <input type="number" id="ev-capacity" class="w-full p-2.5 text-sm font-mono" />
       </div>
     </div>
-    <button class="btn-primary rounded-lg px-4 py-2 text-xs mt-3" onclick="saveEvent()">SAVE EVENT DETAILS</button>
-    <span id="event-save-status" class="text-xs text-ok ml-3"></span>
+    <div class="flex items-center gap-3 mt-3">
+      <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="saveEvent()">SAVE EVENT DETAILS</button>
+      <button class="btn-danger rounded-lg px-4 py-2 text-xs" onclick="deleteEvent()">DELETE EVENT</button>
+      <span id="event-save-status" class="text-xs text-ok"></span>
+    </div>
   </div>
 
   <div class="bg-panel border border-border rounded-xl p-4 mb-4">
@@ -92,15 +104,85 @@
       state/UT — same 10-zone structure and risk engine, just grounded in a different real place.
     </p>
     <div class="flex gap-3 items-center flex-wrap">
-      <select id="region-select" class="p-2.5 text-sm min-w-[220px]"></select>
+      <div class="dropdown" id="region-dropdown">
+        <button type="button" class="dropdown-btn" id="region-dropdown-btn" onclick="toggleRegionDropdown()">
+          Select a region <span class="dropdown-caret">▾</span>
+        </button>
+        <div class="dropdown-panel hidden" id="region-dropdown-panel"></div>
+      </div>
       <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="applyRegion()">APPLY REGION</button>
       <span id="region-status" class="text-xs text-ok"></span>
     </div>
   </div>
 
   <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <h2 class="eyebrow mb-1">Create New Event</h2>
+    <p class="text-[10.5px] text-muted mb-3">
+      Wipes the current event and starts a fresh one — 10 zones seeded and grounded in whichever
+      region you pick, with the name and headcounts you set here (not overwritten by the region).
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Event name</label>
+        <input type="text" id="new-ev-name" class="w-full p-2.5 text-sm" placeholder="e.g. Chennai Music Fest" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Expected attendance</label>
+        <input type="number" id="new-ev-attendance" class="w-full p-2.5 text-sm font-mono" value="50000" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Safe capacity</label>
+        <input type="number" id="new-ev-capacity" class="w-full p-2.5 text-sm font-mono" value="60000" />
+      </div>
+    </div>
+    <div class="flex gap-3 items-center flex-wrap">
+      <div class="dropdown" id="new-ev-region-dropdown">
+        <button type="button" class="dropdown-btn" id="new-ev-region-btn" onclick="toggleNewEventRegionDropdown()">
+          Select a region <span class="dropdown-caret">▾</span>
+        </button>
+        <div class="dropdown-panel hidden" id="new-ev-region-panel"></div>
+      </div>
+      <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="createEvent()">CREATE EVENT</button>
+      <span id="new-event-status" class="text-xs text-ok"></span>
+    </div>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
     <h2 class="eyebrow mb-3">Zones &amp; Capacities</h2>
     <div id="zones"></div>
+  </div>
+
+  <div class="bg-panel border border-border rounded-xl p-4 mb-4">
+    <h2 class="eyebrow mb-1">Scenarios</h2>
+    <p class="text-[10.5px] text-muted mb-3">
+      What the Event Command Operator can trigger from the Command Centre — which zones ramp, by how
+      much per minute, and for how long. Not hardcoded: add, edit or remove scenarios freely.
+    </p>
+    <div id="scenario-list" class="mb-4"></div>
+
+    <div class="border-t border-border pt-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Scenario name</label>
+          <input type="text" id="sc-name" class="w-full p-2.5 text-sm" placeholder="e.g. VIP Arrival Surge" />
+        </div>
+        <div>
+          <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Duration (minutes/ticks)</label>
+          <input type="number" id="sc-duration" class="w-full p-2.5 text-sm font-mono" value="11" />
+        </div>
+      </div>
+      <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Description</label>
+      <input type="text" id="sc-description" class="w-full p-2.5 text-sm mb-3" placeholder="Shown as the first line of the causal chain" />
+
+      <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Zone effects — how many people/units added per minute</label>
+      <div id="sc-effects-rows" class="flex flex-col gap-2 mb-2"></div>
+      <button class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] mb-3" onclick="addEffectRow()">+ ADD ZONE EFFECT</button>
+      <div>
+        <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="saveScenario()">SAVE SCENARIO</button>
+        <button class="btn-ghost rounded-lg px-4 py-2 text-xs ml-2 hidden" id="sc-cancel-edit" onclick="cancelScenarioEdit()">CANCEL EDIT</button>
+        <span id="scenario-status" class="text-xs text-ok ml-2"></span>
+      </div>
+    </div>
   </div>
 
   <div class="bg-panel border border-border rounded-xl p-4">
@@ -139,8 +221,19 @@ async function saveEvent() {
   setTimeout(() => status.textContent = "", 2000);
 }
 
+async function deleteEvent() {
+  if (!confirm("Delete the current event? This wipes all zones, resources and visitor check-ins.")) return;
+  await api("/api/admin/event", { method: "DELETE" });
+  await loadEvent();
+  await loadZones();
+}
+
 async function loadZones() {
   const state = await api("/api/state");
+  if (!state.zones.length) {
+    document.getElementById("zones").innerHTML = `<p class="text-xs text-muted m-0">No event configured — create one above.</p>`;
+    return;
+  }
   document.getElementById("zones").innerHTML = state.zones
     .sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name))
     .map(z => row(`
@@ -179,22 +272,50 @@ async function deleteUser(id) {
   await loadUsers();
 }
 
+let selectedRegionState = null;
+let regionList = [];
+
 async function loadRegions() {
-  const regions = await api("/api/regions");
-  const select = document.getElementById("region-select");
-  select.innerHTML = regions
-    .sort((a, b) => a.state.localeCompare(b.state))
-    .map(r => `<option value="${r.state}">${r.state} — ${r.city}</option>`).join("");
+  regionList = (await api("/api/regions")).sort((a, b) => a.state.localeCompare(b.state));
+  renderRegionPanel();
   const ev = await api("/api/event");
-  if (ev.configured && ev.region) select.value = ev.region;
+  if (ev.configured && ev.region) {
+    const match = regionList.find(r => r.state === ev.region);
+    if (match) selectRegion(match.state, `${match.state} — ${match.city}`);
+  }
 }
 
+function renderRegionPanel() {
+  document.getElementById("region-dropdown-panel").innerHTML = regionList.map(r => `
+    <div class="dropdown-item ${r.state === selectedRegionState ? 'selected' : ''}"
+         onclick="selectRegion('${r.state.replace(/'/g, "\\'")}', '${(r.state + ' — ' + r.city).replace(/'/g, "\\'")}')">
+      ${r.state} — ${r.city}
+    </div>`).join("");
+}
+
+function selectRegion(state, label) {
+  selectedRegionState = state;
+  document.getElementById("region-dropdown-btn").innerHTML = `${label} <span class="dropdown-caret">▾</span>`;
+  document.getElementById("region-dropdown-panel").classList.add("hidden");
+  renderRegionPanel();
+}
+
+function toggleRegionDropdown() {
+  document.getElementById("region-dropdown-panel").classList.toggle("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("region-dropdown").contains(e.target)) {
+    document.getElementById("region-dropdown-panel").classList.add("hidden");
+  }
+});
+
 async function applyRegion() {
-  const state = document.getElementById("region-select").value;
   const status = document.getElementById("region-status");
+  if (!selectedRegionState) { status.textContent = "Pick a region first."; return; }
   status.textContent = "Applying…";
   await api("/api/admin/region", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: selectedRegionState }),
   });
   status.textContent = "Applied.";
   setTimeout(() => status.textContent = "", 2000);
@@ -202,10 +323,157 @@ async function applyRegion() {
   await loadZones();
 }
 
+// --- create new event: its own region dropdown, separate from Event Region's ---
+let selectedNewEventRegion = null;
+
+function renderNewEventRegionPanel() {
+  document.getElementById("new-ev-region-panel").innerHTML = regionList.map(r => `
+    <div class="dropdown-item ${r.state === selectedNewEventRegion ? 'selected' : ''}"
+         onclick="selectNewEventRegion('${r.state.replace(/'/g, "\\'")}', '${(r.state + ' — ' + r.city).replace(/'/g, "\\'")}')">
+      ${r.state} — ${r.city}
+    </div>`).join("");
+}
+
+function selectNewEventRegion(state, label) {
+  selectedNewEventRegion = state;
+  document.getElementById("new-ev-region-btn").innerHTML = `${label} <span class="dropdown-caret">▾</span>`;
+  document.getElementById("new-ev-region-panel").classList.add("hidden");
+  renderNewEventRegionPanel();
+}
+
+function toggleNewEventRegionDropdown() {
+  document.getElementById("new-ev-region-panel").classList.toggle("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("new-ev-region-dropdown").contains(e.target)) {
+    document.getElementById("new-ev-region-panel").classList.add("hidden");
+  }
+});
+
+async function createEvent() {
+  const status = document.getElementById("new-event-status");
+  const name = document.getElementById("new-ev-name").value.trim();
+  if (!name) { status.textContent = "Name is required."; return; }
+  if (!selectedNewEventRegion) { status.textContent = "Pick a region first."; return; }
+  if (!confirm(`Create "${name}"? This replaces the current event entirely.`)) return;
+
+  status.textContent = "Creating…";
+  const body = {
+    name, region: selectedNewEventRegion,
+    expected_attendance: parseInt(document.getElementById("new-ev-attendance").value) || 0,
+    safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
+  };
+  await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  status.textContent = "Created.";
+  setTimeout(() => status.textContent = "", 2000);
+  await loadEvent();
+  await loadZones();
+  await loadScenariosAdmin();
+}
+
+// --- scenarios (Administrator authoring) ------------------------------------
+let zoneNamesForEffects = [];
+let editingScenarioId = null;
+
+async function loadScenariosAdmin() {
+  const state = await api("/api/state");
+  zoneNamesForEffects = state.zones.map(z => z.name);
+
+  const scenarios = await api("/api/scenarios");
+  document.getElementById("scenario-list").innerHTML = scenarios.length
+    ? scenarios.map(s => row(`
+        <div class="flex-1">
+          <div class="font-bold">${s.name}</div>
+          <div class="text-muted text-[11px]">${s.description || ""}</div>
+          <div class="text-muted text-[10.5px] font-mono mt-1">${Object.entries(s.effects).map(([z, v]) => `${z}: +${v}/min`).join(" · ")} · ${s.duration_ticks} min</div>
+        </div>
+        <button class="btn-ghost rounded-lg px-3 py-1.5 text-[11px]" onclick='editScenario(${JSON.stringify(s).replace(/'/g, "&apos;")})'>EDIT</button>
+        <button class="btn-danger rounded-lg px-3 py-1.5 text-[11px]" onclick="deleteScenarioAdmin(${s.id})">DELETE</button>
+      `)).join("")
+    : `<p class="text-xs text-muted m-0">No scenarios yet — add one below.</p>`;
+}
+
+function addEffectRow(zoneName, amount) {
+  const rows = document.getElementById("sc-effects-rows");
+  const rowId = "eff-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+  const div = document.createElement("div");
+  div.className = "flex gap-2 items-center";
+  div.id = rowId;
+  div.innerHTML = `
+    <select class="p-2 text-xs flex-1 eff-zone">
+      ${zoneNamesForEffects.map(z => `<option value="${z}" ${z === zoneName ? "selected" : ""}>${z}</option>`).join("")}
+    </select>
+    <input type="number" class="p-2 text-xs w-28 font-mono eff-amount" placeholder="+ per min" value="${amount ?? ''}" />
+    <button class="btn-danger rounded-lg px-2 py-1 text-[11px]" onclick="document.getElementById('${rowId}').remove()">✕</button>
+  `;
+  rows.appendChild(div);
+}
+
+function clearEffectRows() { document.getElementById("sc-effects-rows").innerHTML = ""; }
+
+function editScenario(s) {
+  editingScenarioId = s.id;
+  document.getElementById("sc-name").value = s.name;
+  document.getElementById("sc-description").value = s.description || "";
+  document.getElementById("sc-duration").value = s.duration_ticks;
+  clearEffectRows();
+  Object.entries(s.effects).forEach(([zone, amount]) => addEffectRow(zone, amount));
+  document.getElementById("sc-cancel-edit").classList.remove("hidden");
+  document.getElementById("scenario-status").textContent = `Editing "${s.name}"`;
+}
+
+function cancelScenarioEdit() {
+  editingScenarioId = null;
+  document.getElementById("sc-name").value = "";
+  document.getElementById("sc-description").value = "";
+  document.getElementById("sc-duration").value = "11";
+  clearEffectRows();
+  document.getElementById("sc-cancel-edit").classList.add("hidden");
+  document.getElementById("scenario-status").textContent = "";
+}
+
+async function saveScenario() {
+  const status = document.getElementById("scenario-status");
+  const name = document.getElementById("sc-name").value.trim();
+  if (!name) { status.textContent = "Name is required."; return; }
+
+  const effects = {};
+  document.querySelectorAll("#sc-effects-rows > div").forEach(rowEl => {
+    const zone = rowEl.querySelector(".eff-zone").value;
+    const amount = parseInt(rowEl.querySelector(".eff-amount").value) || 0;
+    if (amount !== 0) effects[zone] = amount;
+  });
+  if (Object.keys(effects).length === 0) { status.textContent = "Add at least one zone effect."; return; }
+
+  const body = {
+    name, description: document.getElementById("sc-description").value.trim(),
+    duration_ticks: parseInt(document.getElementById("sc-duration").value) || 1,
+    effects,
+  };
+
+  if (editingScenarioId) {
+    await api(`/api/admin/scenarios/${editingScenarioId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } else {
+    await api("/api/admin/scenarios", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  }
+  cancelScenarioEdit();
+  status.textContent = "Saved.";
+  setTimeout(() => status.textContent = "", 2000);
+  await loadScenariosAdmin();
+}
+
+async function deleteScenarioAdmin(id) {
+  if (!confirm("Delete this scenario?")) return;
+  await api(`/api/admin/scenarios/${id}`, { method: "DELETE" });
+  await loadScenariosAdmin();
+}
+
 loadEvent();
 loadZones();
 loadUsers();
-loadRegions();
+loadRegions().then(renderNewEventRegionPanel);
+loadScenariosAdmin();
 </script>
 </body>
 </html>

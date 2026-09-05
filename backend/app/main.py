@@ -65,8 +65,40 @@ class EventUpdate(BaseModel):
     safe_capacity: int
 
 
+class EventCreate(BaseModel):
+    name: str
+    region: str
+    expected_attendance: int
+    safe_capacity: int
+
+
 class RegionUpdate(BaseModel):
     state: str
+
+
+class ScenarioTrigger(BaseModel):
+    scenario_id: int
+
+
+class ScenarioUpsert(BaseModel):
+    name: str
+    description: str = ""
+    duration_ticks: int
+    effects: dict[str, int]  # {"<zone name>": <count added per tick>}
+
+
+class ZoneCreate(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    capacity: int
+    domain: str = "venue"
+    type: str = "gate"
+
+
+class ZoneLocationUpdate(BaseModel):
+    lat: float
+    lng: float
 
 
 @app.get("/api/event")
@@ -114,9 +146,38 @@ def get_causal_chain(db: Session = Depends(get_db)):
     return {"chain": engine.causal_chain(db)}
 
 
+@app.get("/api/scenarios")
+def list_scenarios(db: Session = Depends(get_db)):
+    return engine.list_scenarios(db)
+
+
+@app.post("/api/admin/scenarios")
+def create_scenario(req: ScenarioUpsert, db: Session = Depends(get_db)):
+    scenario = engine.create_scenario(db, req.name, req.description, req.duration_ticks, req.effects)
+    return {"id": scenario.id}
+
+
+@app.patch("/api/admin/scenarios/{scenario_id}")
+def update_scenario(scenario_id: int, req: ScenarioUpsert, db: Session = Depends(get_db)):
+    scenario = engine.update_scenario(db, scenario_id, req.name, req.description, req.duration_ticks, req.effects)
+    if scenario is None:
+        raise HTTPException(404, "scenario not found")
+    return {"id": scenario.id}
+
+
+@app.delete("/api/admin/scenarios/{scenario_id}")
+def delete_scenario(scenario_id: int, db: Session = Depends(get_db)):
+    ok = engine.delete_scenario(db, scenario_id)
+    if not ok:
+        raise HTTPException(404, "scenario not found")
+    return {"deleted": scenario_id}
+
+
 @app.post("/api/scenario/trigger")
-def trigger(db: Session = Depends(get_db)):
-    engine.trigger_scenario(db)
+def trigger(req: ScenarioTrigger, db: Session = Depends(get_db)):
+    state = engine.trigger_scenario(db, req.scenario_id)
+    if state is None:
+        raise HTTPException(404, "scenario not found")
     return engine.full_state(db)
 
 
@@ -199,6 +260,34 @@ def capacity(zone_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@app.post("/api/zones")
+def create_zone(req: ZoneCreate, db: Session = Depends(get_db)):
+    if req.domain not in models.DOMAINS:
+        raise HTTPException(400, "domain must be venue, transport, or hospitality")
+    if not req.name.strip():
+        raise HTTPException(400, "name is required")
+    zone = engine.create_zone(db, req.name.strip(), req.lat, req.lng, req.capacity, req.domain, req.type)
+    if zone is None:
+        raise HTTPException(404, "no event configured yet")
+    return {"id": zone.id, "name": zone.name}
+
+
+@app.patch("/api/zones/{zone_id}/location")
+def update_zone_location(zone_id: int, req: ZoneLocationUpdate, db: Session = Depends(get_db)):
+    zone = engine.update_zone_location(db, zone_id, req.lat, req.lng)
+    if zone is None:
+        raise HTTPException(404, "zone not found")
+    return {"id": zone.id, "lat": zone.lat, "lng": zone.lng}
+
+
+@app.delete("/api/zones/{zone_id}")
+def delete_zone(zone_id: int, db: Session = Depends(get_db)):
+    result = engine.delete_zone(db, zone_id)
+    if not result["ok"]:
+        raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))
+    return {"deleted": zone_id}
+
+
 @app.get("/api/risks/causal-chain/{zone_id}")
 def get_zone_causal_chain(zone_id: int, db: Session = Depends(get_db)):
     return {"chain": engine.zone_causal_chain(db, zone_id)}
@@ -251,6 +340,22 @@ def admin_update_event(req: EventUpdate, db: Session = Depends(get_db)):
     return {"name": event.name, "expected_attendance": event.expected_attendance, "safe_capacity": event.safe_capacity}
 
 
+@app.post("/api/admin/event")
+def admin_create_event(req: EventCreate, db: Session = Depends(get_db)):
+    if req.region not in INDIA_REGIONS:
+        raise HTTPException(400, "unknown state/UT")
+    if not req.name.strip():
+        raise HTTPException(400, "name is required")
+    event = engine.create_event(db, req.name.strip(), req.region, req.expected_attendance, req.safe_capacity)
+    return {"id": event.id, "name": event.name, "region": event.region}
+
+
+@app.delete("/api/admin/event")
+def admin_delete_event(db: Session = Depends(get_db)):
+    engine.delete_event(db)
+    return {"configured": False}
+
+
 @app.patch("/api/admin/zones/{zone_id}")
 def admin_update_zone_capacity(zone_id: int, req: ZoneCapacityUpdate, db: Session = Depends(get_db)):
     zone = db.get(models.Zone, zone_id)
@@ -273,6 +378,7 @@ def admin_raw_tables(db: Session = Depends(get_db)):
         "resources": models.Resource,
         "visitor_profiles": models.VisitorProfile,
         "user_accounts": models.UserAccount,
+        "scenarios": models.Scenario,
         "sim_state": models.SimState,
     }
     out = {}
@@ -305,3 +411,8 @@ def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8001)

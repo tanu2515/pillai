@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -67,6 +69,19 @@
   .gauge-fill.overflow{ box-shadow:0 0 6px 1px #FF5252 inset; }
   .flow-pill{ background:#1E2D42; border:1px solid #2C3E56; border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
   .flow-arrow{ color:#2C3E56; font-size:14px; flex-shrink:0; }
+  .dropdown{ position:relative; min-width:190px; }
+  .dropdown-btn{ width:100%; text-align:left; background:#1E2D42; border:1px solid #2C3E56; color:#fff; border-radius:8px; padding:8px 12px; font-size:12px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .dropdown-btn:hover{ border-color:#008B99; }
+  .dropdown-caret{ color:#90A4AE; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:max-content; min-width:100%; max-width:280px; max-height:200px; overflow-y:auto; background:#1E2D42; border:1px solid #2C3E56; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+  .dropdown-item{ padding:8px 12px; font-size:12px; cursor:pointer; }
+  .dropdown-item:hover{ background:rgba(0,229,255,.1); }
+  .dropdown-item.selected{ background:rgba(0,229,255,.15); color:#00E5FF; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#162232; color:#fff; }
+  .leaflet-popup-content{ margin:12px 14px; font-family:'Manrope',sans-serif; font-size:12.5px; }
+  .leaflet-popup-content input{ background:#1E2D42; border:1px solid #2C3E56; color:#fff; border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
+  .map-place-btn.on{ background:rgba(0,229,255,.15); border-color:#00E5FF; color:#00E5FF; }
+  #zone-map{ background:#0F1722; }
 </style>
 </head>
 <body class="bg-bg text-slate-100 font-sans m-0 min-h-screen relative">
@@ -86,7 +101,13 @@
     </div>
     <div class="flex flex-wrap gap-2 items-center">
       <span id="sim-controls" class="flex flex-wrap gap-2 items-center">
-        <button class="btn-danger rounded-lg px-3 py-2 text-xs" onclick="triggerScenario()" title="Simulates a big rush of people leaving one session at once">Simulate a Crowd Rush</button>
+        <div class="dropdown" id="scenario-dropdown">
+          <button type="button" class="dropdown-btn" id="scenario-dropdown-btn" onclick="toggleScenarioDropdown()">
+            Select scenario <span class="dropdown-caret">▾</span>
+          </button>
+          <div class="dropdown-panel hidden" id="scenario-dropdown-panel"></div>
+        </div>
+        <button class="btn-danger rounded-lg px-3 py-2 text-xs" onclick="triggerScenario()" title="Runs the selected scenario's ramp against the live zones">Trigger Scenario</button>
         <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium" onclick="advanceTick()">Skip Forward 1 Minute</button>
         <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium" onclick="resetSim()">Start Over</button>
       </span>
@@ -123,8 +144,8 @@
     </section>
   </div>
 
-  <div id="tab-whatif" class="tab-panel hidden">
-    <section class="bg-panel border border-border rounded-xl p-5 max-w-xl">
+  <div id="tab-whatif" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+    <section class="bg-panel border border-border rounded-xl p-5">
       <h2 class="eyebrow mb-4">Test a Plan Before You Use It</h2>
       <div class="grid grid-cols-2 gap-4">
         <div id="field-redirect">
@@ -145,6 +166,27 @@
       </div>
       <button class="btn-danger mt-4 w-full rounded-lg px-3 py-2.5 text-sm" onclick="runWhatIf()">See What Would Happen</button>
       <div id="whatif-result" class="mt-4"></div>
+    </section>
+
+    <section class="bg-panel border border-border rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">Zone Map</h2>
+        <button id="map-place-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="toggleMapPlaceMode()">📍 Click Map to Add Gate</button>
+      </div>
+      <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #2C3E56;"></div>
+      <p class="text-[10.5px] text-muted mt-2 mb-3">Drag a marker to move it. Click a marker to edit or delete it.</p>
+
+      <div class="border-t border-border pt-3">
+        <div class="eyebrow mb-2">Add a Gate by Lat/Long</div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input type="text" id="map-new-name" placeholder="Name" class="p-2 text-xs" />
+          <input type="number" id="map-new-capacity" placeholder="Capacity" class="p-2 text-xs font-mono" />
+          <input type="number" step="any" id="map-new-lat" placeholder="Latitude" class="p-2 text-xs font-mono" />
+          <input type="number" step="any" id="map-new-lng" placeholder="Longitude" class="p-2 text-xs font-mono" />
+        </div>
+        <button class="btn-primary rounded-lg px-3 py-1.5 text-[11px] w-full" onclick="addGateByLatLng()">ADD GATE</button>
+        <span id="map-add-status" class="text-xs text-ok"></span>
+      </div>
     </section>
   </div>
 
@@ -221,6 +263,10 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+    // Leaflet computes tile layout from its container's size at init time —
+    // if the What-If tab wasn't visible yet, the map was born at 0×0 and
+    // needs a nudge once its container actually has real dimensions.
+    if (btn.dataset.tab === "whatif" && zoneMap) setTimeout(() => zoneMap.invalidateSize(), 50);
   });
 });
 document.querySelector('.tab-btn[data-tab="overview"]').classList.add("active");
@@ -318,6 +364,7 @@ function renderFlowMap(zones) {
 async function refresh() {
   const state = await api("/api/state");
   renderZones(state);
+  if (roleCfg.tabs.includes("whatif")) renderMapMarkers(state.zones);
   const allRecs = await api("/api/recommendations");
   const recs = roleCfg.domain ? allRecs.filter(r => r.domain === roleCfg.domain) : allRecs;
   document.getElementById("recs").innerHTML = recs.map(r => `
@@ -331,9 +378,43 @@ async function refresh() {
   `).join("") || `<div class="text-xs text-muted">No feasible actions in your area right now.</div>`;
 }
 
-async function triggerScenario() { await api("/api/scenario/trigger", { method: "POST" }); await refresh(); }
+let selectedScenarioId = null;
+let scenarioList = [];
+
+async function loadScenarios() {
+  scenarioList = await api("/api/scenarios");
+  document.getElementById("scenario-dropdown-panel").innerHTML = scenarioList.map(s => `
+    <div class="dropdown-item ${s.id === selectedScenarioId ? 'selected' : ''}" onclick="selectScenario(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
+      ${s.name}
+    </div>`).join("") || `<div class="dropdown-item text-muted">No scenarios yet — add one in Administrator</div>`;
+  if (!selectedScenarioId && scenarioList.length) selectScenario(scenarioList[0].id, scenarioList[0].name);
+}
+
+function selectScenario(id, name) {
+  selectedScenarioId = id;
+  document.getElementById("scenario-dropdown-btn").innerHTML = `${name} <span class="dropdown-caret">▾</span>`;
+  document.getElementById("scenario-dropdown-panel").classList.add("hidden");
+  loadScenarios();
+}
+
+function toggleScenarioDropdown() {
+  document.getElementById("scenario-dropdown-panel").classList.toggle("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  const dd = document.getElementById("scenario-dropdown");
+  if (dd && !dd.contains(e.target)) document.getElementById("scenario-dropdown-panel").classList.add("hidden");
+});
+
+async function triggerScenario() {
+  if (!selectedScenarioId) return;
+  await api("/api/scenario/trigger", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario_id: selectedScenarioId }),
+  });
+  await refresh();
+}
 async function advanceTick() { await api("/api/tick", { method: "POST" }); await refresh(); }
-async function resetSim() { await api("/api/reset", { method: "POST" }); await refresh(); }
+async function resetSim() { await api("/api/reset", { method: "POST" }); await loadScenarios(); await refresh(); }
 
 async function runWhatIf() {
   const body = {
@@ -444,6 +525,138 @@ async function setAck(status) {
   } catch (e) {}
 })();
 
+// --- Zone Map: add/move/delete gates by clicking or typing lat/long --------
+let zoneMap = null;
+let mapMarkers = {}; // zone id -> Leaflet marker
+let mapPlaceMode = false;
+
+function initMap() {
+  if (!roleCfg.tabs.includes("whatif") || zoneMap) return;
+  zoneMap = L.map("zone-map", { zoomControl: true }).setView([19.033, 73.03], 14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap", maxZoom: 19,
+  }).addTo(zoneMap);
+  zoneMap.on("click", (e) => {
+    if (!mapPlaceMode) return;
+    openAddGatePopup(e.latlng);
+  });
+}
+
+function toggleMapPlaceMode() {
+  mapPlaceMode = !mapPlaceMode;
+  document.getElementById("map-place-btn").classList.toggle("on", mapPlaceMode);
+  document.getElementById("map-place-btn").textContent = mapPlaceMode ? "📍 Click the map…" : "📍 Click Map to Add Gate";
+}
+
+function openAddGatePopup(latlng) {
+  const popup = L.popup().setLatLng(latlng).setContent(`
+    <div style="min-width:160px">
+      <input type="text" id="popup-new-name" placeholder="Gate name" />
+      <input type="number" id="popup-new-capacity" placeholder="Capacity" />
+      <button class="btn-primary rounded px-2 py-1 text-[11px] w-full" onclick="submitPopupGate(${latlng.lat}, ${latlng.lng})">ADD</button>
+    </div>
+  `).openOn(zoneMap);
+}
+
+async function submitPopupGate(lat, lng) {
+  const name = document.getElementById("popup-new-name").value.trim();
+  const capacity = parseInt(document.getElementById("popup-new-capacity").value) || 1000;
+  if (!name) return;
+  await api("/api/zones", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, lat, lng, capacity, domain: "venue", type: "gate" }),
+  });
+  zoneMap.closePopup();
+  toggleMapPlaceMode();
+  await refresh();
+}
+
+async function addGateByLatLng() {
+  const status = document.getElementById("map-add-status");
+  const name = document.getElementById("map-new-name").value.trim();
+  const capacity = parseInt(document.getElementById("map-new-capacity").value) || 1000;
+  const lat = parseFloat(document.getElementById("map-new-lat").value);
+  const lng = parseFloat(document.getElementById("map-new-lng").value);
+  if (!name || isNaN(lat) || isNaN(lng)) { status.textContent = "Name, latitude and longitude are required."; return; }
+
+  await api("/api/zones", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, lat, lng, capacity, domain: "venue", type: "gate" }),
+  });
+  document.getElementById("map-new-name").value = "";
+  document.getElementById("map-new-capacity").value = "";
+  document.getElementById("map-new-lat").value = "";
+  document.getElementById("map-new-lng").value = "";
+  status.textContent = "Added.";
+  setTimeout(() => status.textContent = "", 2000);
+  await refresh();
+}
+
+function markerPopupContent(z) {
+  return `
+    <div style="min-width:170px">
+      <div style="font-weight:800;margin-bottom:2px;">${z.name}</div>
+      <div style="color:#90A4AE;font-size:10.5px;margin-bottom:6px;">${z.domain} · ${z.capacity_pressure_pct}% · ${z.level}</div>
+      <button class="btn-danger rounded px-2 py-1 text-[11px] w-full" onclick="deleteGateFromMap(${z.id}, '${z.name.replace(/'/g, "\\'")}')">DELETE</button>
+    </div>`;
+}
+
+async function deleteGateFromMap(id, name) {
+  if (!confirm(`Delete ${name}?`)) return;
+  const res = await fetch(`/api/zones/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.detail || "Couldn't delete this zone.");
+    return;
+  }
+  zoneMap.closePopup();
+  await refresh();
+}
+
+function renderMapMarkers(zones) {
+  if (!zoneMap) return;
+  const withCoords = zones.filter(z => z.lat != null && z.lng != null);
+  const seen = new Set();
+
+  withCoords.forEach(z => {
+    seen.add(z.id);
+    const color = { LOW: "#69F0AE", MODERATE: "#FFD54F", HIGH: "#fb923c", CRITICAL: "#FF5252" }[z.level] || "#00E5FF";
+    if (mapMarkers[z.id]) {
+      mapMarkers[z.id].setLatLng([z.lat, z.lng]);
+      mapMarkers[z.id].setStyle({ fillColor: color });
+      mapMarkers[z.id].setPopupContent(markerPopupContent(z));
+    } else {
+      const marker = L.circleMarker([z.lat, z.lng], {
+        radius: 9, color: "#0F1722", weight: 2, fillColor: color, fillOpacity: 0.9,
+        draggable: false,
+      }).addTo(zoneMap);
+      marker.bindTooltip(z.name, { permanent: false, direction: "top" });
+      marker.bindPopup(markerPopupContent(z));
+      // Leaflet's circleMarker isn't natively draggable — attach manual drag.
+      let dragging = false;
+      marker.on("mousedown", () => { dragging = true; zoneMap.dragging.disable(); });
+      zoneMap.on("mousemove", (e) => { if (dragging) marker.setLatLng(e.latlng); });
+      zoneMap.on("mouseup", async (e) => {
+        if (!dragging) return;
+        dragging = false;
+        zoneMap.dragging.enable();
+        const ll = marker.getLatLng();
+        await api(`/api/zones/${z.id}/location`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: ll.lat, lng: ll.lng }),
+        });
+      });
+      mapMarkers[z.id] = marker;
+    }
+  });
+
+  Object.keys(mapMarkers).forEach(id => {
+    if (!seen.has(Number(id))) { zoneMap.removeLayer(mapMarkers[id]); delete mapMarkers[id]; }
+  });
+}
+
+if (roleCfg.showSimControls) loadScenarios();
+if (roleCfg.tabs.includes("whatif")) setTimeout(initMap, 50); // after layout so #zone-map has real size
 refresh();
 setInterval(refresh, 4000);
 </script>

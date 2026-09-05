@@ -41,6 +41,8 @@ class Zone(Base):
     type = Column(String, default="gate")
     domain = Column(String, nullable=False)  # venue | transport | hospitality
     location_note = Column(String, nullable=True)  # real-world anchor, e.g. "Panvel Railway Station"
+    lat = Column(Float, nullable=True)  # map position — set by clicking the map or typing lat/long
+    lng = Column(Float, nullable=True)
     capacity = Column(Integer, nullable=False)
     current_count = Column(Integer, default=0)
     last_count = Column(Integer, default=0)
@@ -83,10 +85,26 @@ class UserAccount(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class Scenario(Base):
+    """A named disruption/demand event an Administrator can author: which
+    zones ramp, by how much per tick, and for how long. Replaces what used to
+    be hardcoded Gate-2-only ramp constants in engine.py — the Event Command
+    Operator picks one of these to trigger, and it's just data now, not code."""
+    __tablename__ = "scenarios"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    duration_ticks = Column(Integer, nullable=False, default=11)
+    # JSON object: {"<zone name>": <count added per tick>, ...}
+    effects_json = Column(String, nullable=False, default="{}")
+
+
 class SimState(Base):
     __tablename__ = "sim_state"
 
     id = Column(Integer, primary_key=True)
     tick = Column(Integer, default=0)
     scenario_active = Column(Boolean, default=False)
+    active_scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True)
     trigger_tick = Column(Integer, default=-1)
