@@ -703,6 +703,104 @@ def preventive_alerts(db):
     return alerts
 
 
+# --- off-peak travel recommendations ----------------------------------------
+# "Recommend off-peak travel" (PS-8's own wording) — distinct from redirecting
+# a visitor sideways to a quieter gate: this tells them WHEN to arrive.
+# For the live event we reason from the actual scenario ramp (a surge has a
+# known start/duration, so "after the surge ends" is a real, grounded ETA,
+# not a guess). For an event that hasn't gone live yet there's no arrival-rate
+# data at all, so event_detail() falls back to a schedule-based heuristic
+# instead of calling this.
+
+def _occupancy_level(pct):
+    """SRS Section 10's own thresholds — deliberately NOT the composite risk
+    score (which blends in short-term velocity and can read LOW/MODERATE even
+    at 90%+ occupancy if arrivals happen to be flat at that exact tick). Off-
+    peak advice is about how full the gate physically is right now, so it
+    reasons from raw occupancy directly."""
+    if pct >= 90:
+        return "CRITICAL"
+    if pct >= 80:
+        return "HIGH"
+    if pct >= 60:
+        return "MODERATE"
+    return "NORMAL"
+
+
+def offpeak_recommendations(db):
+    state = get_state_row(db)
+    if not state:
+        return []
+    gates = db.query(models.Zone).filter(models.Zone.type == "gate").all()
+
+    scenario = db.get(models.Scenario, state.active_scenario_id) if state.active_scenario_id else None
+    ticks_since_trigger = state.tick - state.trigger_tick if state.scenario_active else -1
+    duration = scenario.duration_ticks if scenario else 0
+    ramping = state.scenario_active and scenario and 0 <= ticks_since_trigger < duration
+    ramp_ticks_remaining = (duration - ticks_since_trigger) if ramping else 0
+
+    out = []
+    for zone in gates:
+        r = zone_risk(zone, db)
+        occ_level = _occupancy_level(r["capacity_pressure_pct"])
+        if occ_level in ("HIGH", "CRITICAL") and ramp_ticks_remaining > 0:
+            eta_tick = state.tick + ramp_ticks_remaining
+            out.append({
+                "zone_id": zone.id, "zone_name": zone.name, "current_level": occ_level,
+                "current_pct": r["capacity_pressure_pct"],
+                "best_time_clock": event_clock_label(eta_tick), "minutes_to_better": ramp_ticks_remaining,
+                "recommendation": f"{zone.name} is busy right now ({r['capacity_pressure_pct']}%). The current surge is "
+                                   f"expected to ease by {event_clock_label(eta_tick)} (~{ramp_ticks_remaining} min) — "
+                                   f"arriving after that will mean a shorter wait.",
+            })
+        elif occ_level in ("HIGH", "CRITICAL"):
+            out.append({
+                "zone_id": zone.id, "zone_name": zone.name, "current_level": occ_level,
+                "current_pct": r["capacity_pressure_pct"],
+                "best_time_clock": None, "minutes_to_better": None,
+                "recommendation": f"{zone.name} is busy ({r['capacity_pressure_pct']}%) and isn't expected to ease on "
+                                   f"its own soon — a different gate is a better bet than waiting.",
+            })
+        elif r["arrival_surge"] > 40:
+            out.append({
+                "zone_id": zone.id, "zone_name": zone.name, "current_level": occ_level,
+                "current_pct": r["capacity_pressure_pct"],
+                "best_time_clock": event_clock_label(state.tick), "minutes_to_better": 0,
+                "recommendation": f"{zone.name} is filling up quickly ({r['capacity_pressure_pct']}%) — arriving in the "
+                                   f"next few minutes beats waiting.",
+            })
+        else:
+            out.append({
+                "zone_id": zone.id, "zone_name": zone.name, "current_level": occ_level,
+                "current_pct": r["capacity_pressure_pct"],
+                "best_time_clock": event_clock_label(state.tick), "minutes_to_better": 0,
+                "recommendation": f"{zone.name} is currently a good time to arrive ({occ_level}, {r['capacity_pressure_pct']}%).",
+            })
+    out.sort(key=lambda a: {"CRITICAL": 0, "HIGH": 1, "MODERATE": 2, "NORMAL": 3}[a["current_level"]])
+    return out
+
+
+def schedule_offpeak_hint(event_time):
+    """Heuristic used only for an event that hasn't gone live yet (no real
+    arrival-rate data exists). Grounded in one honest, well-known pattern —
+    entry queues peak right around the stated start time — not a fabricated
+    prediction; framed as a general tip, not a live measurement."""
+    if not event_time:
+        return None
+    try:
+        h, m = map(int, event_time.split(":"))
+    except (ValueError, AttributeError):
+        return None
+    def fmt(hh, mm):
+        period = "PM" if hh >= 12 else "AM"
+        hr12 = ((hh + 11) % 12) + 1
+        return f"{hr12}:{mm:02d} {period}"
+    early = fmt((h + 22) % 24, m)  # ~2 hours before start
+    late = fmt((h + 1) % 24, m)    # ~1 hour after start
+    return (f"Entry queues are typically busiest right around the {fmt(h, m)} start time. "
+            f"Arriving before {early} or after {late} usually means a shorter wait at the gate.")
+
+
 GATE3_LANE_CAPACITY_BOOST = 500  # "open an additional lane" as a persisted capacity increase
 STAFF_PROCESSING_RELIEF = 150  # per zone queue drained faster once staff arrive — demo-scale, not physically derived
 HOTEL_B_REDIRECT_FRACTION = 0.10  # cap how much of Hotel A's current guests get moved in one approval
@@ -1014,6 +1112,7 @@ def event_detail(db, event_id):
     is_live = bool(live and live.id == event.id)
 
     gates, crowd_status, transport_info, hotels, announcements = [], None, None, [], []
+    off_peak = None
     if is_live:
         state = full_state(db)
         gates = [
@@ -1029,6 +1128,10 @@ def event_detail(db, event_id):
             {"severity": a["severity"], "message": a["message"], "created_at": a["created_at"]}
             for a in list_alerts(db)[:5]
         ]
+        off_peak = offpeak_recommendations(db)
+    else:
+        hint = schedule_offpeak_hint(event.event_time)
+        off_peak = [{"recommendation": hint}] if hint else []
 
     return {
         "id": event.id, "name": event.name, "description": event.description, "event_date": event.event_date,
@@ -1039,7 +1142,7 @@ def event_detail(db, event_id):
         "safe_capacity": event.safe_capacity,
         "is_live": is_live,
         "gates": gates, "crowd_status": crowd_status, "transport_info": transport_info,
-        "hotels": hotels, "announcements": announcements,
+        "hotels": hotels, "announcements": announcements, "off_peak": off_peak,
         "tiers": [
             {
                 "id": t.id, "name": t.name, "price": t.price, "capacity": t.capacity,
@@ -1222,8 +1325,9 @@ def hotel_recommendations(db):
             "reason": ", ".join(reasons),
         })
     out.sort(key=lambda x: x["score"], reverse=True)
-    for i, h in enumerate(out):
-        h["recommended"] = i == 0
+    manual = next((h for h in hotels if h.manual_recommended), None)
+    for o in out:
+        o["recommended"] = (o["zone_id"] == manual.id) if manual else (o is out[0])
     return out
 
 
@@ -1448,6 +1552,139 @@ def delete_zone(db, zone_id):
     db.delete(zone)
     db.commit()
     return {"ok": True}
+
+
+# --- Event Setup Form (Event Command Operator): gates, hotels, transport ---
+# One consolidated view over the live event's zones, grouped by domain, with
+# every field an operator would actually configure — not just capacity like
+# the plain admin zone list. Hotels/transport zones created here are regular
+# Zone rows (same table everything else already uses), just with the fuller
+# field set (staff, price, distance, contact, amenities, manual override)
+# actually filled in through this form instead of left null.
+
+def event_setup_summary(db):
+    event = get_live_event(db)
+    if not event:
+        return {"configured": False}
+    zones = db.query(models.Zone).filter(models.Zone.event_id == event.id).all()
+    venue = next((z for z in zones if z.type == "arena"), None)
+
+    gates = [
+        {
+            "id": z.id, "name": z.name, "capacity": z.capacity, "current_count": z.current_count,
+            "staff_assigned": z.staff_assigned,
+        }
+        for z in zones if z.type == "gate"
+    ]
+
+    hotels_ranked = {h["zone_id"]: h for h in hotel_recommendations(db)}
+    hotels = []
+    for z in zones:
+        if z.type != "hotel":
+            continue
+        ranked = hotels_ranked.get(z.id, {})
+        hotels.append({
+            "id": z.id, "name": z.name, "total_rooms": z.capacity, "occupied_rooms": z.current_count,
+            "available_rooms": max(z.capacity - z.current_count, 0),
+            "distance_km": ranked.get("distance_km"), "price_tier": z.price_tier,
+            "contact": z.contact, "amenities": z.amenities,
+            "manual_recommended": z.manual_recommended, "recommended": ranked.get("recommended", False),
+            "lat": z.lat, "lng": z.lng,
+        })
+
+    transport = [
+        {
+            "id": z.id, "name": z.name, "type": z.type, "capacity": z.capacity, "current_count": z.current_count,
+            "occupied_pct": round(z.current_count / z.capacity * 100, 1) if z.capacity else 0,
+            "contact": z.contact, "lat": z.lat, "lng": z.lng,
+        }
+        for z in zones if z.domain == "transport"
+    ]
+
+    bus = db.query(models.Resource).filter(models.Resource.type == "bus").first()
+
+    return {
+        "configured": True, "event_name": event.name,
+        "venue": {"id": venue.id, "name": venue.name, "lat": venue.lat, "lng": venue.lng} if venue else None,
+        "gates": gates, "hotels": hotels, "transport": transport,
+        "buses": {"total": bus.quantity_total, "available": bus.quantity_available} if bus else None,
+    }
+
+
+def update_gate_setup(db, zone_id, capacity, staff_assigned):
+    zone = db.get(models.Zone, zone_id)
+    if not zone or zone.type != "gate":
+        return None
+    zone.capacity = capacity
+    zone.staff_assigned = staff_assigned
+    db.commit()
+    return zone
+
+
+def create_hotel(db, name, capacity, lat, lng, price_tier=None, contact=None, amenities=None):
+    event = get_live_event(db)
+    if not event:
+        return None
+    zone = models.Zone(
+        event_id=event.id, name=name, type="hotel", domain="hospitality", lat=lat, lng=lng,
+        capacity=capacity, current_count=0, last_count=0, price_tier=price_tier, contact=contact, amenities=amenities,
+    )
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return zone
+
+
+def update_hotel(db, zone_id, capacity=None, occupied_rooms=None, price_tier=None, contact=None, amenities=None, manual_recommended=None):
+    zone = db.get(models.Zone, zone_id)
+    if not zone or zone.type != "hotel":
+        return None
+    if capacity is not None:
+        zone.capacity = capacity
+    if occupied_rooms is not None:
+        zone.current_count = occupied_rooms
+    if price_tier is not None:
+        zone.price_tier = price_tier
+    if contact is not None:
+        zone.contact = contact
+    if amenities is not None:
+        zone.amenities = amenities
+    if manual_recommended is not None:
+        if manual_recommended:
+            # only one hotel can be the manual pick at a time
+            for other in db.query(models.Zone).filter(models.Zone.type == "hotel", models.Zone.id != zone_id).all():
+                other.manual_recommended = False
+        zone.manual_recommended = manual_recommended
+    db.commit()
+    return zone
+
+
+def create_transport_zone(db, name, capacity, lat, lng, type_="corridor", contact=None):
+    event = get_live_event(db)
+    if not event:
+        return None
+    zone = models.Zone(
+        event_id=event.id, name=name, type=type_, domain="transport", lat=lat, lng=lng,
+        capacity=capacity, current_count=0, last_count=0, contact=contact,
+    )
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return zone
+
+
+def update_transport_zone(db, zone_id, capacity=None, current_count=None, contact=None):
+    zone = db.get(models.Zone, zone_id)
+    if not zone or zone.domain != "transport":
+        return None
+    if capacity is not None:
+        zone.capacity = capacity
+    if current_count is not None:
+        zone.current_count = current_count
+    if contact is not None:
+        zone.contact = contact
+    db.commit()
+    return zone
 
 
 # --- Event lifecycle (Administrator: create / edit / delete) ---------------
@@ -1821,6 +2058,17 @@ def chatbot_answer(db, question):
         if not log:
             return {"text": "Nothing has happened yet — trigger a scenario to see activity build up.", "grounded_in": ["state:timeline"]}
         return {"text": " | ".join(f"[{e['clock']}] {e['message']}" for e in log), "grounded_in": ["state:timeline"]}
+
+    if any(k in q for k in ("off-peak", "off peak", "best time", "when should i", "when to arrive", "avoid crowd", "avoid rush")) or \
+            _fuzzy_word_match(q, ["offpeak", "arrive", "rush"]):
+        event = get_live_event(db)
+        if not event:
+            return {"text": "No live event right now to base timing advice on.", "grounded_in": []}
+        recs = offpeak_recommendations(db)
+        if not recs:
+            return {"text": "No gates configured to give timing advice on.", "grounded_in": []}
+        best = min(recs, key=lambda r: {"NORMAL": 0, "MODERATE": 1, "HIGH": 2, "CRITICAL": 3}[r["current_level"]])
+        return {"text": best["recommendation"], "grounded_in": [f"zone:{best['zone_name']}"]}
 
     if any(k in q for k in ("gate", "queue", "wait", "entry")) or _fuzzy_word_match(q, ["gate", "queue", "wait", "entry", "people"]):
         advisory = gate_advisory(db)

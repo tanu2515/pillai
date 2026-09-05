@@ -126,7 +126,12 @@ async function doLogin() {
     statusEl.textContent = data.status === "signup"
       ? `Welcome — new ${data.role} account created for ${data.email}.`
       : `Welcome back, ${data.email}.`;
-    setTimeout(() => { window.location.href = ROLE_DEST[data.role]; }, 400);
+    // A brand-new Event Command Operator account lands on the Event Setup Form
+    // first (gates/hotels/transport configuration) rather than straight into
+    // the live Command Centre — returning operators skip straight there.
+    const dest = (data.status === "signup" && data.role === "Event Command Operator")
+      ? "event-setup.html" : ROLE_DEST[data.role];
+    setTimeout(() => { window.location.href = dest; }, 400);
   } catch (e) {
     statusEl.textContent = "";
     errorEl.textContent = "Something went wrong signing in. Please try again.";
