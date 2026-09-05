@@ -1,3 +1,4 @@
+import json
 import random
 import uuid
 
@@ -13,11 +14,6 @@ W_SURGE = 0.25
 W_INSTABILITY = 0.15
 W_RESOURCE = 0.15
 W_TIME = 0.10
-
-GATE2_RAMP_PER_TICK = 273
-CORRIDOR_B_RAMP_PER_TICK = 76
-HOTEL_A_RAMP_PER_TICK = 9
-RAMP_DURATION_TICKS = 11
 
 EVENT_START_HOUR = 14  # the event clock reads 14:00 -> 00:00 as tick advances
 ACK_THRESHOLD = 65  # risk score at/above this can be acknowledged/escalated
@@ -105,9 +101,13 @@ def get_state_row(db):
     return state
 
 
-def trigger_scenario(db):
+def trigger_scenario(db, scenario_id):
+    scenario = db.get(models.Scenario, scenario_id)
     state = get_state_row(db)
+    if not scenario or not state:
+        return None
     state.scenario_active = True
+    state.active_scenario_id = scenario.id
     state.trigger_tick = state.tick
     db.commit()
     return state
@@ -115,23 +115,23 @@ def trigger_scenario(db):
 
 def advance_tick(db):
     state = get_state_row(db)
+    if state is None:
+        return None
     state.tick += 1
+
+    scenario = db.get(models.Scenario, state.active_scenario_id) if state.active_scenario_id else None
+    effects = json.loads(scenario.effects_json) if scenario else {}
     ticks_since_trigger = state.tick - state.trigger_tick if state.scenario_active else -1
-    ramping = state.scenario_active and 0 <= ticks_since_trigger < RAMP_DURATION_TICKS
+    duration = scenario.duration_ticks if scenario else 0
+    ramping = state.scenario_active and 0 <= ticks_since_trigger < duration
 
     zones = db.query(models.Zone).all()
     for zone in zones:
-        delta = 0
-        if ramping and zone.name == "Gate 2":
-            delta = GATE2_RAMP_PER_TICK
-        elif ramping and zone.name == "Corridor B":
-            delta = CORRIDOR_B_RAMP_PER_TICK
-        elif ramping and zone.name == "Hotel A":
-            delta = HOTEL_A_RAMP_PER_TICK
+        delta = effects.get(zone.name, 0) if ramping else 0
         new_count = zone.current_count + delta
-        if zone.name == "Hotel A":
+        if zone.type == "hotel":
             new_count = min(zone.capacity, new_count)  # a hotel can't hold more guests than it has rooms
-        # Corridor B is deliberately allowed past 100% — transport *demand* can
+        # Gates/corridors/hubs are deliberately allowed past 100% — demand can
         # exceed capacity (that's congestion), unlike a hotel's physical rooms.
         new_count = max(0, new_count)
         zone.prev_delta = zone.current_count - zone.last_count
@@ -153,6 +153,53 @@ def reset_simulation(db):
     seed_if_empty(db)
 
 
+# --- scenario authoring (Administrator) ------------------------------------
+
+def list_scenarios(db):
+    scenarios = db.query(models.Scenario).order_by(models.Scenario.id).all()
+    return [
+        {"id": s.id, "name": s.name, "description": s.description,
+         "duration_ticks": s.duration_ticks, "effects": json.loads(s.effects_json)}
+        for s in scenarios
+    ]
+
+
+def create_scenario(db, name, description, duration_ticks, effects):
+    scenario = models.Scenario(
+        name=name, description=description, duration_ticks=duration_ticks,
+        effects_json=json.dumps(effects),
+    )
+    db.add(scenario)
+    db.commit()
+    db.refresh(scenario)
+    return scenario
+
+
+def update_scenario(db, scenario_id, name, description, duration_ticks, effects):
+    scenario = db.get(models.Scenario, scenario_id)
+    if not scenario:
+        return None
+    scenario.name = name
+    scenario.description = description
+    scenario.duration_ticks = duration_ticks
+    scenario.effects_json = json.dumps(effects)
+    db.commit()
+    return scenario
+
+
+def delete_scenario(db, scenario_id):
+    scenario = db.get(models.Scenario, scenario_id)
+    if not scenario:
+        return False
+    state = get_state_row(db)
+    if state and state.active_scenario_id == scenario_id:
+        state.scenario_active = False
+        state.active_scenario_id = None
+    db.delete(scenario)
+    db.commit()
+    return True
+
+
 # --- acknowledge / escalate ----------------------------------------------
 
 def set_ack_status(db, zone_id, status):
@@ -169,16 +216,20 @@ def set_ack_status(db, zone_id, status):
 # --- consolidated state ---------------------------------------------------
 
 def full_state(db):
+    state = get_state_row(db)
+    if state is None:
+        return {"configured": False, "tick": 0, "clock": event_clock_label(0),
+                "scenario_active": False, "zones": [], "resources": []}
+
     zones = db.query(models.Zone).all()
     resources = db.query(models.Resource).all()
-    state = get_state_row(db)
 
     zone_out = []
     for z in zones:
         r = zone_risk(z, db)
         zone_out.append({
             "id": z.id, "name": z.name, "type": z.type, "domain": z.domain,
-            "location_note": z.location_note,
+            "location_note": z.location_note, "lat": z.lat, "lng": z.lng,
             "capacity": z.capacity, "current_count": z.current_count,
             "linked_transport_zone_id": z.linked_transport_zone_id,
             "linked_hospitality_zone_id": z.linked_hospitality_zone_id,
@@ -207,31 +258,37 @@ def full_state(db):
 
 
 def causal_chain(db):
+    """Walks whichever zones the *active* scenario's own effects_json names,
+    in the order the scenario author listed them — generic to any scenario,
+    not hardcoded to Gate 2/Corridor B/Hotel A."""
     state = get_state_row(db)
-    gate2 = db.query(models.Zone).filter(models.Zone.name == "Gate 2").first()
-    chain = []
-    if not state.scenario_active:
-        return ["No active scenario. Trigger the session-release scenario to see the causal chain build up live."]
-    chain.append("Headline session ends — attendees begin exiting toward Gate 2")
-    g2r = zone_risk(gate2, db)
-    chain.append(f"Gate 2 inflow rises — utilization now {g2r['capacity_pressure_pct']}% ({g2r['level']})")
-    corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id)
-    cb_pct = round(corridor_b.current_count / corridor_b.capacity * 100, 1)
-    chain.append(f"{corridor_b.name} demand rises to {cb_pct}% as exiting attendees seek transport")
-    hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id)
-    ha_pct = round(hotel_a.current_count / hotel_a.capacity * 100, 1)
-    chain.append(f"{hotel_a.name} occupancy rises to {ha_pct}% from new same-night demand")
+    if not state or not state.scenario_active or not state.active_scenario_id:
+        return ["No active scenario. Trigger a scenario to see the causal chain build up live."]
+    scenario = db.get(models.Scenario, state.active_scenario_id)
+    effects = json.loads(scenario.effects_json)
+    chain = [scenario.description or f"{scenario.name} begins"]
+    for zone_name in effects:
+        zone = db.query(models.Zone).filter(models.Zone.name == zone_name).first()
+        if not zone:
+            continue
+        r = zone_risk(zone, db)
+        chain.append(f"{zone.name} rises to {r['capacity_pressure_pct']}% ({r['level']})")
     return chain
 
 
 def zone_causal_chain(db, zone_id):
-    """Per-zone Risk Detail: for Gate 2 this is the full canonical chain;
-    for every other zone it's a one-step breakdown of its own risk factors."""
+    """Per-zone Risk Detail: if this zone is one the active scenario's
+    effects target, show the full scenario chain; otherwise a one-step
+    breakdown of just this zone's own risk factors."""
     zone = db.get(models.Zone, zone_id)
     if not zone:
         return []
-    if zone.name == "Gate 2":
-        return causal_chain(db)
+    state = get_state_row(db)
+    if state and state.scenario_active and state.active_scenario_id:
+        scenario = db.get(models.Scenario, state.active_scenario_id)
+        effects = json.loads(scenario.effects_json)
+        if zone.name in effects:
+            return causal_chain(db)
     r = zone_risk(zone, db)
     return [
         f"{zone.name} is at {r['capacity_pressure_pct']}% of capacity ({r['level']})",
@@ -248,6 +305,8 @@ BUS_CAPACITY_EACH = 50
 def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0):
     gate2 = db.query(models.Zone).filter(models.Zone.name == "Gate 2").first()
     gate3 = db.query(models.Zone).filter(models.Zone.name == "Gate 3").first()
+    if not gate2 or not gate3:
+        return None
     corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id)
     hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id)
 
@@ -449,12 +508,112 @@ def zone_capacity(db, zone_id):
     }
 
 
+# --- map: add/move/remove gates from the What-If Simulator's map -----------
+# Gate 2, Corridor B and Hotel A are protected from deletion — the canonical
+# SRS-Appendix scenario chain (and run_whatif's hardcoded Gate 2/Gate 3 logic)
+# depends on those exact zones existing. Everything else can be freely added,
+# repositioned, or removed — this is deliberately just map metadata (lat/lng)
+# plus the same Zone row shape already used everywhere else, not a parallel
+# "gates" system.
+PROTECTED_ZONE_NAMES = {"Gate 2", "Gate 3", "Corridor B", "Hotel A", "Main Hall"}
+
+
+def create_zone(db, name, lat, lng, capacity, domain="venue", type_="gate"):
+    event = db.query(models.Event).first()
+    if not event:
+        return None
+    zone = models.Zone(
+        event_id=event.id, name=name, type=type_, domain=domain,
+        lat=lat, lng=lng, capacity=capacity, current_count=0, last_count=0,
+    )
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return zone
+
+
+def update_zone_location(db, zone_id, lat, lng):
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        return None
+    zone.lat = lat
+    zone.lng = lng
+    db.commit()
+    return zone
+
+
+def delete_zone(db, zone_id):
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        return {"ok": False, "error": "zone not found"}
+    if zone.name in PROTECTED_ZONE_NAMES:
+        return {"ok": False, "error": f"{zone.name} can't be deleted — the built-in scenario depends on it."}
+    # a gate pointing visitors here shouldn't be left dangling
+    for gate in db.query(models.Zone).filter(models.Zone.linked_transport_zone_id == zone_id).all():
+        gate.linked_transport_zone_id = None
+    for gate in db.query(models.Zone).filter(models.Zone.linked_hospitality_zone_id == zone_id).all():
+        gate.linked_hospitality_zone_id = None
+    db.delete(zone)
+    db.commit()
+    return {"ok": True}
+
+
+# --- Event lifecycle (Administrator: create / edit / delete) ---------------
+# One live event at a time (same architecture as before) — but the
+# Administrator can now actually wipe it and start a fresh one, instead of
+# only ever being able to edit the single event seeding created.
+
+def create_event(db, name, region, expected_attendance, safe_capacity):
+    db.query(models.Zone).delete()
+    db.query(models.Resource).delete()
+    db.query(models.VisitorProfile).delete()
+    db.query(models.Event).delete()
+    db.commit()
+
+    event = models.Event(
+        name=name, region=region,
+        expected_attendance=expected_attendance, safe_capacity=safe_capacity,
+        status="active",
+    )
+    db.add(event)
+    db.flush()
+
+    from .seed import create_zones_and_resources
+    create_zones_and_resources(db, event)
+
+    state = get_state_row(db)
+    if state:
+        state.tick = 0
+        state.scenario_active = False
+        state.active_scenario_id = None
+        state.trigger_tick = -1
+    else:
+        db.add(models.SimState(tick=0, scenario_active=False, trigger_tick=-1))
+    db.commit()
+
+    apply_region(db, region, rename=False)
+    return event
+
+
+def delete_event(db):
+    """Wipes the event entirely — the app falls back to its already-built
+    'no event configured yet' state (login/attendee/command-center all
+    handle {"configured": false} gracefully) until an Administrator creates
+    a new one. Scenarios and user accounts are reference data and survive."""
+    db.query(models.Zone).delete()
+    db.query(models.Resource).delete()
+    db.query(models.VisitorProfile).delete()
+    db.query(models.Event).delete()
+    db.query(models.SimState).delete()
+    db.commit()
+
+
 # --- India region grounding (Administrator: Event Configuration) -----------
 # Re-anchors the fixed 10-zone template to a real venue/transport hub/airport/
 # hotel for whichever Indian state/UT is selected — one real-world skin over
 # the same structure and risk engine, not a separate simulation per state.
 
-def apply_region(db, state_name):
+def apply_region(db, state_name, rename=True):
     region = INDIA_REGIONS.get(state_name)
     if not region:
         return None
@@ -463,7 +622,10 @@ def apply_region(db, state_name):
     city = region["city"]
     venue = region["venue"] or "the venue"
 
-    event.name = f"{city} Mega Fest"
+    # rename=False when called right after create_event() — the Administrator
+    # already chose a name there, region-grounding shouldn't silently replace it.
+    if rename:
+        event.name = f"{city} Mega Fest"
     event.region = state_name
     db.flush()
 
