@@ -1,4 +1,4 @@
-# KAIRO — PS-8 Mega-Event Hospitality Orchestration
+# VYAVASTHA — PS-8 Mega-Event Hospitality Orchestration
 
 Working prototype backend + dashboards. See `WINNING_PLAN.md` for the full strategy, Q&A prep, and remaining checklist.
 
@@ -14,7 +14,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 - Attendee view: http://localhost:8001/attendee.html
 - From a phone on the same WiFi: `http://<this-machine's-LAN-IP>:8001/` (find the IP with `ipconfig`)
 
-Data lives in `backend/kairo.db` (SQLite, created automatically, seeded with the SRS's own Appendix scenario — Mumbai Global Festival).
+Data lives in `backend/vyavastha.db` (SQLite, created automatically, seeded with the SRS's own Appendix scenario — Mumbai Global Festival).
 
 ## What's implemented
 
@@ -27,5 +27,5 @@ Data lives in `backend/kairo.db` (SQLite, created automatically, seeded with the
 
 ## Not yet wired up
 
-- Real YOLO camera detection (from `crowd-prediction-ai`) — intentionally held off until the teammate's remaining KAIRO code arrives, per the integration point noted in `WINNING_PLAN.md` Section 7. The phone-as-IP-camera setup (Section 7.1) is documented and ready to wire into `engine.py` once that code lands.
+- Real YOLO camera detection (from `crowd-prediction-ai`) — intentionally held off until the teammate's remaining KAIRO code (the prior hackathon build this project is built on) arrives, per the integration point noted in `WINNING_PLAN.md` Section 7. The phone-as-IP-camera setup (Section 7.1) is documented and ready to wire into `engine.py` once that code lands.
 - LLM explanation layer (Section 8's grounded copilot).

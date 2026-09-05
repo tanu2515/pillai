@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KAIRO — Mega-Event Orchestration</title>
+<title>VYAVASTHA — Mega-Event Orchestration</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,17 +13,22 @@
     theme: {
       extend: {
         colors: {
-          bg: "#0F1722",
-          surface: "#162232",
-          panel: "#1E2D42",
-          panel2: "#162232",
-          border: "#2C3E56",
-          muted: "#90A4AE",
-          accent: "#00E5FF",
-          accentDim: "#008B99",
-          warn: "#FFD54F",
-          ok: "#69F0AE",
-          danger: "#FF5252",
+          bg: "#EAF7F4",
+          surface: "#FFFFFF",
+          panel: "#FFFFFF",
+          panel2: "#F1F5F9",
+          border: "#E2E8F0",
+          muted: "#64748B",
+          ink: "#123B6D",
+          accent: "#1976D2",
+          accentDim: "#123B6D",
+          green: "#20C997",
+          greenLight: "#5BE7A9",
+          brandGreen: "#20C997",
+          warn: "#F59E0B",
+          ok: "#22C55E",
+          high: "#F87171",
+          danger: "#DC2626",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -36,39 +41,41 @@
 <style>
   body{
     background-image:
-      radial-gradient(circle at 15% 0%, rgba(0,229,255,.05), transparent 55%),
-      linear-gradient(#2C3E56 1px, transparent 1px),
-      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
-    background-size: auto, 36px 36px, 36px 36px;
-    background-color:#0F1722;
+      radial-gradient(circle at 15% 0%, rgba(25,118,210,.06), transparent 55%),
+      radial-gradient(circle at 85% 100%, rgba(32,201,151,.06), transparent 55%),
+      linear-gradient(#E2E8F0 1px, transparent 1px),
+      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size: auto, auto, 36px 36px, 36px 36px;
+    background-color:#EAF7F4;
     background-attachment:fixed;
   }
-  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.025;
-    background:repeating-linear-gradient(to bottom, #fff 0 1px, transparent 1px 4px); }
-  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
+  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.015;
+    background:repeating-linear-gradient(to bottom, #123B6D 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); }
+  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .role-card{ transition:.15s; }
-  .role-card:hover{ border-color:rgba(0,229,255,.6); background:rgba(0,229,255,.06); }
-  .role-card:hover .chev{ transform:translateX(3px); color:#00E5FF; }
-  .role-icon{ background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.3); }
-  .glow-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(0,229,255,.45),transparent); }
-  .corner{ position:absolute; width:20px; height:20px; border-color:rgba(0,229,255,.4); border-style:solid; border-width:0; }
+  .role-card:hover{ border-color:rgba(25,118,210,.5); background:rgba(25,118,210,.05); }
+  .role-card:hover .chev{ transform:translateX(3px); color:#1976D2; }
+  .role-icon{ background:rgba(25,118,210,.1); border:1px solid rgba(25,118,210,.25); }
+  .glow-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(25,118,210,.35),transparent); }
+  .corner{ position:absolute; width:20px; height:20px; border-color:rgba(25,118,210,.3); border-style:solid; border-width:0; }
   .corner.tl{ top:20px; left:20px; border-top-width:2px; border-left-width:2px; }
   .corner.tr{ top:20px; right:20px; border-top-width:2px; border-right-width:2px; }
   .corner.bl{ bottom:20px; left:20px; border-bottom-width:2px; border-left-width:2px; }
   .corner.br{ bottom:20px; right:20px; border-bottom-width:2px; border-right-width:2px; }
 </style>
 </head>
-<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+<body class="bg-bg text-ink font-sans m-0 min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
 <div class="scanlines"></div>
 <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
 
 <div class="max-w-lg w-full relative z-10">
   <div class="flex flex-col items-center text-center mb-10">
     <div class="w-[92px] h-[92px] rounded-full flex items-center justify-center mb-7 relative"
-         style="background:linear-gradient(140deg, rgba(76,123,125,.25), rgba(0,229,255,.08)); border:1.5px solid rgba(0,229,255,.5); box-shadow:0 0 45px rgba(0,229,255,.25);">
+         style="background:linear-gradient(140deg, rgba(25,118,210,.15), rgba(32,201,151,.12)); border:1.5px solid rgba(25,118,210,.4); box-shadow:0 0 45px rgba(25,118,210,.18);">
       <span class="text-4xl">📡</span>
     </div>
-    <h1 class="text-4xl font-black m-0 tracking-[0.18em]">KAIRO</h1>
+    <h1 class="brand-mark text-4xl font-black m-0 tracking-[0.18em]">VYAVASTHA</h1>
     <div class="glow-divider w-12 my-3"></div>
     <span class="uppercase text-[10px] font-bold tracking-[0.22em] text-accent bg-accent/10 border border-accent/30 rounded-full px-4 py-1.5 mt-1">
       Smart Crowd &amp; Event Management

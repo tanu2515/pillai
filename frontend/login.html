@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KAIRO — Sign In</title>
+<title>VYAVASTHA — Sign In</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,9 +13,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", border: "#2C3E56",
-          muted: "#90A4AE", accent: "#00E5FF", accentDim: "#008B99",
-          warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
+          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
+          high: "#F87171", danger: "#DC2626",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -28,30 +29,32 @@
 <style>
   body{
     background-image:
-      radial-gradient(circle at 20% 0%, rgba(0,229,255,.05), transparent 55%),
-      linear-gradient(#2C3E56 1px, transparent 1px),
-      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
-    background-size:auto, 36px 36px, 36px 36px;
-    background-color:#0F1722;
+      radial-gradient(circle at 20% 0%, rgba(25,118,210,.06), transparent 55%),
+      radial-gradient(circle at 80% 100%, rgba(32,201,151,.05), transparent 55%),
+      linear-gradient(#E2E8F0 1px, transparent 1px),
+      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px;
+    background-color:#EAF7F4;
   }
-  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
-  input[type=email], select{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:10px; }
-  input[type=email]:focus, select:focus{ outline:none; border-color:#00E5FF; }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); }
+  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  input[type=email], select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:10px; }
+  input[type=email]:focus, select:focus{ outline:none; border-color:#1976D2; }
   select{ appearance:none; }
-  select option{ background:#162232; color:#fff; }
+  select option{ background:#FFFFFF; color:#123B6D; }
   .selectwrap{ position:relative; }
-  .selectwrap::after{ content:'▾'; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:#90A4AE; font-size:11px; pointer-events:none; }
-  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.08em; transition:.15s; }
+  .selectwrap::after{ content:'▾'; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:#64748B; font-size:11px; pointer-events:none; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.08em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
 </style>
 </head>
-<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen flex items-center justify-center px-4">
+<body class="bg-bg text-ink font-sans m-0 min-h-screen flex items-center justify-center px-4">
 
 <div class="max-w-sm w-full">
   <div class="flex items-center gap-2.5 justify-center mb-8">
     <span class="tick"></span>
-    <span class="text-lg font-black tracking-[0.14em]">KAIRO</span>
+    <span class="brand-mark text-lg font-black tracking-[0.14em]">VYAVASTHA</span>
   </div>
 
   <div class="bg-panel border border-border rounded-2xl p-6">
@@ -117,8 +120,8 @@ async function doLogin() {
     });
     if (!res.ok) throw new Error("Login failed");
     const data = await res.json();
-    sessionStorage.setItem("kairo_email", data.email);
-    sessionStorage.setItem("kairo_role", data.role);
+    sessionStorage.setItem("vyavastha_email", data.email);
+    sessionStorage.setItem("vyavastha_role", data.role);
     statusEl.textContent = data.status === "signup"
       ? `Welcome — new ${data.role} account created for ${data.email}.`
       : `Welcome back, ${data.email}.`;
@@ -142,7 +145,7 @@ if (preselect && ROLE_DEST[preselect]) document.getElementById("role").value = p
     const data = await res.json();
     el.textContent = data.configured ? data.name : "No event configured yet — an Administrator sets this up first.";
   } catch (e) {
-    el.textContent = "KAIRO";
+    el.textContent = "VYAVASTHA";
   }
 })();
 </script>

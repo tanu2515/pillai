@@ -1,5 +1,5 @@
 # Real-world region data for all 28 Indian states + 8 union territories,
-# researched via web search (not invented) — used to re-ground KAIRO's fixed
+# researched via web search (not invented) — used to re-ground VYAVASTHA's fixed
 # 10-zone template (Main Hall/VIP Zone/Gate 1-3/Corridor A-B/Transport Hub/
 # Hotel A-B) to a real venue, transport hub, airport and hotel in whichever
 # state/UT an Administrator selects. Fields explicitly unverifiable by search

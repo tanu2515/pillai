@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KAIRO — Command Center</title>
+<title>VYAVASTHA — Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,9 +15,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", panel2: "#162232",
-          border: "#2C3E56", muted: "#90A4AE", accent: "#00E5FF", accentDim: "#008B99",
-          warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", panel2: "#F1F5F9",
+          border: "#E2E8F0", muted: "#64748B", ink: "#123B6D",
+          accent: "#1976D2", accentDim: "#123B6D", green: "#20C997", greenLight: "#5BE7A9",
+          warn: "#F59E0B", ok: "#22C55E", high: "#F87171", danger: "#DC2626",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -30,73 +31,75 @@
 <style>
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(0,229,255,.04), transparent 45%),
-      linear-gradient(#2C3E56 1px, transparent 1px),
-      linear-gradient(90deg, #2C3E56 1px, transparent 1px);
-    background-size:auto, 36px 36px, 36px 36px;
-    background-color:#0F1722;
+      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
+      radial-gradient(circle at 5% 100%, rgba(32,201,151,.05), transparent 45%),
+      linear-gradient(#E2E8F0 1px, transparent 1px),
+      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px;
+    background-color:#EAF7F4;
     background-attachment:fixed;
   }
-  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.02;
-    background:repeating-linear-gradient(to bottom, #fff 0 1px, transparent 1px 4px); }
-  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; flex-shrink:0; }
-  .tab-btn{ color:#90A4AE; border-color:transparent; letter-spacing:.03em; }
-  .tab-btn.active{ color:#00E5FF; border-color:#00E5FF; }
-  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.06em; transition:.15s; }
+  .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.015;
+    background:repeating-linear-gradient(to bottom, #123B6D 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); flex-shrink:0; }
+  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .tab-btn{ color:#64748B; border-color:transparent; letter-spacing:.03em; }
+  .tab-btn.active{ color:#1976D2; border-color:#1976D2; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.06em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-ghost{ background:#1E2D42; border:1px solid #2C3E56; color:#e2e8f0; transition:.15s; }
-  .btn-ghost:hover{ border-color:#008B99; }
-  .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; font-weight:700; letter-spacing:.05em; transition:.15s; }
-  .btn-danger:hover{ background:rgba(255,82,82,.2); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
+  .btn-ghost{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; transition:.15s; }
+  .btn-ghost:hover{ border-color:#1976D2; }
+  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; font-weight:700; letter-spacing:.05em; transition:.15s; }
+  .btn-danger:hover{ background:rgba(220,38,38,.15); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
   input[type=number], input[type=text], select{
-    background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:10px;
+    background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:10px;
   }
-  input[type=number]:focus, input[type=text]:focus, select:focus{ outline:none; border-color:#00E5FF; }
-  .live-dot{ width:6px; height:6px; border-radius:50%; background:#69F0AE; box-shadow:0 0 6px #69F0AE; animation:blink 1.6s ease-in-out infinite; }
+  input[type=number]:focus, input[type=text]:focus, select:focus{ outline:none; border-color:#1976D2; }
+  .live-dot{ width:6px; height:6px; border-radius:50%; background:#22C55E; box-shadow:0 0 6px rgba(34,197,94,.6); animation:blink 1.6s ease-in-out infinite; }
   @keyframes blink{ 50%{ opacity:.35; } }
-  .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; transition:.12s; }
+  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; transition:.12s; box-shadow:0 1px 2px rgba(18,59,109,.04); }
   .row-card.clickable{ cursor:pointer; }
-  .row-card.clickable:hover{ border-color:#008B99; }
+  .row-card.clickable:hover{ border-color:#1976D2; }
   .ack-pill{ font-size:9px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:20px; }
-  .modal-veil{ position:fixed; inset:0; background:rgba(2,6,10,.72); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-veil{ position:fixed; inset:0; background:rgba(18,59,109,.45); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
   .modal-veil.show{ display:flex; }
-  .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); }
-  .ai-box{ background:#0F1722; border:1px solid #2C3E56; border-radius:10px; padding:12px; margin-top:10px; }
-  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:#00E5FF; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
-  .gauge{ height:6px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; }
+  .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#FFFFFF; border:1.5px solid rgba(25,118,210,.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); }
+  .ai-box{ background:#F1F5F9; border:1px solid #E2E8F0; border-radius:10px; padding:12px; margin-top:10px; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:#1976D2; background:rgba(25,118,210,.08); border:1px solid rgba(25,118,210,.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
+  .gauge{ height:6px; border-radius:4px; background:#F1F5F9; border:1px solid #E2E8F0; overflow:hidden; }
   .gauge-fill{ height:100%; border-radius:4px; transition:width .4s ease; }
-  .gauge-fill.overflow{ box-shadow:0 0 6px 1px #FF5252 inset; }
-  .flow-pill{ background:#1E2D42; border:1px solid #2C3E56; border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
-  .flow-arrow{ color:#2C3E56; font-size:14px; flex-shrink:0; }
+  .gauge-fill.overflow{ box-shadow:0 0 6px 1px #DC2626 inset; }
+  .flow-pill{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
+  .flow-arrow{ color:#94A3B8; font-size:14px; flex-shrink:0; }
   .dropdown{ position:relative; min-width:190px; }
-  .dropdown-btn{ width:100%; text-align:left; background:#1E2D42; border:1px solid #2C3E56; color:#fff; border-radius:8px; padding:8px 12px; font-size:12px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:6px; }
-  .dropdown-btn:hover{ border-color:#008B99; }
-  .dropdown-caret{ color:#90A4AE; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:max-content; min-width:100%; max-width:280px; max-height:200px; overflow-y:auto; background:#1E2D42; border:1px solid #2C3E56; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:8px 12px; font-size:12px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .dropdown-btn:hover{ border-color:#1976D2; }
+  .dropdown-caret{ color:#64748B; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:max-content; min-width:100%; max-width:280px; max-height:200px; overflow-y:auto; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); }
   .dropdown-item{ padding:8px 12px; font-size:12px; cursor:pointer; }
-  .dropdown-item:hover{ background:rgba(0,229,255,.1); }
-  .dropdown-item.selected{ background:rgba(0,229,255,.15); color:#00E5FF; }
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#162232; color:#fff; }
+  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
+  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#FFFFFF; color:#123B6D; }
   .leaflet-popup-content{ margin:12px 14px; font-family:'Manrope',sans-serif; font-size:12.5px; }
-  .leaflet-popup-content input{ background:#1E2D42; border:1px solid #2C3E56; color:#fff; border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
-  .map-place-btn.on{ background:rgba(0,229,255,.15); border-color:#00E5FF; color:#00E5FF; }
-  #zone-map{ background:#0F1722; }
-  .chat-fab{ position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#00E5FF; color:#05161E; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(0,229,255,.4); z-index:60; border:none; }
+  .leaflet-popup-content input{ background:#EAF7F4; border:1px solid #E2E8F0; color:#123B6D; border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
+  .map-place-btn.on{ background:rgba(25,118,210,.12); border-color:#1976D2; color:#1976D2; }
+  #zone-map{ background:#F1F5F9; }
+  .chat-fab{ position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#1976D2,#20C997); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(25,118,210,.35); z-index:60; border:none; }
   .chat-fab:hover{ filter:brightness(1.08); }
-  .chat-panel{ position:fixed; bottom:88px; right:20px; width:320px; max-width:calc(100vw - 40px); height:440px; max-height:calc(100vh - 120px); background:#162232; border:1.5px solid rgba(0,229,255,.4); border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.4); z-index:60; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel{ position:fixed; bottom:88px; right:20px; width:320px; max-width:calc(100vw - 40px); height:440px; max-height:calc(100vh - 120px); background:#FFFFFF; border:1.5px solid rgba(25,118,210,.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); z-index:60; display:none; flex-direction:column; overflow:hidden; }
   .chat-panel.show{ display:flex; }
-  .chat-header{ padding:12px 14px; border-bottom:1px solid #2C3E56; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .chat-header{ padding:12px 14px; border-bottom:1px solid #E2E8F0; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#123B6D; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
   .chat-messages{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
   .chat-msg{ max-width:85%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
-  .chat-msg.user{ align-self:flex-end; background:#00E5FF; color:#05161E; font-weight:600; }
-  .chat-msg.bot{ align-self:flex-start; background:#1E2D42; border:1px solid #2C3E56; color:#e2e8f0; }
-  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #2C3E56; flex-shrink:0; }
+  .chat-msg.user{ align-self:flex-end; background:#1976D2; color:#fff; font-weight:600; }
+  .chat-msg.bot{ align-self:flex-start; background:#F1F5F9; border:1px solid #E2E8F0; color:#123B6D; }
+  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #E2E8F0; flex-shrink:0; }
   .chat-input-row input{ flex:1; padding:8px 10px !important; font-size:12.5px; }
-  .chat-input-row button{ background:#00E5FF; color:#05161E; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
+  .chat-input-row button{ background:#1976D2; color:#fff; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
 </style>
 </head>
-<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen relative">
+<body class="bg-bg text-ink font-sans m-0 min-h-screen relative">
 <div class="scanlines"></div>
 
 <div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
@@ -105,7 +108,7 @@
       <a href="/" class="tick"></a>
       <div>
         <h1 class="text-sm font-extrabold m-0 leading-tight tracking-[0.1em] uppercase flex items-center gap-2">
-          <span id="event-title">KAIRO</span>
+          <span id="event-title">VYAVASTHA</span>
           <span id="role-badge" class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5"></span>
         </h1>
         <p class="text-xs text-muted font-mono m-0 flex items-center gap-1.5 mt-0.5"><span class="live-dot"></span><span id="clock-label">14:00</span></p>
@@ -124,21 +127,39 @@
         <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium" onclick="resetSim()">Start Over</button>
       </span>
       <span id="readonly-note" class="text-xs text-muted italic hidden">Live event clock is run by the Event Command Operator</span>
+      <button id="emergency-btn" class="btn-danger rounded-lg px-3 py-2 text-xs hidden" onclick="openEmergencyModal()">🚨 Emergency</button>
       <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
-      <a href="/login.html" class="text-xs text-muted hover:text-slate-200 hover:underline font-medium">Switch role →</a>
+      <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
     </div>
   </div>
   <nav class="flex gap-1 px-4 sm:px-6 overflow-x-auto">
     <button data-tab="overview" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Command Centre</button>
     <button data-tab="whatif" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">What-If Simulator</button>
     <button data-tab="actions" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Suggested Actions</button>
+    <button data-tab="alerts" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Alerts</button>
+    <button data-tab="hotels" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Hotels</button>
+    <button data-tab="transport" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Transport</button>
+    <button data-tab="analytics" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Analytics</button>
     <button data-tab="timeline" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Incident Timeline</button>
   </nav>
+</div>
+
+<div id="emergency-banner" class="hidden bg-danger/15 border-b border-danger/50 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap relative z-[1]">
+  <span class="text-danger text-sm font-bold">🚨 EMERGENCY — <span id="emergency-banner-zone"></span>: <span id="emergency-banner-message" class="font-normal"></span></span>
+  <button id="emergency-clear-btn" class="btn-danger rounded-lg px-3 py-1.5 text-xs hidden" onclick="clearEmergency()">Clear Emergency</button>
 </div>
 
 <main class="p-3 sm:p-6 max-w-6xl mx-auto relative z-[1]">
 
   <div id="tab-overview" class="tab-panel">
+    <section class="bg-panel border border-border rounded-xl p-4 mb-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">Event Health Score</h2>
+        <span class="text-[10.5px] text-muted font-mono">composite of every domain's live risk</span>
+      </div>
+      <div id="health-score"></div>
+    </section>
+
     <section id="preventive-section" class="bg-panel border border-warn/40 rounded-xl p-4 mb-4 hidden">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow text-warn">⏱ Act Before It's Critical</h2>
@@ -197,7 +218,7 @@
         <h2 class="eyebrow">Zone Map</h2>
         <button id="map-place-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="toggleMapPlaceMode()">📍 Click Map to Add Gate</button>
       </div>
-      <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #2C3E56;"></div>
+      <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
       <p class="text-[10.5px] text-muted mt-2 mb-3">Drag a marker to move it. Click a marker to edit or delete it.</p>
 
       <div class="border-t border-border pt-3">
@@ -219,9 +240,48 @@
       <h2 class="eyebrow text-danger mb-3">🚨 No Feasible Plan — Needs a Human Call</h2>
       <div id="escalations"></div>
     </section>
-    <section class="bg-panel border border-border rounded-xl p-4 max-w-xl">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-xl mb-4">
       <h2 class="eyebrow mb-3">What To Do Right Now</h2>
       <div id="recs"></div>
+    </section>
+    <section id="staff-section" class="bg-panel border border-border rounded-xl p-4 max-w-xl hidden">
+      <h2 class="eyebrow mb-3">Staff Allocation Suggestions</h2>
+      <div id="staff-suggestions"></div>
+    </section>
+  </div>
+
+  <div id="tab-alerts" class="tab-panel hidden grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+    <section class="bg-panel border border-border rounded-xl p-4">
+      <h2 class="eyebrow mb-3">Alerts</h2>
+      <div id="alerts-list"></div>
+    </section>
+    <section class="bg-panel border border-border rounded-xl p-4">
+      <h2 class="eyebrow mb-3">Notifications</h2>
+      <div id="notifications-list"></div>
+    </section>
+  </div>
+
+  <div id="tab-hotels" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
+      <h2 class="eyebrow mb-3">Hotel Recommendations</h2>
+      <div id="hotels-list"></div>
+    </section>
+  </div>
+
+  <div id="tab-transport" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
+      <h2 class="eyebrow mb-3">Transport Demand Prediction</h2>
+      <div id="transport-demand-list"></div>
+    </section>
+  </div>
+
+  <div id="tab-analytics" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">Post-Event Analytics</h2>
+        <button class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="loadAnalytics()">↻ Refresh</button>
+      </div>
+      <div id="analytics-body"></div>
     </section>
   </div>
 
@@ -229,13 +289,30 @@
     <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">Incident Timeline</h2>
-        <span class="text-[10.5px] text-muted font-mono">what happened, when, and how KAIRO responded</span>
+        <span class="text-[10.5px] text-muted font-mono">what happened, when, and how VYAVASTHA responded</span>
       </div>
       <div id="timeline-list"></div>
     </section>
   </div>
 
 </main>
+
+<div class="modal-veil" id="emergencyModal" onclick="if(event.target===this) closeEmergencyModal()">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-4 border-b border-border">
+      <h3 class="text-base font-extrabold m-0 text-danger">🚨 Declare Emergency</h3>
+      <button onclick="closeEmergencyModal()" class="text-muted hover:text-accent text-lg">✕</button>
+    </div>
+    <div class="p-4">
+      <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Zone</label>
+      <select id="emergency-zone" class="w-full p-2.5 text-sm mb-3"></select>
+      <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Message</label>
+      <input type="text" id="emergency-message" placeholder="e.g. Medical emergency, crowd crush risk" class="w-full p-2.5 text-sm mb-4" />
+      <button class="btn-danger w-full rounded-lg px-3 py-2.5 text-sm" onclick="submitEmergency()">DECLARE EMERGENCY</button>
+      <div id="emergency-modal-status" class="text-xs text-muted mt-2"></div>
+    </div>
+  </div>
+</div>
 
 <div class="modal-veil" id="riskModal" onclick="if(event.target===this) closeRiskModal()">
   <div class="modal-box">
@@ -244,7 +321,7 @@
         <h3 id="modal-zone-name" class="text-base font-extrabold m-0"></h3>
         <p id="modal-location-note" class="text-muted text-[10.5px] font-mono m-0 mt-0.5"></p>
       </div>
-      <button onclick="closeRiskModal()" class="text-muted hover:text-slate-200 text-lg">✕</button>
+      <button onclick="closeRiskModal()" class="text-muted hover:text-accent text-lg">✕</button>
     </div>
     <div class="p-4">
       <div id="modal-flights" class="hidden mb-4"></div>
@@ -264,11 +341,11 @@
   </div>
 </div>
 
-<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask KAIRO">💬</button>
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask Vyavastha">💬</button>
 <div id="chat-panel" class="chat-panel">
   <div class="chat-header">
-    <span>Ask KAIRO</span>
-    <button onclick="toggleChat()" style="background:none;border:none;color:#90A4AE;font-size:16px;cursor:pointer;">✕</button>
+    <span>Ask Vyavastha</span>
+    <button onclick="toggleChat()" style="background:none;border:none;color:#64748B;font-size:16px;cursor:pointer;">✕</button>
   </div>
   <div id="chat-messages" class="chat-messages">
     <div class="chat-msg bot">Ask me about a gate, hotel, or corridor by name, or try "what should I do" or "what happened".</div>
@@ -281,17 +358,17 @@
 
 <script>
 const API = "";
-const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
-const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-orange-400", CRITICAL: "text-danger" };
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
+const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
 
 // Every operator role sees a scoped slice of the same Command Centre: which
 // zone domains, which What-If fields, and whether they can drive the shared
 // event clock (only the Event Command Operator can).
 const ROLE_CONFIG = {
-  command:     { label: "EVENT COMMAND OPERATOR", tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: true,  showAiAdvisor: true, domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
-  venue:       { label: "VENUE MANAGER",          tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: false, showAiAdvisor: false, domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
-  transport:   { label: "TRANSPORT OPERATOR",     tabs: ["overview", "whatif", "actions", "timeline"], showSimControls: false, showAiAdvisor: false, domain: "transport",   whatifFields: ["buses"] },
-  hospitality: { label: "HOSPITALITY OPERATOR",   tabs: ["overview", "actions", "timeline"],           showSimControls: false, showAiAdvisor: false, domain: "hospitality", whatifFields: [] },
+  command:     { label: "EVENT COMMAND OPERATOR", roleName: "Event Command Operator", tabs: ["overview", "whatif", "actions", "alerts", "hotels", "transport", "analytics", "timeline"], showSimControls: true,  showAiAdvisor: true, showEmergency: true,  domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
+  venue:       { label: "VENUE MANAGER",          roleName: "Venue Manager",           tabs: ["overview", "whatif", "actions", "alerts", "timeline"],                                    showSimControls: false, showAiAdvisor: false, showEmergency: true,  domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
+  transport:   { label: "TRANSPORT OPERATOR",     roleName: "Transport Operator",      tabs: ["overview", "whatif", "actions", "alerts", "transport", "timeline"],                       showSimControls: false, showAiAdvisor: false, showEmergency: false, domain: "transport",   whatifFields: ["buses"] },
+  hospitality: { label: "HOSPITALITY OPERATOR",   roleName: "Hospitality Operator",    tabs: ["overview", "actions", "alerts", "hotels", "timeline"],                                    showSimControls: false, showAiAdvisor: false, showEmergency: false, domain: "hospitality", whatifFields: [] },
 };
 const roleParam = new URLSearchParams(location.search).get("role");
 const roleKey = ROLE_CONFIG[roleParam] ? roleParam : "command";
@@ -303,6 +380,7 @@ if (!roleCfg.showSimControls) {
   document.getElementById("readonly-note").classList.remove("hidden");
 }
 if (roleCfg.showAiAdvisor) document.getElementById("ai-advisor-btn").classList.remove("hidden");
+if (roleCfg.showEmergency) document.getElementById("emergency-btn").classList.remove("hidden");
 
 const ALL_WHATIF_FIELDS = ["redirect", "buses", "staff", "gate3"];
 ALL_WHATIF_FIELDS.forEach(f => {
@@ -320,11 +398,16 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     // if the What-If tab wasn't visible yet, the map was born at 0×0 and
     // needs a nudge once its container actually has real dimensions.
     if (btn.dataset.tab === "whatif" && zoneMap) setTimeout(() => zoneMap.invalidateSize(), 50);
+    if (btn.dataset.tab === "hotels") loadHotels();
+    if (btn.dataset.tab === "transport") loadTransportDemand();
+    if (btn.dataset.tab === "analytics") loadAnalytics();
   });
 });
 document.querySelector('.tab-btn[data-tab="overview"]').classList.add("active");
 
 async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = { ...(opts.headers || {}), "X-User-Role": roleCfg.roleName };
   const res = await fetch(API + path, opts);
   return res.json();
 }
@@ -510,6 +593,100 @@ async function approveAction(id, btn) {
   await refresh();
 }
 
+function healthBar(label, value) {
+  const color = value >= 80 ? "text-ok" : value >= 60 ? "text-warn" : "text-danger";
+  const barColor = value >= 80 ? "bg-ok" : value >= 60 ? "bg-warn" : "bg-danger";
+  return `
+    <div>
+      <div class="flex items-center justify-between text-[10.5px] text-muted uppercase tracking-wide mb-1">
+        <span>${label}</span><span class="font-mono ${color} font-bold">${value}</span>
+      </div>
+      <div class="gauge"><div class="gauge-fill ${barColor}" style="width:${Math.min(value, 100)}%"></div></div>
+    </div>`;
+}
+
+function renderHealthScore(h) {
+  const domainRows = Object.entries(h.domains || {}).map(([d, v]) => healthBar(d, v)).join("");
+  document.getElementById("health-score").innerHTML = `
+    <div class="flex items-center gap-4 flex-wrap mb-3">
+      <div class="font-mono text-3xl font-black ${h.overall >= 80 ? 'text-ok' : h.overall >= 60 ? 'text-warn' : 'text-danger'}">${h.overall}</div>
+      <div class="text-[10.5px] text-muted">
+        overall health · safety ${h.safety ?? '—'} ·
+        ${h.open_alerts ?? 0} open alert(s), ${h.critical_alerts ?? 0} critical
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${domainRows}</div>`;
+}
+
+const ALERT_SEVERITY_TEXT = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
+
+function renderAlerts(alerts) {
+  const scoped = roleCfg.domain ? alerts.filter(a => !a.zone_domain || a.zone_domain === roleCfg.domain) : alerts;
+  document.getElementById("alerts-list").innerHTML = scoped.map(a => `
+    <div class="row-card p-3 mb-2 text-sm">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <div>
+          <span class="font-bold ${ALERT_SEVERITY_TEXT[a.severity] || ''}">${a.severity}</span>
+          <span class="text-muted"> · ${a.zone_name || 'event-wide'}</span>
+        </div>
+        <span class="font-mono text-[10.5px] text-muted">${a.status.toUpperCase()}</span>
+      </div>
+      <div class="mt-1">${a.message}</div>
+      ${a.status !== "resolved" ? `
+        <div class="flex gap-2 mt-2">
+          ${a.status === "open" ? `<button class="btn-ghost rounded px-2 py-1 text-[10px] font-semibold" onclick="patchAlert(${a.id}, 'acknowledged')">Acknowledge</button>` : ""}
+          <button class="btn-ghost rounded px-2 py-1 text-[10px] font-semibold" onclick="patchAlert(${a.id}, 'resolved')">Resolve</button>
+        </div>` : ""}
+    </div>
+  `).join("") || `<div class="text-xs text-muted">No alerts.</div>`;
+}
+
+async function patchAlert(id, status) {
+  await api(`/api/alerts/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+  });
+  await refresh();
+}
+
+function renderNotifications(list) {
+  document.getElementById("notifications-list").innerHTML = list.map(n => `
+    <div class="row-card p-3 mb-2 text-sm ${n.is_read ? 'opacity-60' : ''}">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <span class="font-bold">${n.title}</span>
+        <span class="font-mono text-[10.5px] text-muted">${n.priority}</span>
+      </div>
+      <div class="mt-1">${n.message}</div>
+      ${!n.is_read ? `<button class="btn-ghost rounded px-2 py-1 text-[10px] font-semibold mt-2" onclick="readNotification(${n.id})">Mark read</button>` : ""}
+    </div>
+  `).join("") || `<div class="text-xs text-muted">No notifications.</div>`;
+}
+
+async function readNotification(id) {
+  await api(`/api/notifications/${id}/read`, { method: "POST" });
+  await refresh();
+}
+
+function renderStaffSuggestions(list) {
+  const section = document.getElementById("staff-section");
+  if (!list.length) { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  document.getElementById("staff-suggestions").innerHTML = list.map(s => `
+    <div class="row-card p-3 mb-2 text-sm">
+      <div>Move <span class="font-bold">${s.staff_to_move}</span> staff: <b>${s.from_zone}</b> → <b>${s.to_zone}</b></div>
+      <div class="text-muted text-[10.5px] mt-1">${s.reason}</div>
+    </div>
+  `).join("");
+}
+
+function renderEmergencyStatus(status) {
+  const banner = document.getElementById("emergency-banner");
+  if (!status.active) { banner.classList.add("hidden"); return; }
+  banner.classList.remove("hidden");
+  document.getElementById("emergency-banner-zone").textContent = status.zone_name || "";
+  document.getElementById("emergency-banner-message").textContent = status.message || "";
+  document.getElementById("emergency-clear-btn").classList.toggle("hidden", !roleCfg.showEmergency);
+}
+
 async function refresh() {
   const state = await api("/api/state");
   currentResources = state.resources;
@@ -545,6 +722,20 @@ async function refresh() {
       <button class="btn-danger rounded-lg px-3 py-1.5 text-[11px] font-semibold w-full mt-3" onclick="approveAction('${r.id}', this)">Approve &amp; Execute</button>
     </div>
   `).join("") || `<div class="text-xs text-muted">No feasible actions in your area right now.</div>`;
+
+  if (roleCfg.tabs.includes("actions")) {
+    renderStaffSuggestions(await api("/api/staff/suggestions"));
+  }
+
+  const health = await api("/api/health-score");
+  renderHealthScore(health);
+
+  if (roleCfg.tabs.includes("alerts")) {
+    renderAlerts(await api("/api/alerts"));
+    renderNotifications(await api(`/api/notifications?role=${encodeURIComponent(roleCfg.roleName)}`));
+  }
+
+  renderEmergencyStatus(await api("/api/emergency/status"));
 }
 
 let selectedScenarioId = null;
@@ -780,7 +971,7 @@ async function setAck(status) {
 (async function loadEvent() {
   try {
     const data = await api("/api/event");
-    document.getElementById("event-title").textContent = data.configured ? `KAIRO — ${data.name}` : "KAIRO — no event configured";
+    document.getElementById("event-title").textContent = data.configured ? `VYAVASTHA — ${data.name}` : "VYAVASTHA — no event configured";
   } catch (e) {}
 })();
 
@@ -855,7 +1046,7 @@ function markerPopupContent(z) {
   return `
     <div style="min-width:170px">
       <div style="font-weight:800;margin-bottom:2px;">${z.name}</div>
-      <div style="color:#90A4AE;font-size:10.5px;margin-bottom:6px;">${z.domain} · ${z.capacity_pressure_pct}% · ${z.level}</div>
+      <div style="color:#64748B;font-size:10.5px;margin-bottom:6px;">${z.domain} · ${z.capacity_pressure_pct}% · ${z.level}</div>
       <button class="btn-danger rounded px-2 py-1 text-[11px] w-full" onclick="deleteGateFromMap(${z.id}, '${z.name.replace(/'/g, "\\'")}')">DELETE</button>
     </div>`;
 }
@@ -879,14 +1070,14 @@ function renderMapMarkers(zones) {
 
   withCoords.forEach(z => {
     seen.add(z.id);
-    const color = { LOW: "#69F0AE", MODERATE: "#FFD54F", HIGH: "#fb923c", CRITICAL: "#FF5252" }[z.level] || "#00E5FF";
+    const color = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" }[z.level] || "#1976D2";
     if (mapMarkers[z.id]) {
       mapMarkers[z.id].setLatLng([z.lat, z.lng]);
       mapMarkers[z.id].setStyle({ fillColor: color });
       mapMarkers[z.id].setPopupContent(markerPopupContent(z));
     } else {
       const marker = L.circleMarker([z.lat, z.lng], {
-        radius: 9, color: "#0F1722", weight: 2, fillColor: color, fillOpacity: 0.9,
+        radius: 9, color: "#FFFFFF", weight: 2, fillColor: color, fillOpacity: 0.9,
         draggable: false,
       }).addTo(zoneMap);
       marker.bindTooltip(z.name, { permanent: false, direction: "top" });
@@ -914,7 +1105,7 @@ function renderMapMarkers(zones) {
   });
 }
 
-// --- Ask KAIRO: floating chatbot, rule-based over live data, no external API
+// --- Ask Vyavastha: floating chatbot, rule-based over live data, no external API
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -939,6 +1130,97 @@ async function sendChat() {
   const tag = result.grounded_in && result.grounded_in.length ? groundedTag(result.grounded_in) : "";
   messages.insertAdjacentHTML("beforeend", `<div class="chat-msg bot">${escapeHtml(result.text).replace(/\n/g, "<br>")}${tag}</div>`);
   messages.scrollTop = messages.scrollHeight;
+}
+
+// --- Hotels / Transport demand / Post-event analytics (lazy-loaded per tab) -
+
+async function loadHotels() {
+  const hotels = await api("/api/hotels/recommendations");
+  document.getElementById("hotels-list").innerHTML = hotels.map(h => `
+    <div class="row-card p-3 mb-2 text-sm ${h.recommended ? 'border-ok/60' : ''}">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <span class="font-bold">${h.name}${h.recommended ? ' ⭐' : ''}</span>
+        <span class="font-mono text-ok font-bold">${h.score}</span>
+      </div>
+      <div class="text-muted text-[10.5px] mt-1">${h.reason}</div>
+    </div>
+  `).join("") || `<div class="text-xs text-muted">No hotel zones configured.</div>`;
+}
+
+async function loadTransportDemand() {
+  const list = await api("/api/transport/demand-prediction");
+  document.getElementById("transport-demand-list").innerHTML = list.map(t => `
+    <div class="row-card p-3 mb-2 text-sm">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <span class="font-bold">${t.zone_name}</span>
+        <span class="font-mono text-[10.5px] text-muted">${t.current_pct}% now · ${t.projected_15min_pct}% in 15 min</span>
+      </div>
+      <div class="text-muted text-[10.5px] mt-1">${t.recommendation}</div>
+    </div>
+  `).join("") || `<div class="text-xs text-muted">No transport zones configured.</div>`;
+}
+
+async function loadAnalytics() {
+  const a = await api("/api/analytics/post-event");
+  const metric = (label, value) => `
+    <div class="row-card p-3 text-sm flex items-center justify-between">
+      <span class="text-muted text-[10.5px] uppercase tracking-wide">${label}</span>
+      <span class="font-mono font-bold">${value}</span>
+    </div>`;
+  document.getElementById("analytics-body").innerHTML = `
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+      ${metric("Event", a.event_name || "—")}
+      ${metric("Health score", a.event_health_score)}
+      ${metric("Registered", a.total_registered)}
+      ${metric("Checked in", a.total_checked_in)}
+      ${metric("Peak occupancy", a.peak_occupancy_pct + "%")}
+      ${metric("Most problematic zone", a.most_problematic_zone || "—")}
+      ${metric("Critical incidents", a.critical_incidents)}
+      ${metric("Resolved incidents", a.resolved_incidents)}
+      ${metric("Most effective action", a.most_effective_action || "—")}
+      ${metric("Transport utilization", a.transport_utilization_pct + "%")}
+      ${metric("Hotel utilization", a.hotel_utilization_pct + "%")}
+    </div>
+    <h4 class="eyebrow mb-2">Zone Peaks</h4>
+    ${a.zone_peaks.map(z => `
+      <div class="row-card p-3 mb-2 text-sm">
+        <div class="flex items-center justify-between">
+          <span>${z.zone_name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></span>
+          <span class="font-mono text-[11px]">${z.peak_pct}% (peak ${z.peak_count})</span>
+        </div>
+      </div>
+    `).join("")}
+  `;
+}
+
+// --- Emergency mode -------------------------------------------------------
+
+function openEmergencyModal() {
+  document.getElementById("emergency-zone").innerHTML = currentZones.map(z => `<option value="${z.id}">${z.name}</option>`).join("");
+  document.getElementById("emergency-message").value = "";
+  document.getElementById("emergency-modal-status").textContent = "";
+  document.getElementById("emergencyModal").classList.add("show");
+}
+
+function closeEmergencyModal() {
+  document.getElementById("emergencyModal").classList.remove("show");
+}
+
+async function submitEmergency() {
+  const zone_id = parseInt(document.getElementById("emergency-zone").value);
+  const message = document.getElementById("emergency-message").value.trim();
+  const status = document.getElementById("emergency-modal-status");
+  if (!zone_id || !message) { status.textContent = "Pick a zone and enter a message."; return; }
+  await api("/api/emergency/trigger", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zone_id, message }),
+  });
+  closeEmergencyModal();
+  await refresh();
+}
+
+async function clearEmergency() {
+  await api("/api/emergency/clear", { method: "POST" });
+  await refresh();
 }
 
 if (roleCfg.showSimControls) loadScenarios();
