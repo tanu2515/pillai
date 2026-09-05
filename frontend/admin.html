@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KAIRO — Administrator</title>
+<title>VYAVASTHA — Administrator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,8 +13,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#0F1722", surface: "#162232", panel: "#1E2D42", border: "#2C3E56",
-          muted: "#90A4AE", accent: "#00E5FF", warn: "#FFD54F", ok: "#69F0AE", danger: "#FF5252",
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
+          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
+          high: "#F87171", danger: "#DC2626",
         },
         fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
       },
@@ -24,44 +26,45 @@
 <style>
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(0,229,255,.04), transparent 45%),
-      linear-gradient(#2C3E56 1px, transparent 1px), linear-gradient(90deg, #2C3E56 1px, transparent 1px);
-    background-size:auto, 36px 36px, 36px 36px; background-color:#0F1722;
+      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
+      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
   }
-  .tick{ width:3px; height:20px; border-radius:2px; background:#00E5FF; box-shadow:0 0 8px #00E5FF; }
-  .row-card{ background:#1E2D42; border:1px solid #2C3E56; border-radius:10px; }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#90A4AE; text-transform:uppercase; }
-  input[type=text], input[type=number], select{ background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; }
-  input:focus, select:focus{ outline:none; border-color:#00E5FF; }
-  select option{ background:#162232; color:#fff; }
-  .btn-primary{ background:#00E5FF; color:#05161E; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); }
+  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
+  input[type=text], input[type=number], select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; }
+  input:focus, select:focus{ outline:none; border-color:#1976D2; }
+  select option{ background:#FFFFFF; color:#123B6D; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-danger{ background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.5); color:#FF5252; }
+  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; }
   .cap-input{ width:110px; text-align:right; padding:6px 8px; font-family:'JetBrains Mono',monospace; }
-  .gauge{ height:5px; border-radius:4px; background:#0F1722; border:1px solid #2C3E56; overflow:hidden; margin-top:6px; width:100%; max-width:160px; }
+  .gauge{ height:5px; border-radius:4px; background:#F1F5F9; border:1px solid #E2E8F0; overflow:hidden; margin-top:6px; width:100%; max-width:160px; }
   .gauge-fill{ height:100%; border-radius:4px; }
   .dropdown{ position:relative; min-width:220px; }
-  .dropdown-btn{ width:100%; text-align:left; background:#162232; border:1px solid #2C3E56; color:#fff; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
-  .dropdown-btn:hover{ border-color:#008B99; }
-  .dropdown-caret{ color:#90A4AE; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; max-height:200px; overflow-y:auto; background:#162232; border:1px solid #2C3E56; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:#1976D2; }
+  .dropdown-caret{ color:#64748B; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; max-height:200px; overflow-y:auto; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); }
   .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
-  .dropdown-item:hover{ background:rgba(0,229,255,.1); }
-  .dropdown-item.selected{ background:rgba(0,229,255,.15); color:#00E5FF; }
+  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
+  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
 </style>
 </head>
-<body class="bg-bg text-slate-100 font-sans m-0 min-h-screen">
+<body class="bg-bg text-ink font-sans m-0 min-h-screen">
 
 <div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
   <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3">
     <div class="flex items-center gap-3">
       <a href="/" class="tick"></a>
       <h1 class="text-sm font-extrabold m-0 tracking-[0.1em] uppercase flex items-center gap-2">
-        <span id="event-title">KAIRO — Administrator</span>
+        <span id="event-title">VYAVASTHA — Administrator</span>
         <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">ADMINISTRATOR</span>
       </h1>
     </div>
-    <a href="/login.html" class="text-xs text-muted hover:text-slate-200 hover:underline font-medium">Switch role →</a>
+    <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
   </div>
 </div>
 
@@ -192,9 +195,14 @@
 </main>
 
 <script>
-async function api(path, opts) { const res = await fetch(path, opts); return res.json(); }
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = { ...(opts.headers || {}), "X-User-Role": "Administrator" };
+  const res = await fetch(path, opts);
+  return res.json();
+}
 function row(inner) { return `<div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2 text-sm">${inner}</div>`; }
-const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-orange-500", CRITICAL: "bg-danger" };
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
 
 async function loadEvent() {
   const ev = await api("/api/event");
@@ -202,9 +210,9 @@ async function loadEvent() {
     document.getElementById("ev-name").value = ev.name;
     document.getElementById("ev-attendance").value = ev.expected_attendance;
     document.getElementById("ev-capacity").value = ev.safe_capacity;
-    document.getElementById("event-title").textContent = `KAIRO — ${ev.name}`;
+    document.getElementById("event-title").textContent = `VYAVASTHA — ${ev.name}`;
   } else {
-    document.getElementById("event-title").textContent = "KAIRO — no event configured";
+    document.getElementById("event-title").textContent = "VYAVASTHA — no event configured";
   }
 }
 
@@ -215,7 +223,7 @@ async function saveEvent() {
     safe_capacity: parseInt(document.getElementById("ev-capacity").value) || 0,
   };
   await api("/api/admin/event", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  document.getElementById("event-title").textContent = `KAIRO — ${body.name}`;
+  document.getElementById("event-title").textContent = `VYAVASTHA — ${body.name}`;
   const status = document.getElementById("event-save-status");
   status.textContent = "Saved.";
   setTimeout(() => status.textContent = "", 2000);

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -15,7 +15,7 @@ Base.metadata.create_all(bind=db_engine)
 with SessionLocal() as db:
     seed_if_empty(db)
 
-app = FastAPI(title="KAIRO — PS-8 Mega-Event Orchestration")
+app = FastAPI(title="VYAVASTHA — PS-8 Mega-Event Orchestration")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +30,8 @@ class WhatIfRequest(BaseModel):
     open_gate3: bool = False
     add_buses: int = 0
     move_staff: int = 0
+    from_zone: str = "Gate 2"
+    to_zone: str = "Gate 3"
 
 
 class PlanSpec(BaseModel):
@@ -117,6 +119,54 @@ class ZoneLocationUpdate(BaseModel):
     lng: float
 
 
+class AlertStatusUpdate(BaseModel):
+    status: str  # open | acknowledged | resolved
+
+
+class EmergencyTrigger(BaseModel):
+    zone_id: int
+    message: str
+
+
+class AttendeeEmail(BaseModel):
+    email: str
+
+
+class SetCurrentEvent(BaseModel):
+    email: str
+    event_attendee_id: int
+
+
+# --- role enforcement (backward-compatible) ---------------------------------
+# Reads an optional X-User-Role header. Absent header = full access (every
+# client that predates this change keeps working exactly as before); a
+# client that *does* send a role is held to that role's domain, same scoping
+# command-center.html already does client-side via ROLE_CONFIG.
+DOMAIN_ROLES = {
+    "venue": "Venue Manager",
+    "transport": "Transport Operator",
+    "hospitality": "Hospitality Operator",
+}
+FULL_ACCESS_ROLES = {"Administrator", "Event Command Operator"}
+
+
+def get_role(x_user_role: str | None = Header(default=None)):
+    return x_user_role
+
+
+def require_domain_access(role: str | None, domain: str | None):
+    if role is None or role in FULL_ACCESS_ROLES:
+        return
+    if domain and DOMAIN_ROLES.get(domain) == role:
+        return
+    raise HTTPException(403, f"role '{role}' cannot act on domain '{domain}'")
+
+
+def require_admin(role: str | None):
+    if role is not None and role != "Administrator":
+        raise HTTPException(403, "Administrator role required")
+
+
 @app.get("/api/event")
 def get_event(db: Session = Depends(get_db)):
     event = db.query(models.Event).first()
@@ -135,7 +185,8 @@ def list_regions():
 
 
 @app.post("/api/admin/region")
-def admin_apply_region(req: RegionUpdate, db: Session = Depends(get_db)):
+def admin_apply_region(req: RegionUpdate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     result = engine.apply_region(db, req.state)
     if result is None:
         raise HTTPException(404, "unknown state/UT")
@@ -168,13 +219,15 @@ def list_scenarios(db: Session = Depends(get_db)):
 
 
 @app.post("/api/admin/scenarios")
-def create_scenario(req: ScenarioUpsert, db: Session = Depends(get_db)):
+def create_scenario(req: ScenarioUpsert, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     scenario = engine.create_scenario(db, req.name, req.description, req.duration_ticks, req.effects)
     return {"id": scenario.id}
 
 
 @app.patch("/api/admin/scenarios/{scenario_id}")
-def update_scenario(scenario_id: int, req: ScenarioUpsert, db: Session = Depends(get_db)):
+def update_scenario(scenario_id: int, req: ScenarioUpsert, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     scenario = engine.update_scenario(db, scenario_id, req.name, req.description, req.duration_ticks, req.effects)
     if scenario is None:
         raise HTTPException(404, "scenario not found")
@@ -182,7 +235,8 @@ def update_scenario(scenario_id: int, req: ScenarioUpsert, db: Session = Depends
 
 
 @app.delete("/api/admin/scenarios/{scenario_id}")
-def delete_scenario(scenario_id: int, db: Session = Depends(get_db)):
+def delete_scenario(scenario_id: int, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     ok = engine.delete_scenario(db, scenario_id)
     if not ok:
         raise HTTPException(404, "scenario not found")
@@ -212,7 +266,7 @@ def reset(db: Session = Depends(get_db)):
 @app.post("/api/simulate/whatif")
 def whatif(req: WhatIfRequest, db: Session = Depends(get_db)):
     return engine.run_whatif(
-        db, req.redirect_count, req.open_gate3, req.add_buses, req.move_staff
+        db, req.redirect_count, req.open_gate3, req.add_buses, req.move_staff, req.from_zone, req.to_zone
     )
 
 
@@ -252,7 +306,11 @@ def chatbot_ask(req: ChatRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/action-plans/approve")
-def approve(req: ApproveRequest, db: Session = Depends(get_db)):
+def approve(req: ApproveRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    if role is not None and role not in FULL_ACCESS_ROLES:
+        action_domains = {a["id"]: a["domain"] for a in engine.CANDIDATE_ACTIONS}
+        for aid in req.action_ids:
+            require_domain_access(role, action_domains.get(aid))
     applied = engine.approve_actions(db, req.action_ids)
     return {"applied": applied, "state": engine.full_state(db)}
 
@@ -340,7 +398,10 @@ def get_zone_causal_chain(zone_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/zones/{zone_id}/ack")
-def ack_zone(zone_id: int, req: AckRequest, db: Session = Depends(get_db)):
+def ack_zone(zone_id: int, req: AckRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_domain_access(role, zone.domain)
     zone = engine.set_ack_status(db, zone_id, req.status)
     if zone is None:
         raise HTTPException(404, "zone not found or invalid status")
@@ -380,7 +441,8 @@ def transport_local(db: Session = Depends(get_db)):
 # --- Administrator: event configuration only, no live-ops access ----------
 
 @app.patch("/api/admin/event")
-def admin_update_event(req: EventUpdate, db: Session = Depends(get_db)):
+def admin_update_event(req: EventUpdate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     event = db.query(models.Event).first()
     if not event:
         raise HTTPException(404, "no event configured yet")
@@ -392,7 +454,8 @@ def admin_update_event(req: EventUpdate, db: Session = Depends(get_db)):
 
 
 @app.post("/api/admin/event")
-def admin_create_event(req: EventCreate, db: Session = Depends(get_db)):
+def admin_create_event(req: EventCreate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     if req.region not in INDIA_REGIONS:
         raise HTTPException(400, "unknown state/UT")
     if not req.name.strip():
@@ -402,13 +465,15 @@ def admin_create_event(req: EventCreate, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/admin/event")
-def admin_delete_event(db: Session = Depends(get_db)):
+def admin_delete_event(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     engine.delete_event(db)
     return {"configured": False}
 
 
 @app.patch("/api/admin/zones/{zone_id}")
-def admin_update_zone_capacity(zone_id: int, req: ZoneCapacityUpdate, db: Session = Depends(get_db)):
+def admin_update_zone_capacity(zone_id: int, req: ZoneCapacityUpdate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     zone = db.get(models.Zone, zone_id)
     if not zone:
         raise HTTPException(404, "zone not found")
@@ -420,9 +485,10 @@ def admin_update_zone_capacity(zone_id: int, req: ZoneCapacityUpdate, db: Sessio
 
 
 @app.get("/api/admin/raw-tables")
-def admin_raw_tables(db: Session = Depends(get_db)):
+def admin_raw_tables(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
     """Every row of every table, straight from the DB — for the raw table
     viewer page. Debug/inspection only, not used by any real screen."""
+    require_admin(role)
     tables = {
         "events": models.Event,
         "zones": models.Zone,
@@ -431,6 +497,10 @@ def admin_raw_tables(db: Session = Depends(get_db)):
         "user_accounts": models.UserAccount,
         "scenarios": models.Scenario,
         "sim_state": models.SimState,
+        "alerts": models.Alert,
+        "notifications": models.Notification,
+        "attendees": models.Attendee,
+        "event_attendees": models.EventAttendee,
     }
     out = {}
     for name, model in tables.items():
@@ -444,19 +514,136 @@ def admin_raw_tables(db: Session = Depends(get_db)):
 
 
 @app.get("/api/admin/users")
-def admin_list_users(db: Session = Depends(get_db)):
+def admin_list_users(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     users = db.query(models.UserAccount).order_by(models.UserAccount.email).all()
     return [{"id": u.id, "email": u.email, "role": u.role} for u in users]
 
 
 @app.delete("/api/admin/users/{user_id}")
-def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
+def admin_delete_user(user_id: int, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
     user = db.get(models.UserAccount, user_id)
     if not user:
         raise HTTPException(404, "user not found")
     db.delete(user)
     db.commit()
     return {"deleted": user_id}
+
+
+# --- Event Health Score (Section 29) ----------------------------------------
+
+@app.get("/api/health-score")
+def health_score(db: Session = Depends(get_db)):
+    return engine.event_health_score(db)
+
+
+# --- Alerts + notifications (Sections 22-23, 27) ----------------------------
+
+@app.get("/api/alerts")
+def get_alerts(status: str | None = None, db: Session = Depends(get_db)):
+    return engine.list_alerts(db, status=status)
+
+
+@app.patch("/api/alerts/{alert_id}")
+def patch_alert(alert_id: int, req: AlertStatusUpdate, db: Session = Depends(get_db)):
+    alert = engine.set_alert_status(db, alert_id, req.status)
+    if alert is None:
+        raise HTTPException(404, "alert not found or invalid status")
+    return {"id": alert.id, "status": alert.status}
+
+
+@app.get("/api/notifications")
+def get_notifications(role: str | None = None, db: Session = Depends(get_db)):
+    return engine.list_notifications(db, role=role)
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def read_notification(notification_id: int, db: Session = Depends(get_db)):
+    n = engine.mark_notification_read(db, notification_id)
+    if n is None:
+        raise HTTPException(404, "notification not found")
+    return {"id": n.id, "is_read": n.is_read}
+
+
+# --- hotel recommendation engine (Section 16) -------------------------------
+
+@app.get("/api/hotels/recommendations")
+def hotel_recommendations(db: Session = Depends(get_db)):
+    return engine.hotel_recommendations(db)
+
+
+# --- transport demand prediction (Section 14) -------------------------------
+
+@app.get("/api/transport/demand-prediction")
+def transport_demand_prediction(db: Session = Depends(get_db)):
+    return engine.transport_demand_prediction(db)
+
+
+# --- dynamic staff allocation, generalized (Section 13) ---------------------
+
+@app.get("/api/staff/suggestions")
+def staff_suggestions(db: Session = Depends(get_db)):
+    return engine.staff_allocation_suggestions(db)
+
+
+# --- emergency mode (Section 28) --------------------------------------------
+
+@app.post("/api/emergency/trigger")
+def emergency_trigger(req: EmergencyTrigger, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    if role is not None and role not in FULL_ACCESS_ROLES | {"Venue Manager"}:
+        raise HTTPException(403, f"role '{role}' cannot declare an emergency")
+    result = engine.trigger_emergency(db, req.zone_id, req.message)
+    if result is None:
+        raise HTTPException(404, "zone not found")
+    return result
+
+
+@app.post("/api/emergency/clear")
+def emergency_clear(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    if role is not None and role not in FULL_ACCESS_ROLES | {"Venue Manager"}:
+        raise HTTPException(403, f"role '{role}' cannot clear an emergency")
+    return engine.clear_emergency(db)
+
+
+@app.get("/api/emergency/status")
+def emergency_status_endpoint(db: Session = Depends(get_db)):
+    return engine.emergency_status(db)
+
+
+# --- post-event analytics / historical learning (Sections 31-32) ----------
+
+@app.get("/api/analytics/post-event")
+def post_event_analytics(db: Session = Depends(get_db)):
+    return engine.event_analytics(db)
+
+
+# --- multi-event attendee registration (Sections 4-5) -----------------------
+
+@app.post("/api/attendee/register-event")
+def attendee_register_event(req: AttendeeEmail, db: Session = Depends(get_db)):
+    result = engine.register_attendee_for_event(db, req.email.strip().lower())
+    if result is None:
+        raise HTTPException(404, "no event configured yet")
+    return result
+
+
+@app.get("/api/attendee/my-events")
+def attendee_my_events(email: str, db: Session = Depends(get_db)):
+    return engine.list_my_events(db, email.strip().lower())
+
+
+@app.post("/api/attendee/current-event")
+def attendee_set_current_event(req: SetCurrentEvent, db: Session = Depends(get_db)):
+    result = engine.set_current_event(db, req.email.strip().lower(), req.event_attendee_id)
+    if result is None:
+        raise HTTPException(404, "registration not found")
+    return result
+
+
+@app.get("/api/attendee/current-event-context")
+def attendee_current_event_context(email: str, db: Session = Depends(get_db)):
+    return engine.current_event_context(db, email.strip().lower())
 
 
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"

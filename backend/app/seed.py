@@ -37,10 +37,10 @@ def create_zones_and_resources(db: Session, event: models.Event):
                                  capacity=5000, current_count=2100, last_count=2100)
     hotel_a = models.Zone(event_id=event.id, name="Hotel A", type="hotel", domain="hospitality",
                            lat=19.0450, lng=73.0150,
-                           capacity=2000, current_count=1840, last_count=1840)
+                           capacity=2000, current_count=1840, last_count=1840, price_tier=4)
     hotel_b = models.Zone(event_id=event.id, name="Hotel B", type="hotel", domain="hospitality",
                            lat=19.0230, lng=73.0470,
-                           capacity=2000, current_count=1120, last_count=1120)
+                           capacity=2000, current_count=1120, last_count=1120, price_tier=3)
     db.add_all([main_hall, vip_zone, corridor_a, corridor_b, transport_hub, hotel_a, hotel_b])
     db.flush()
 
