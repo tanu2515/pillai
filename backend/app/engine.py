@@ -2019,10 +2019,16 @@ def create_hotel(db, name, capacity, lat, lng, price_tier=None, contact=None, am
     return zone
 
 
-def update_hotel(db, zone_id, capacity=None, occupied_rooms=None, price_tier=None, contact=None, amenities=None, manual_recommended=None):
+def update_hotel(db, zone_id, capacity=None, occupied_rooms=None, price_tier=None, contact=None, amenities=None, manual_recommended=None, name=None, lat=None, lng=None):
     zone = db.get(models.Zone, zone_id)
     if not zone or zone.type != "hotel":
         return None
+    if name is not None:
+        zone.name = name
+    if lat is not None:
+        zone.lat = lat
+    if lng is not None:
+        zone.lng = lng
     if capacity is not None:
         zone.capacity = capacity
     if occupied_rooms is not None:
@@ -2111,11 +2117,14 @@ def _deactivate_current_live_event(db):
 
 
 def _activate_event(db, event):
-    """Makes `event` (already inserted/flushed) the live one — no zones are
-    auto-created; the operator builds gates/hotels/transport zones themselves
-    via Event Setup's Add Gate/Hotel/Transport forms. Only the bus/staff/
-    medical resource pools are created automatically (no UI exists to add
-    those directly). Shared by create_event and switch_to_event."""
+    """Makes `event` (already inserted/flushed) the live one — gates/hotels/
+    transport zones are still built by the operator themselves via Event
+    Setup's Add Gate/Hotel/Transport forms. The one zone auto-created here is
+    the venue/arena zone ("Main Hall") at the event's venue_lat/lng — every
+    hotel-distance and evacuation-origin calculation needs some zone of
+    type='arena' to measure from, and there's no Event Setup UI to add one
+    manually. Also creates the bus/staff/medical resource pools (no UI exists
+    to add those directly). Shared by create_event and switch_to_event."""
     from .seed import create_default_resources
     create_default_resources(db)
 
@@ -2128,6 +2137,16 @@ def _activate_event(db, event):
     else:
         db.add(models.SimState(tick=0, scenario_active=False, trigger_tick=-1))
     db.commit()
+
+    has_arena = db.query(models.Zone).filter(models.Zone.event_id == event.id, models.Zone.type == "arena").first()
+    if not has_arena and event.venue_lat is not None and event.venue_lng is not None:
+        db.add(models.Zone(
+            event_id=event.id, name="Main Hall", type="arena", domain="venue",
+            lat=event.venue_lat, lng=event.venue_lng,
+            capacity=event.safe_capacity or event.expected_attendance or 1,
+            current_count=0, last_count=0,
+        ))
+        db.commit()
 
     apply_region(db, event.region, rename=False)
     return event

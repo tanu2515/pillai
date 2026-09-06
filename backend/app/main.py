@@ -179,12 +179,15 @@ class HotelCreate(BaseModel):
 
 
 class HotelUpdate(BaseModel):
+    name: str | None = None
     capacity: int | None = None
     occupied_rooms: int | None = None
     price_tier: int | None = None
     contact: str | None = None
     amenities: str | None = None
     manual_recommended: bool | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 class HotelDiscoveryRequest(BaseModel):
@@ -719,6 +722,7 @@ def post_hotel(req: HotelCreate, db: Session = Depends(get_db)):
 def patch_hotel(zone_id: int, req: HotelUpdate, db: Session = Depends(get_db)):
     zone = engine.update_hotel(
         db, zone_id, req.capacity, req.occupied_rooms, req.price_tier, req.contact, req.amenities, req.manual_recommended,
+        req.name, req.lat, req.lng,
     )
     if zone is None:
         raise HTTPException(404, "hotel not found")

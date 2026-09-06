@@ -532,13 +532,16 @@ function hotelRow(h) {
   return `
     <div class="row-card p-4 mb-3">
       <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-sm">${h.name}</span>
+        <div class="flex items-center gap-2 flex-1 min-w-[180px]">
+          <input type="text" class="small-input font-bold text-sm flex-1" id="h-name-${h.id}" value="${escapeHtml(h.name)}" />
           ${h.recommended ? '<span class="rec-badge">RECOMMENDED</span>' : ""}
         </div>
+        <button class="btn-secondary px-3 py-1 rounded-lg text-[11px]" onclick="openMapPicker('h-lat-${h.id}','h-lng-${h.id}')">📍 Edit location</button>
         <button class="btn-danger px-3 py-1 rounded-lg text-[11px]" onclick="removeHotel(${h.id})">DELETE</button>
       </div>
-      <div class="text-muted text-[10.5px] font-mono mt-1">${h.distance_km != null ? h.distance_km + " km from venue" : "distance unknown (set lat/lng)"}</div>
+      <input type="hidden" id="h-lat-${h.id}" value="${h.lat ?? ""}" />
+      <input type="hidden" id="h-lng-${h.id}" value="${h.lng ?? ""}" />
+      <div class="text-muted text-[10.5px] font-mono mt-1">${h.distance_km != null ? h.distance_km + " km from venue" : "distance unknown (no venue zone set for this event)"}</div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
         <label class="text-[10px] text-muted uppercase tracking-wide">Total rooms
           <input type="number" class="small-input w-full" id="h-rooms-${h.id}" value="${h.total_rooms}" />
@@ -567,13 +570,20 @@ function hotelRow(h) {
 }
 
 async function saveHotel(id) {
+  const name = document.getElementById(`h-name-${id}`).value.trim();
+  if (!name) { showToast("Hotel name can't be empty."); return; }
+  const lat = parseFloat(document.getElementById(`h-lat-${id}`).value);
+  const lng = parseFloat(document.getElementById(`h-lng-${id}`).value);
   const body = {
+    name,
     capacity: parseInt(document.getElementById(`h-rooms-${id}`).value) || null,
     occupied_rooms: parseInt(document.getElementById(`h-occ-${id}`).value),
     price_tier: parseInt(document.getElementById(`h-price-${id}`).value) || null,
     contact: document.getElementById(`h-contact-${id}`).value.trim() || null,
     amenities: document.getElementById(`h-amen-${id}`).value.trim() || null,
     manual_recommended: document.getElementById(`h-manual-${id}`).checked,
+    lat: isNaN(lat) ? null : lat,
+    lng: isNaN(lng) ? null : lng,
   };
   await api(`/api/event-setup/hotels/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   showToast("Hotel updated.");
