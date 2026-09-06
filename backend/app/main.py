@@ -285,6 +285,7 @@ class BookTierRequest(BaseModel):
     quantity: int = 1
     hotel_zone_id: int | None = None
     wants_transport: bool = False
+    budget_tier: int | None = None
 
 
 # --- role enforcement (backward-compatible) ---------------------------------
@@ -500,6 +501,11 @@ def escalations(db: Session = Depends(get_db)):
     return engine.escalations(db)
 
 
+@app.get("/api/risks/register")
+def risks_register(db: Session = Depends(get_db)):
+    return engine.risk_register(db)
+
+
 @app.get("/api/timeline")
 def timeline(db: Session = Depends(get_db)):
     return engine.recent_log(db)
@@ -582,12 +588,21 @@ def create_event_listing(req: EventListingCreate, db: Session = Depends(get_db))
 def book_tier(event_id: int, tier_id: int, req: BookTierRequest, db: Session = Depends(get_db)):
     return engine.book_tier(
         db, event_id, tier_id, req.name, req.seat_id, req.email, req.quantity, req.hotel_zone_id, req.wants_transport,
+        req.budget_tier,
     )
 
 
 @app.get("/api/my-bookings")
 def my_bookings(email: str, db: Session = Depends(get_db)):
     return engine.list_my_bookings(db, email.strip().lower())
+
+
+@app.get("/api/my-plan")
+def my_plan(code: str, db: Session = Depends(get_db)):
+    plan = engine.attendee_plan(db, code)
+    if plan is None:
+        raise HTTPException(404, "booking not found")
+    return plan
 
 
 @app.get("/api/auth/roles")
@@ -929,6 +944,11 @@ def admin_delete_user(user_id: int, db: Session = Depends(get_db), role: str | N
 @app.get("/api/health-score")
 def health_score(db: Session = Depends(get_db)):
     return engine.event_health_score(db)
+
+
+@app.get("/api/health-breakdown")
+def health_breakdown(db: Session = Depends(get_db)):
+    return engine.health_breakdown(db)
 
 
 # --- Alerts + notifications (Sections 22-23, 27) ----------------------------
@@ -1358,8 +1378,8 @@ def emergency_status_endpoint(db: Session = Depends(get_db)):
 # --- post-event analytics / historical learning (Sections 31-32) ----------
 
 @app.get("/api/analytics/post-event")
-def post_event_analytics(db: Session = Depends(get_db)):
-    return engine.event_analytics(db)
+def post_event_analytics(event_id: int | None = None, db: Session = Depends(get_db)):
+    return engine.event_analytics(db, event_id=event_id)
 
 
 # --- multi-event attendee registration (Sections 4-5) -----------------------

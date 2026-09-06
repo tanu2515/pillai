@@ -168,9 +168,9 @@
     <section class="bg-panel border border-border rounded-xl p-4 mb-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">Event Health Score</h2>
-        <span class="text-[10.5px] text-muted font-mono">composite of every domain's live risk</span>
+        <span class="text-[10.5px] text-muted font-mono">composite of every domain's live risk · click for breakdown</span>
       </div>
-      <div id="health-score"></div>
+      <div id="health-score" class="cursor-pointer" onclick="openHealthBreakdown()"></div>
     </section>
 
     <section id="preventive-section" class="bg-panel border border-warn/40 rounded-xl p-4 mb-4 hidden">
@@ -185,11 +185,11 @@
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">Risk Register</h2>
         <div class="flex items-center gap-2">
-          <span class="text-[10.5px] text-muted font-mono">updates every 4 sec · click a zone for detail</span>
+          <span class="text-[10.5px] text-muted font-mono">updates every 4 sec · click a risk for detail</span>
           <button id="ai-advisor-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold hidden" onclick="runAiAdvisor()">✨ AI Advisor</button>
         </div>
       </div>
-      <div id="zones"></div>
+      <div id="risk-register-list"></div>
       <div id="ai-advisor-box" class="ai-box hidden"></div>
     </section>
 
@@ -324,7 +324,10 @@
     <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">Post-Event Analytics</h2>
-        <button class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="loadAnalytics()">↻ Refresh</button>
+        <div class="flex items-center gap-2">
+          <select id="analytics-event-select" class="p-2 text-xs" onchange="loadAnalytics()"></select>
+          <button class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="loadAnalytics()">↻ Refresh</button>
+        </div>
       </div>
       <div id="analytics-body"></div>
     </section>
@@ -359,6 +362,20 @@
   </div>
 </div>
 
+<div class="modal-veil" id="healthModal" onclick="if(event.target===this) closeHealthModal()">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-4 border-b border-border">
+      <h3 class="text-base font-extrabold m-0">Health Score Breakdown</h3>
+      <button onclick="closeHealthModal()" class="text-muted hover:text-accent text-lg">✕</button>
+    </div>
+    <div class="p-4">
+      <div id="health-modal-overall" class="mb-4"></div>
+      <div id="health-modal-pillars"></div>
+      <div id="health-modal-mitigation" class="mt-3 pt-3 border-t border-border"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-veil" id="riskModal" onclick="if(event.target===this) closeRiskModal()">
   <div class="modal-box">
     <div class="flex items-center justify-between p-4 border-b border-border">
@@ -377,6 +394,8 @@
       </div>
       <h4 class="eyebrow mb-2">Causal Chain</h4>
       <ol id="modal-chain" class="text-sm text-muted leading-7 list-decimal list-inside mb-4"></ol>
+
+      <div id="modal-recs" class="mb-4"></div>
 
       <button class="btn-ghost rounded-lg px-3 py-2 text-xs font-medium w-full" onclick="explainWithAi()">✨ Explain with AI</button>
       <div id="modal-ai-box" class="ai-box hidden"></div>
@@ -403,8 +422,8 @@
 
 <script>
 const API = "";
-const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
-const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
+const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", MEDIUM: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
+const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", MEDIUM: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
 
 // Every operator role sees a scoped slice of the same Command Centre: which
 // zone domains, which What-If fields, and whether they can drive the shared
@@ -443,7 +462,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (btn.dataset.tab === "whatif" && zoneMap) setTimeout(() => zoneMap.invalidateSize(), 50);
     if (btn.dataset.tab === "hotels") { loadHotels(); initDiscoveryMap(); if (discoveryMap) setTimeout(() => discoveryMap.invalidateSize(), 50); }
     if (btn.dataset.tab === "transport") { loadTransportDemand(); renderTransportPanel(); }
-    if (btn.dataset.tab === "analytics") loadAnalytics();
+    if (btn.dataset.tab === "analytics") loadAnalyticsEventList();
   });
 });
 document.querySelector('.tab-btn[data-tab="overview"]').classList.add("active");
@@ -509,6 +528,8 @@ function renderAiBox(el, result) {
 
 let currentZones = [];
 let currentResources = [];
+let currentRecs = [];
+let lastHealthBreakdown = null;
 
 function gaugeBar(z, widthClass) {
   const pct = Math.min(z.capacity_pressure_pct, 100);
@@ -522,26 +543,41 @@ function gaugeBar(z, widthClass) {
 function renderZones(state) {
   document.getElementById("clock-label").textContent = state.clock + (state.scenario_active ? " — crowd rush in progress" : "");
   currentZones = roleCfg.domain ? state.zones.filter(z => z.domain === roleCfg.domain) : state.zones;
-  document.getElementById("zones").innerHTML = currentZones.map(z => `
-    <div class="row-card clickable flex items-center gap-3 px-3 py-2.5 mb-2 text-sm" onclick="openRiskModal(${z.id})">
-      <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${LEVEL_COLOR[z.level]}" style="box-shadow:0 0 6px currentColor;"></div>
-      <div class="flex-1">
-        <div>${z.name} ${z.type === "gate" && z.is_accessible ? '<span title="Wheelchair-accessible exit">♿</span>' : ""} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
-        ${z.location_note ? `<div class="text-muted text-[10.5px] font-mono">${z.location_note}</div>` : ""}
-        ${gaugeBar(z, "mt-1.5 w-full max-w-[220px]")}
-      </div>
-      ${z.ack_status !== "open" ? `<span class="ack-pill ${z.ack_status === 'escalated' ? 'bg-danger/20 text-danger' : 'bg-ok/20 text-ok'}">${z.ack_status.toUpperCase()}</span>` : ""}
-      <div class="text-muted font-mono tabular-nums w-16 text-right">${z.capacity_pressure_pct}%</div>
-      <div class="font-mono tabular-nums w-32 text-right text-[11px] px-2.5 py-1 rounded-full bg-surface border border-border ${LEVEL_TEXT[z.level]} font-bold">${z.score} · ${z.level}</div>
-    </div>
-  `).join("");
   renderFlowMap(state.zones);
 }
 
-// Static gate → transport → hospitality chains from the seed data (a gate's
-// linked_transport/hospitality_zone_id), rendered as connected pills so the
-// spatial relationship between domains is visible, not just a flat list.
+const STATUS_WORD = { LOW: "NORMAL", MODERATE: "WARNING", HIGH: "HIGH", CRITICAL: "CRITICAL" };
+const STATUS_DOT  = { LOW: "🟢", MODERATE: "🟡", HIGH: "🟠", CRITICAL: "🔴" };
+
+// Boxed operational flow map — not a geographic map. Same live zone data
+// (current_count/capacity/level) and the same gate → transport →
+// hospitality chains (linked_transport/hospitality_zone_id) that used to
+// render as flat pills, now as stacked status cards with a density bar,
+// connected by a down-arrow so the flow direction is visible at a glance.
+function zoneBox(z) {
+  const pct = Math.min(z.capacity_pressure_pct, 100);
+  return `
+    <div class="row-card clickable p-3" style="min-width:180px" onclick="openRiskModal(${z.id})">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <span class="font-bold text-sm">${z.name}</span>
+        <span title="${STATUS_WORD[z.level]}">${STATUS_DOT[z.level]}</span>
+      </div>
+      <div class="text-[10.5px] text-muted font-mono mb-1">${z.current_count.toLocaleString()} / ${z.capacity.toLocaleString()}</div>
+      ${gaugeBar(z, "w-full")}
+      <div class="flex items-center justify-between mt-1.5">
+        <span class="font-mono text-[11px] font-bold ${LEVEL_TEXT[z.level]}">${z.capacity_pressure_pct}%</span>
+        <span class="text-[10px] font-bold uppercase tracking-wide ${LEVEL_TEXT[z.level]}">${STATUS_WORD[z.level]}</span>
+      </div>
+    </div>`;
+}
+
 function renderFlowMap(zones) {
+  const el = document.getElementById("flow-map");
+  if (!zones.length) {
+    el.innerHTML = `<div class="text-center py-8 text-muted text-sm">No event is live — the venue map will populate once an event starts.</div>`;
+    return;
+  }
+
   const byId = Object.fromEntries(zones.map(z => [z.id, z]));
   const chained = new Set();
   const chains = [];
@@ -560,23 +596,22 @@ function renderFlowMap(zones) {
   });
   const standalone = zones.filter(z => !chained.has(z.id));
 
-  const pill = z => `
-    <div class="flow-pill" onclick="openRiskModal(${z.id})" style="cursor:pointer">
-      <span class="${LEVEL_TEXT[z.level]} font-bold">${z.name}</span>
-      <span class="text-muted"> · ${z.capacity_pressure_pct}%</span>
-    </div>`;
-
-  const rows = chains.map(chain => `
-    <div class="flex items-center gap-2 flex-wrap">
-      ${chain.map((z, i) => (i > 0 ? `<span class="flow-arrow">→</span>` : "") + pill(z)).join("")}
+  const columns = chains.map(chain => `
+    <div class="flex flex-col items-center gap-1">
+      ${chain.map((z, i) => (i > 0 ? `<span class="flow-arrow" style="transform:rotate(90deg)">→</span>` : "") + zoneBox(z)).join("")}
     </div>`).join("");
 
   const standaloneRow = standalone.length ? `
-    <div class="flex items-center gap-2 flex-wrap pt-2 border-t border-border mt-1">
-      ${standalone.map(pill).join("")}
+    <div class="flex items-start gap-2 flex-wrap pt-2 border-t border-border mt-2">
+      ${standalone.map(zoneBox).join("")}
     </div>` : "";
 
-  document.getElementById("flow-map").innerHTML = rows + standaloneRow;
+  const allClear = zones.every(z => z.level === "LOW");
+  const banner = allClear
+    ? `<div class="text-[11px] text-ok font-semibold mb-2">VENUE STATUS — All zones operating within safe capacity.</div>`
+    : "";
+
+  el.innerHTML = banner + `<div class="flex items-start gap-4 flex-wrap">${columns}</div>` + standaloneRow;
 }
 
 function resourceAvail(type) {
@@ -672,6 +707,7 @@ async function approveAction(id, btn) {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action_ids: [id] }),
   });
   await refresh();
+  closeRiskModal(); // no-op if it wasn't open (e.g. approved from the Suggested Actions tab)
 }
 
 function healthBar(label, value) {
@@ -686,17 +722,64 @@ function healthBar(label, value) {
     </div>`;
 }
 
-function renderHealthScore(h) {
-  const domainRows = Object.entries(h.domains || {}).map(([d, v]) => healthBar(d, v)).join("");
+function renderHealthScore(h, breakdown) {
   document.getElementById("health-score").innerHTML = `
-    <div class="flex items-center gap-4 flex-wrap mb-3">
+    <div class="flex items-center gap-4 flex-wrap mb-1">
       <div class="font-mono text-3xl font-black ${h.overall >= 80 ? 'text-ok' : h.overall >= 60 ? 'text-warn' : 'text-danger'}">${h.overall}</div>
       <div class="text-[10.5px] text-muted">
         overall health · safety ${h.safety ?? '—'} ·
         ${h.open_alerts ?? 0} open alert(s), ${h.critical_alerts ?? 0} critical
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${domainRows}</div>`;
+    <div class="text-[11.5px] text-muted italic">${breakdown?.reason || ""}</div>`;
+}
+
+function openHealthBreakdown() {
+  if (!lastHealthBreakdown) return;
+  const b = lastHealthBreakdown;
+  document.getElementById("health-modal-overall").innerHTML = `
+    <div class="font-mono text-3xl font-black ${b.overall >= 80 ? 'text-ok' : b.overall >= 60 ? 'text-warn' : 'text-danger'}">${b.overall}</div>
+    <div class="text-[11px] text-muted mt-1">${b.reason}</div>`;
+  document.getElementById("health-modal-pillars").innerHTML = b.pillars.map(p => `
+    <div class="mb-3">
+      <div class="flex items-center justify-between text-[10.5px] text-muted uppercase tracking-wide mb-1">
+        <span>${p.label}</span><span class="font-mono ${LEVEL_TEXT[p.level]} font-bold">${p.pct}% · ${p.level}</span>
+      </div>
+      <div class="gauge"><div class="gauge-fill ${LEVEL_COLOR[p.level]}" style="width:${Math.min(p.pct, 100)}%"></div></div>
+      <div class="text-[11px] text-muted mt-1">${p.reason}</div>
+    </div>`).join("");
+  document.getElementById("health-modal-mitigation").innerHTML = `
+    <div class="eyebrow mb-1">Recommended Mitigation</div>
+    <div class="text-sm">${b.mitigation}</div>`;
+  document.getElementById("healthModal").classList.add("show");
+}
+function closeHealthModal() { document.getElementById("healthModal").classList.remove("show"); }
+
+function renderRiskRegister(rows) {
+  const el = document.getElementById("risk-register-list");
+  if (!rows.length) {
+    el.innerHTML = `
+      <div class="text-center py-6">
+        <div class="text-2xl mb-1 text-ok">✓ ALL CLEAR</div>
+        <div class="text-muted text-xs">No active operational risks detected.</div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = rows.map(r => `
+    <div class="row-card p-3 mb-2 text-sm ${r.zone_id ? 'clickable' : ''}" ${r.zone_id ? `onclick="openRiskModal(${r.zone_id})"` : ""}>
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <span class="font-mono text-[9px] uppercase tracking-wide text-muted">${r.risk_type}</span>
+          <div class="font-bold">${r.zone_name}</div>
+        </div>
+        <span class="font-mono text-[11px] px-2.5 py-1 rounded-full bg-surface border border-border ${LEVEL_TEXT[r.severity]} font-bold">${r.severity}</span>
+      </div>
+      <div class="flex items-center justify-between mt-1.5 text-[11px] text-muted font-mono">
+        <span>${r.current_label}</span><span>${r.threshold_label}</span>
+      </div>
+      <div class="text-[11px] mt-1"><span class="text-muted">Action: </span>${r.recommended_action}</div>
+    </div>
+  `).join("");
 }
 
 const ALERT_SEVERITY_TEXT = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };
@@ -793,6 +876,7 @@ async function refresh() {
   }
 
   const allRecs = await api("/api/recommendations");
+  currentRecs = allRecs;
   const recs = roleCfg.domain ? allRecs.filter(r => r.domain === roleCfg.domain) : allRecs;
   document.getElementById("recs").innerHTML = recs.map(r => `
     <div class="row-card p-3 mb-2 text-sm">
@@ -815,8 +899,12 @@ async function refresh() {
     renderStaffSuggestions(await api("/api/staff/suggestions"));
   }
 
-  const health = await api("/api/health-score");
-  renderHealthScore(health);
+  const [health, breakdown, registerRows] = await Promise.all([
+    api("/api/health-score"), api("/api/health-breakdown"), api("/api/risks/register"),
+  ]);
+  lastHealthBreakdown = breakdown;
+  renderHealthScore(health, breakdown);
+  renderRiskRegister(registerRows);
 
   if (roleCfg.tabs.includes("alerts")) {
     renderAlerts(await api("/api/alerts"));
@@ -940,8 +1028,20 @@ async function runAiAdvisor() {
   const box = document.getElementById("ai-advisor-box");
   box.classList.remove("hidden");
   box.innerHTML = `<p class="text-xs text-muted italic m-0">Thinking…</p>`;
-  const result = await api("/api/ai/advisor");
-  renderAiBox(box, result);
+  const a = await api("/api/ai/advisor");
+  renderAiAdvisorBox(box, a);
+}
+
+function renderAiAdvisorBox(el, a) {
+  if (a.error) { el.innerHTML = `<p class="text-xs text-muted italic m-0">${a.error}</p>`; return; }
+  const section = (label, value) => value
+    ? `<div class="mb-2.5"><div class="eyebrow mb-0.5">${label}</div><p class="text-sm m-0 leading-relaxed">${value}</p></div>` : "";
+  let html = section("Current Situation", a.situation);
+  if (a.top_risk) html += section("Top Risk", `${a.top_risk.type} — ${a.top_risk.zone_name}`);
+  if (a.recommendation) html += section("Recommendation", a.recommendation.label);
+  if (a.expected_impact) html += section("Expected Impact", `${a.expected_impact.before_pct}% → ${a.expected_impact.after_pct}%`);
+  if (a.waiting_time) html += section("Waiting Time", `${a.waiting_time.before_min} min → ${a.waiting_time.after_min} min`);
+  el.innerHTML = html + groundedTag(a.grounded_in);
 }
 
 // --- Risk Detail modal ---------------------------------------------------
@@ -1024,6 +1124,16 @@ async function openRiskModal(zoneId) {
 
   const chain = await api(`/api/risks/causal-chain/${zoneId}`);
   document.getElementById("modal-chain").innerHTML = chain.chain.map(c => `<li class="mb-1">${c}</li>`).join("");
+
+  const zoneRecs = currentRecs.filter(r => r.target_zones.includes(zone.name));
+  const recsBox = document.getElementById("modal-recs");
+  recsBox.innerHTML = zoneRecs.length ? `
+    <h4 class="eyebrow mb-2">Recommended Actions</h4>
+    ${zoneRecs.map(r => `
+      <div class="row-card p-2.5 mb-2 flex items-center justify-between gap-2 text-sm">
+        <span>${r.label}</span>
+        <button class="btn-danger rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold flex-shrink-0" onclick="approveAction('${r.id}', this)">Take Action</button>
+      </div>`).join("")}` : "";
 
   const ackActions = document.getElementById("modal-ack-actions");
   if (zone.can_ack) {
@@ -1426,8 +1536,25 @@ async function loadTransportDemand() {
   `).join("") || `<div class="text-xs text-muted">No transport zones configured.</div>`;
 }
 
+let analyticsEventsLoaded = false;
+
+async function loadAnalyticsEventList() {
+  // Populated once per page load — an operator picking a past event to
+  // review shouldn't have the dropdown reset out from under them every time
+  // the tab re-opens or the 4s refresh loop ticks.
+  if (analyticsEventsLoaded) { loadAnalytics(); return; }
+  const events = await api("/api/admin/all-events");
+  const select = document.getElementById("analytics-event-select");
+  select.innerHTML = `<option value="">Current live event</option>` + events.map(ev =>
+    `<option value="${ev.id}">${ev.name} (${ev.status})</option>`
+  ).join("");
+  analyticsEventsLoaded = true;
+  loadAnalytics();
+}
+
 async function loadAnalytics() {
-  const a = await api("/api/analytics/post-event");
+  const eventId = document.getElementById("analytics-event-select").value;
+  const a = await api(eventId ? `/api/analytics/post-event?event_id=${eventId}` : "/api/analytics/post-event");
   const metric = (label, value) => `
     <div class="row-card p-3 text-sm flex items-center justify-between">
       <span class="text-muted text-[10.5px] uppercase tracking-wide">${label}</span>

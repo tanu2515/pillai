@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -221,10 +222,120 @@ def seed_sample_catalog_events(db: Session):
         )
 
 
+def seed_past_concert(db: Session):
+    """One fully-realized status="completed" concert — the only historical
+    event with real zone/booking/alert data, so post-event analytics
+    (engine.event_analytics(db, event_id=...)) and My Events > Past have
+    something concrete to show instead of an empty catalog row. Its zones are
+    never touched by reset_simulation/switch_to_event (those only ever act on
+    the live event's zone_id set), so this stays put across sim resets."""
+    if db.query(models.Event).filter(models.Event.name == "Mumbai Monsoon Music Night").count() > 0:
+        return
+
+    event = models.Event(
+        name="Mumbai Monsoon Music Night",
+        description="An open-air night of live sets from Mumbai's biggest indie and playback acts.",
+        event_date="2026-08-09", event_time="19:00", category="Concert", city="Mumbai",
+        venue_name="NSCI Dome", venue_address="Worli, Mumbai, Maharashtra",
+        banner_emoji="🎸", is_featured=False, region="Maharashtra",
+        expected_attendance=9500, safe_capacity=10000, status="completed",
+    )
+    db.add(event)
+    db.flush()
+
+    # Suffixed "(Past)" so these never exact-name-collide with a live event's
+    # own "Gate 2"/"Hotel A"/etc — several core simulation functions
+    # (run_whatif, _execute_action_effect, tick's scenario ramp) look up
+    # zones by exact canonical name with no event scoping at all, so a
+    # same-named completed-event zone would be a live landmine otherwise.
+    main_hall = models.Zone(event_id=event.id, name="Main Hall (Past)", type="arena", domain="venue",
+                             capacity=10000, current_count=0, last_count=0, peak_count=9760, peak_tick=38)
+    corridor_b = models.Zone(event_id=event.id, name="Corridor B (Past)", type="corridor", domain="transport",
+                              capacity=4000, current_count=0, last_count=0, peak_count=4180, peak_tick=43)
+    transport_hub = models.Zone(event_id=event.id, name="Transport Hub (Past)", type="hub", domain="transport",
+                                 capacity=3000, current_count=0, last_count=0, peak_count=2540, peak_tick=44)
+    hotel_a = models.Zone(event_id=event.id, name="Hotel A (Past)", type="hotel", domain="hospitality",
+                           capacity=1500, current_count=0, last_count=0, peak_count=1420, peak_tick=40, price_tier=4)
+    db.add_all([main_hall, corridor_b, transport_hub, hotel_a])
+    db.flush()
+
+    gate_1 = models.Zone(event_id=event.id, name="Gate 1 (Past)", type="gate", domain="venue",
+                          capacity=4000, current_count=0, last_count=0, peak_count=3820, peak_tick=12,
+                          is_accessible=True, linked_transport_zone_id=transport_hub.id)
+    gate_2 = models.Zone(event_id=event.id, name="Gate 2 (Past)", type="gate", domain="venue",
+                          capacity=3500, current_count=0, last_count=0, peak_count=3822, peak_tick=41,
+                          linked_transport_zone_id=corridor_b.id, linked_hospitality_zone_id=hotel_a.id)
+    db.add_all([gate_1, gate_2])
+    db.flush()
+
+    general = models.EventTier(event_id=event.id, name="General", price=899, capacity=8000,
+                                booked_count=7600, gate_name="Gate 1 (Past)")
+    vip = models.EventTier(event_id=event.id, name="VIP", price=2999, capacity=1500,
+                            booked_count=1380, gate_name="Gate 2 (Past)")
+    db.add_all([general, vip])
+    db.flush()
+
+    booking_ts = datetime(2026, 7, 20, 10, 0, tzinfo=timezone.utc)
+    sample_bookings = [
+        ("Aditi Rao", general, 2), ("Rohan Mehta", general, 1), ("Sneha Kulkarni", vip, 2),
+        ("Farhan Sheikh", general, 4), ("Priya Nair", general, 1), ("Karan Malhotra", vip, 1),
+        ("Ishita Bose", general, 2), ("Vivek Iyer", general, 3), ("Ananya Desai", vip, 2),
+        ("Sameer Khan", general, 1),
+    ]
+    for name, tier, qty in sample_bookings:
+        db.add(models.VisitorProfile(
+            name=name, event_id=event.id, tier_id=tier.id, quantity=qty,
+            checked_in=True, created_at=booking_ts,
+        ))
+
+    owner_email = "sales@onlydairy.in"
+    db.add(models.VisitorProfile(
+        name="Sales (OnlyDairy)", email=owner_email, event_id=event.id, tier_id=vip.id, quantity=1,
+        checked_in=True, created_at=booking_ts,
+    ))
+
+    account = db.query(models.UserAccount).filter(
+        models.UserAccount.email == owner_email, models.UserAccount.role == "Attendee"
+    ).first()
+    if not account:
+        account = models.UserAccount(email=owner_email, role="Attendee")
+        db.add(account)
+        db.flush()
+    attendee = db.query(models.Attendee).filter(models.Attendee.user_account_id == account.id).first()
+    if not attendee:
+        attendee = models.Attendee(user_account_id=account.id, name=owner_email.split("@")[0])
+        db.add(attendee)
+        db.flush()
+    db.add(models.EventAttendee(
+        attendee_id=attendee.id, event_id=event.id, event_name=event.name, event_date=event.event_date,
+        registration_status="Attended", registration_time=booking_ts,
+    ))
+
+    alert_ts = datetime(2026, 8, 9, 20, 55, tzinfo=timezone.utc)
+    db.add_all([
+        models.Alert(
+            event_id=event.id, zone_id=gate_2.id, alert_type="crowd", severity="CRITICAL",
+            impact_score=round(gate_2.peak_count / gate_2.capacity * 100, 1),
+            message="Gate 2 crossed safe capacity during headline-act exit surge",
+            status="resolved", created_at=alert_ts,
+            resolved_at=datetime(2026, 8, 9, 21, 10, tzinfo=timezone.utc),
+        ),
+        models.Alert(
+            event_id=event.id, zone_id=corridor_b.id, alert_type="crowd", severity="HIGH",
+            impact_score=round(corridor_b.peak_count / corridor_b.capacity * 100, 1),
+            message="Corridor B congestion following Gate 2 redirect",
+            status="resolved", created_at=alert_ts,
+            resolved_at=datetime(2026, 8, 9, 21, 15, tzinfo=timezone.utc),
+        ),
+    ])
+    db.commit()
+
+
 def seed_if_empty(db: Session):
     seed_default_scenarios(db)  # scenarios are global reference data, independent of event resets
     seed_transit_routes(db)
     seed_sample_catalog_events(db)
+    seed_past_concert(db)
 
     from .engine import get_live_event
     if get_live_event(db):

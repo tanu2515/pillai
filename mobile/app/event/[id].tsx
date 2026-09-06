@@ -13,6 +13,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
 import { api, apiPost, getEmail } from "../../src/api";
 import { colors, radius, spacing, shadow, levelColor } from "../../src/theme";
+import { openInMaps } from "../../src/maps";
 
 type Tier = { id: number; name: string; price: number; capacity: number; available: number; uses_seats: boolean; gate_name?: string };
 type Gate = { name: string; occupancy_pct: number; level: string };
@@ -40,6 +41,18 @@ type EventDetail = {
   tiers: Tier[];
 };
 type Seat = { id: number; seat_label: string; status: string };
+type PlanGate = { name: string; level: string; capacity_pressure_pct: number; lat: number | null; lng: number | null };
+type PlanHotel = { name: string; available_pct: number; lat: number | null; lng: number | null; reason: string };
+type PlanTransport = { zone_name: string; recommendation: string };
+type PlanArrival = { recommendation: string };
+type Plan = {
+  event_name: string;
+  is_live: boolean;
+  gate: PlanGate | null;
+  hotel: PlanHotel | null;
+  transport: PlanTransport | null;
+  arrival: PlanArrival | null;
+};
 
 function fmtDate(dateStr?: string, timeStr?: string) {
   if (!dateStr) return "Date to be announced";
@@ -245,6 +258,71 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const BUDGET_OPTIONS: { label: string; value: number }[] = [
+  { label: "Budget", value: 1 },
+  { label: "Mid-range", value: 3 },
+  { label: "Premium", value: 5 },
+];
+
+function PlanSection({ plan }: { plan: Plan }) {
+  if (!plan.is_live) {
+    return (
+      <View style={styles.planBox}>
+        <Text style={styles.planTitle}>Your Plan</Text>
+        <Text style={styles.mutedText}>
+          {plan.arrival?.recommendation || "Your personalized plan will be ready once the event goes live."}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.planBox}>
+      <Text style={styles.planTitle}>Your Plan</Text>
+      {plan.gate && (
+        <View style={styles.planRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.planLabel}>Entry gate</Text>
+            <Text style={styles.planValue}>
+              {plan.gate.name} · <Text style={{ color: levelColor[plan.gate.level] }}>{plan.gate.level}</Text>
+            </Text>
+          </View>
+          {plan.gate.lat != null && plan.gate.lng != null && (
+            <Pressable style={styles.mapBtn} onPress={() => openInMaps(plan.gate!.lat!, plan.gate!.lng!)}>
+              <Text style={styles.mapBtnText}>🧭 Navigate</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {plan.hotel && (
+        <View style={styles.planRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.planLabel}>Recommended hotel</Text>
+            <Text style={styles.planValue}>{plan.hotel.name}</Text>
+            <Text style={styles.mutedText}>{plan.hotel.reason}</Text>
+          </View>
+          {plan.hotel.lat != null && plan.hotel.lng != null && (
+            <Pressable style={styles.mapBtn} onPress={() => openInMaps(plan.hotel!.lat!, plan.hotel!.lng!)}>
+              <Text style={styles.mapBtnText}>🧭 Navigate</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {plan.transport && (
+        <View style={styles.planRowStack}>
+          <Text style={styles.planLabel}>Transport</Text>
+          <Text style={styles.mutedText}>{plan.transport.recommendation}</Text>
+        </View>
+      )}
+      {plan.arrival && (
+        <View style={styles.planRowStack}>
+          <Text style={styles.planLabel}>Best time to arrive</Text>
+          <Text style={styles.mutedText}>{plan.arrival.recommendation}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function BookingSheet({
   visible,
   onClose,
@@ -271,9 +349,11 @@ function BookingSheet({
   const [showSeats, setShowSeats] = useState(false);
   const [wantsTransport, setWantsTransport] = useState(false);
   const [wantsHotel, setWantsHotel] = useState(false);
+  const [budgetTier, setBudgetTier] = useState(3);
   const showHotelOption = hotels.length > 0;
   const [error, setError] = useState("");
   const [result, setResult] = useState<any>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -283,8 +363,10 @@ function BookingSheet({
       setShowSeats(false);
       setWantsTransport(false);
       setWantsHotel(false);
+      setBudgetTier(3);
       setError("");
       setResult(null);
+      setPlan(null);
     }
   }, [visible, tier.id]);
 
@@ -307,6 +389,7 @@ function BookingSheet({
       quantity: seatId ? 1 : qty,
       wants_transport: wantsTransport,
       hotel_zone_id: wantsHotel && hotels.length ? hotels[0].zone_id : null,
+      budget_tier: wantsHotel ? budgetTier : null,
     });
     if (res.status !== "ok") {
       setError(res.message || "Booking failed.");
@@ -314,6 +397,13 @@ function BookingSheet({
     }
     setResult(res);
     onBooked();
+    try {
+      const p = await api<Plan>(`/api/my-plan?code=${res.code}`);
+      setPlan(p);
+    } catch {
+      // Plan is a bonus on top of a successful booking — a failed fetch here
+      // shouldn't block the confirmation screen the attendee is waiting on.
+    }
   }
 
   const total = tier.price * (seatId ? 1 : qty);
@@ -336,6 +426,7 @@ function BookingSheet({
                 {result.seat_label ? ` · Seat ${result.seat_label}` : ""}
                 {result.quantity > 1 ? ` · Qty ${result.quantity}` : ""} · ₹{result.total_price.toLocaleString()}
               </Text>
+              {plan && <PlanSection plan={plan} />}
               <Pressable
                 style={styles.confirmBtn}
                 onPress={() => {
@@ -421,6 +512,19 @@ function BookingSheet({
                       <Text style={[styles.tabOptText, wantsHotel && styles.tabOptTextActive]}>Add hotel</Text>
                     </Pressable>
                   </View>
+                  {wantsHotel && (
+                    <View style={[styles.tabGroup, { marginTop: 8 }]}>
+                      {BUDGET_OPTIONS.map((b) => (
+                        <Pressable
+                          key={b.value}
+                          style={[styles.tabOpt, budgetTier === b.value && styles.tabOptActive]}
+                          onPress={() => setBudgetTier(b.value)}
+                        >
+                          <Text style={[styles.tabOptText, budgetTier === b.value && styles.tabOptTextActive]}>{b.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -544,6 +648,14 @@ const styles = StyleSheet.create({
   confirmTitle: { fontSize: 17, fontWeight: "800", color: colors.ink, marginTop: spacing.sm },
   qrWrap: { backgroundColor: "#fff", padding: spacing.md, borderRadius: radius.lg, marginVertical: spacing.md },
   confirmCode: { fontSize: 22, letterSpacing: 5, fontWeight: "800", color: colors.accent, marginBottom: spacing.sm },
+  planBox: { width: "100%", backgroundColor: colors.bg, borderRadius: radius.lg, padding: spacing.md, marginTop: spacing.md },
+  planTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: colors.ink, textTransform: "uppercase", marginBottom: spacing.sm },
+  planRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingVertical: 6 },
+  planRowStack: { paddingVertical: 6 },
+  planLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 },
+  planValue: { fontSize: 13, fontWeight: "700", color: colors.ink, marginTop: 2 },
+  mapBtn: { backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 10 },
+  mapBtnText: { color: "#fff", fontSize: 10.5, fontWeight: "700" },
   seatGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   seat: { width: "15%", aspectRatio: 1, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
   seatBooked: { backgroundColor: colors.high, opacity: 0.6 },
