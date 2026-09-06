@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KAIRO — Hotel Partner Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config={theme:{extend:{colors:{bg:'#EAF7F4',panel:'#FFFFFF',border:'#E2E8F0',muted:'#64748B',ink:'#123B6D',accent:'#1976D2',ok:'#16A34A',warn:'#D97706',danger:'#DC2626'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
+</script>
+<style>
+body{background:radial-gradient(circle at 10% 0%,rgba(25,118,210,.08),transparent 40%),radial-gradient(circle at 90% 100%,rgba(22,163,74,.06),transparent 45%),#EAF7F4;color:#123B6D}
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
+.btn{font-weight:800;transition:.15s}.btn:hover{transform:translateY(-1px)}
+input,select{background:#fff;border:1px solid #CBD5E1;border-radius:10px;color:#123B6D}
+input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px rgba(25,118,210,.1)}
+</style>
+</head>
+<body class="min-h-screen font-sans">
+<header class="border-b border-border bg-white/85 backdrop-blur sticky top-0 z-10">
+  <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+    <div>
+      <div class="text-[11px] uppercase tracking-[.22em] font-black text-accent">KAIRO</div>
+      <div class="text-xl font-black">Hotel Partner Portal</div>
+      <div class="text-xs text-muted mt-1">Update your hotel's room inventory for event coordination.</div>
+    </div>
+    <div id="conn" class="text-[11px] px-3 py-1.5 rounded-full border border-border text-muted">Connecting…</div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-5 py-7">
+  <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-5">
+    <section class="card p-6">
+      <div class="flex items-center justify-between gap-3 mb-5">
+        <div>
+          <div class="text-[11px] uppercase tracking-[.18em] font-extrabold text-muted">Property</div>
+          <h1 id="hotel-name" class="text-2xl font-black mt-1">Select hotel</h1>
+        </div>
+        <select id="hotel-select" class="px-3 py-2 text-sm" onchange="loadHotel()"></select>
+      </div>
+
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Total rooms</div><div id="total" class="text-2xl font-black mt-1">—</div></div>
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Occupied</div><div id="occupied" class="text-2xl font-black mt-1">—</div></div>
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Available</div><div id="available" class="text-2xl font-black mt-1">—</div></div>
+      </div>
+
+      <div class="mt-5 flex items-center justify-between text-sm"><span class="text-muted">Occupancy</span><span id="pct" class="font-mono font-bold">—</span></div>
+      <div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-2"><div id="bar" class="h-full bg-accent rounded-full transition-all" style="width:0%"></div></div>
+
+      <div class="mt-6 p-4 rounded-xl border border-dashed border-border bg-slate-50">
+        <div class="text-[11px] uppercase tracking-[.16em] font-extrabold text-muted">Manual update</div>
+        <div class="mt-3 flex flex-col sm:flex-row gap-3">
+          <input id="occupied-input" type="number" min="0" class="flex-1 px-3 py-3 text-sm" placeholder="Occupied rooms" />
+          <button class="btn bg-accent text-white rounded-xl px-5 py-3 text-sm" onclick="saveAvailability()">UPDATE KAIRO</button>
+        </div>
+        <div id="message" class="text-xs mt-3 text-muted"></div>
+      </div>
+    </section>
+
+    <section class="card p-6">
+      <div class="text-[11px] uppercase tracking-[.18em] font-extrabold text-muted">Why this exists</div>
+      <h2 class="text-xl font-black mt-1">One simple source for room availability</h2>
+      <p class="text-sm text-muted leading-relaxed mt-3">Your hotel keeps control of its inventory. KAIRO only receives the latest availability so the event manager can make better capacity decisions.</p>
+
+      <div class="mt-5 space-y-3 text-sm">
+        <div class="flex gap-3 p-3 rounded-xl bg-slate-50 border border-border"><span class="text-lg">🏨</span><div><div class="font-bold">Your hotel owns the data</div><div class="text-xs text-muted mt-1">The PMS/portal is the source of truth.</div></div></div>
+        <div class="flex gap-3 p-3 rounded-xl bg-slate-50 border border-border"><span class="text-lg">⚡</span><div><div class="font-bold">KAIRO receives updates</div><div class="text-xs text-muted mt-1">For the prototype, this portal behaves like a partner feed.</div></div></div>
+        <div class="flex gap-3 p-3 rounded-xl bg-slate-50 border border-border"><span class="text-lg">🧠</span><div><div class="font-bold">Event manager uses the data</div><div class="text-xs text-muted mt-1">KAIRO can detect saturation and recommend another hotel zone.</div></div></div>
+      </div>
+
+      <div class="mt-6 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+        <div class="text-xs font-bold text-accent">Integration status</div>
+        <div class="text-sm mt-1">Portal → KAIRO API → Event Manager</div>
+        <div id="updated" class="text-[11px] text-muted font-mono mt-2">Waiting for first update…</div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card p-6 mt-5">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div><div class="text-[11px] uppercase tracking-[.18em] font-extrabold text-muted">Event impact</div><h2 class="text-xl font-black mt-1">How KAIRO sees nearby hotel inventory</h2></div>
+      <button class="btn border border-border rounded-xl px-4 py-2.5 text-xs" onclick="loadAllHotels()">REFRESH INVENTORY</button>
+    </div>
+    <div id="hotel-grid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
+  </section>
+</main>
+
+<script>
+let hotels=[]; let selectedId=null;
+async function api(url,opts={}){const r=await fetch(url,opts); const d=await r.json(); if(!r.ok) throw new Error(d.detail||'Request failed'); return d}
+function setConn(ok){const el=document.getElementById('conn');el.textContent=ok?'🟢 Connected to KAIRO':'🔴 Connection issue';el.className='text-[11px] px-3 py-1.5 rounded-full border '+(ok?'border-green-200 bg-green-50 text-ok':'border-red-200 bg-red-50 text-danger')}
+async function loadAllHotels(){try{hotels=await api('/api/partner/hotels'); setConn(true); const select=document.getElementById('hotel-select'); select.innerHTML=hotels.map(h=>`<option value="${h.id}">${h.name}</option>`).join(''); if(!selectedId && hotels.length) selectedId=hotels[0].id; select.value=selectedId||''; renderGrid(); await loadHotel()}catch(e){setConn(false);document.getElementById('message').textContent=e.message}}
+async function loadHotel(){selectedId=Number(document.getElementById('hotel-select').value); if(!selectedId)return; try{const h=await api('/api/partner/hotels/'+selectedId); document.getElementById('hotel-name').textContent=h.name; document.getElementById('total').textContent=h.capacity; document.getElementById('occupied').textContent=h.occupied_rooms; document.getElementById('available').textContent=h.available_rooms; document.getElementById('pct').textContent=h.occupancy_pct+'%'; document.getElementById('bar').style.width=Math.min(h.occupancy_pct,100)+'%'; document.getElementById('occupied-input').value=h.occupied_rooms; document.getElementById('updated').textContent='Last portal read: '+new Date().toLocaleTimeString(); setConn(true)}catch(e){document.getElementById('message').textContent=e.message}}
+async function saveAvailability(){const v=Number(document.getElementById('occupied-input').value); if(!Number.isFinite(v))return; try{const d=await api('/api/partner/hotels/'+selectedId+'/availability',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({occupied_rooms:v})}); document.getElementById('message').textContent=`Updated. ${d.available_rooms} rooms are now available.`; document.getElementById('updated').textContent='KAIRO updated: '+new Date().toLocaleTimeString(); await loadAllHotels()}catch(e){document.getElementById('message').textContent=e.message}}
+function renderGrid(){document.getElementById('hotel-grid').innerHTML=hotels.map(h=>{const tone=h.occupancy_pct>=95?'text-danger':h.occupancy_pct>=80?'text-warn':'text-ok';return `<div class="border border-border rounded-xl p-4"><div class="flex items-center justify-between"><div class="font-bold">${h.name}</div><div class="font-mono text-xs ${tone}">${h.occupancy_pct}%</div></div><div class="text-xs text-muted mt-2">${h.available_rooms} available of ${h.capacity}</div><div class="h-2 bg-slate-100 rounded-full overflow-hidden mt-3"><div class="h-full bg-accent" style="width:${Math.min(h.occupancy_pct,100)}%"></div></div></div>`}).join('')}
+loadAllHotels(); setInterval(loadAllHotels,30000);
+</script>
+</body>
+</html>

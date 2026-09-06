@@ -8,7 +8,6 @@ from .database import Base
 
 
 ROLES = [
-    "Administrator",
     "Attendee",
     "Event Command Operator",
     "Hospitality Operator",
@@ -110,6 +109,22 @@ class Zone(Base):
     ack_status = Column(String, default="open")  # open | acknowledged | escalated
 
 
+class CrowdSnapshot(Base):
+    """An auditable reading from any crowd-count source.
+
+    Zone.current_count remains the live value used by the risk engine; this
+    table records how that value was obtained so camera, check-in, manual and
+    simulated data can share one downstream pipeline.
+    """
+    __tablename__ = "crowd_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    count = Column(Integer, nullable=False)
+    source = Column(String, nullable=False)  # yolo | checkin | manual | simulation
+    captured_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
 class Resource(Base):
     __tablename__ = "resources"
 
@@ -140,6 +155,21 @@ class VisitorProfile(Base):
     checked_in = Column(Boolean, default=False)
     walk_in = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class HotelInventorySnapshot(Base):
+    """Latest room-availability push for a hotel Zone, from the partner
+    portal (manual update) or a PMS webhook — separate from Zone.current_count
+    so the source/timestamp of the last live update is preserved. Falls back
+    to the zone's own current_count/capacity when no snapshot exists yet."""
+    __tablename__ = "hotel_inventory_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    hotel_id = Column(Integer, ForeignKey("zones.id"), nullable=False, unique=True)
+    occupied_rooms = Column(Integer, nullable=False, default=0)
+    available_rooms = Column(Integer, nullable=False, default=0)
+    source = Column(String, nullable=False, default="hotel_partner_portal")
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 
 class UserAccount(Base):

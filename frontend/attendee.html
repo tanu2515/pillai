@@ -167,6 +167,33 @@
         <h2 class="eyebrow mb-3">🕒 Best time to arrive</h2>
         <div id="offpeak-list" class="text-sm"></div>
       </section>
+
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.22s">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="eyebrow">🏨 Nearby stay — live rooms</h2>
+          <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10px]" onclick="loadUserHotels()">REFRESH</button>
+        </div>
+        <div id="user-hotels" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        <p id="hotel-data-note" class="text-[10px] text-muted mt-2"></p>
+      </section>
+
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.23s">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="eyebrow">🔎 Explore hotels near you</h2>
+          <button class="btn-primary px-3 py-1.5 rounded-lg text-[10px]" onclick="findHotelsNearMe()">📍 USE MY LOCATION</button>
+        </div>
+        <div id="nearby-hotels-explore" class="text-sm">
+          <div class="text-xs text-muted">Tap "Use My Location" to discover hotels near where you are right now (via OpenStreetMap) — not just near the venue.</div>
+        </div>
+      </section>
+
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.24s">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="eyebrow">🚌 Getting around</h2>
+          <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10px]" onclick="loadUserTransport()">REFRESH</button>
+        </div>
+        <div id="user-transport" class="text-sm"></div>
+      </section>
     </div>
 
     <div class="lg:col-span-1">
@@ -280,12 +307,35 @@ async function loadGates() {
   await renderEvacuation();
 }
 
+// Best-effort browser geolocation — silently falls back to venue-centre
+// distance if unsupported/denied, or if the page isn't served over a secure
+// origin (browsers block navigator.geolocation on plain http:// except on
+// localhost, so this won't work for attendees on the LAN IP over http).
+let cachedLocation = null;
+let locationRequested = false;
+function getMyLocation() {
+  if (cachedLocation || locationRequested) return Promise.resolve(cachedLocation);
+  locationRequested = true;
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { cachedLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(cachedLocation); },
+      () => resolve(null),
+      { timeout: 4000 },
+    );
+  });
+}
+
 async function onAccessibleToggle() {
   const checked = document.getElementById("accessible-toggle").checked;
   if (checked) {
+    const loc = await getMyLocation();
     await api("/api/attendee/accessibility-request", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: getAttendeeEmail() || null }),
+      body: JSON.stringify({
+        email: getAttendeeEmail() || null,
+        ...(loc ? { lat: loc.lat, lng: loc.lng } : { zone_name: myGateName || null }),
+      }),
     });
   }
   await renderEvacuation();
@@ -293,7 +343,9 @@ async function onAccessibleToggle() {
 
 async function renderEvacuation() {
   const accessibleOnly = document.getElementById("accessible-toggle").checked;
-  const data = await api(`/api/evacuation-routes?accessible_only=${accessibleOnly}`);
+  const loc = await getMyLocation();
+  const locQuery = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : "";
+  const data = await api(`/api/evacuation-routes?accessible_only=${accessibleOnly}${locQuery}`);
   const el = document.getElementById("evac-status");
   const top = data.routes[0];
   const exitLine = top
@@ -305,7 +357,8 @@ async function renderEvacuation() {
       (exitLine ? `Nearest safe exit: ${exitLine}.` : `No safe exit currently computed — follow staff instructions.`) +
       (data.all_exits_congested ? ` <span class="text-muted">All exits are under pressure — proceed with caution.</span>` : "");
   } else if (exitLine) {
-    el.innerHTML = `Recommended exit: ${exitLine}.`;
+    el.innerHTML = `Recommended exit: ${exitLine}.` +
+      (!data.from_attendee_location ? ` <span class="text-muted">(distance from venue centre — enable location for distance from you)</span>` : "");
   } else {
     el.innerHTML = accessibleOnly
       ? `<span class="text-muted">No accessible exit configured yet — ask a staff member for assistance.</span>`
@@ -339,15 +392,105 @@ async function renderMap(gates) {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(mapInstance);
     mapInstance._markers = {};
   }
+  let hotelInventory = {};
+  try {
+    const hotelData = await api("/api/attendee/hotels");
+    hotelInventory = Object.fromEntries((hotelData.hotels || []).map(h => [h.id, h]));
+  } catch (e) {}
   withCoords.forEach(z => {
+    const isHotel = z.type === "hotel";
+    const hInv = isHotel ? hotelInventory[z.id] : null;
+    const tooltip = isHotel
+      ? `🏨 ${z.name}${hInv ? ` · ${hInv.available_rooms} rooms free` : ""}`
+      : `${z.name} · ${z.level}`;
     if (mapInstance._markers[z.id]) {
-      mapInstance._markers[z.id].setStyle({ fillColor: LEVEL_HEX[z.level] || "#1976D2" });
+      mapInstance._markers[z.id].setStyle(isHotel
+        ? { fillColor: "#1976D2" }
+        : { fillColor: LEVEL_HEX[z.level] || "#1976D2" });
+      mapInstance._markers[z.id].setTooltipContent(tooltip);
     } else {
-      mapInstance._markers[z.id] = L.circleMarker([z.lat, z.lng], { radius: 7, color: "#123B6D", weight: 1.5, fillColor: LEVEL_HEX[z.level] || "#1976D2", fillOpacity: 0.9 })
-        .addTo(mapInstance).bindTooltip(`${z.name} · ${z.level}`);
+      mapInstance._markers[z.id] = L.circleMarker([z.lat, z.lng], {
+        radius: isHotel ? 8 : 7, color: isHotel ? "#20C997" : "#123B6D", weight: isHotel ? 2 : 1.5,
+        fillColor: isHotel ? "#1976D2" : (LEVEL_HEX[z.level] || "#1976D2"), fillOpacity: 0.9,
+      }).addTo(mapInstance).bindTooltip(tooltip);
     }
   });
   setTimeout(() => mapInstance.invalidateSize(), 150);
+}
+
+async function findHotelsNearMe() {
+  const box = document.getElementById("nearby-hotels-explore");
+  box.innerHTML = '<div class="text-xs text-muted">Getting your location…</div>';
+  const loc = await getMyLocation();
+  if (!loc) {
+    box.innerHTML = '<div class="text-xs text-muted">Could not get your location. Please allow location access in your browser and try again.</div>';
+    return;
+  }
+  box.innerHTML = '<div class="text-xs text-muted">Searching nearby hotels…</div>';
+  try {
+    const data = await api("/api/hotels/discover-nearby", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: loc.lat, lng: loc.lng, radius_m: 5000 }),
+    });
+    const hotels = data.hotels || [];
+    const priceLabel = { budget: "Budget", mid: "Mid-range", premium: "Premium" };
+    box.innerHTML = hotels.length ? `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${hotels.map(h => `
+          <div class="row-card p-3">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-sm">${escapeHtml(h.name)}</span>
+              <span class="text-[10.5px] text-muted font-mono">${h.distance_km < 1 ? Math.round(h.distance_km * 1000) + " m" : h.distance_km.toFixed(2) + " km"}</span>
+            </div>
+            <div class="text-[10.5px] text-muted mt-1">${escapeHtml(h.type)} · ${h.stars != null ? "⭐ " + h.stars : "rating unavailable"} · ${priceLabel[h.price_band] || "price not mapped"}</div>
+          </div>`).join("")}
+      </div>
+      <div class="text-[10px] text-muted mt-2">${escapeHtml(data.note || "")}</div>`
+      : '<div class="text-xs text-muted">No hotels found near your current location.</div>';
+  } catch (e) {
+    box.innerHTML = `<div class="text-xs text-muted">Search failed: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function loadUserHotels() {
+  const el = document.getElementById("user-hotels");
+  el.innerHTML = '<div class="text-xs text-muted">Loading live room availability…</div>';
+  try {
+    const data = await api("/api/attendee/hotels");
+    el.innerHTML = data.hotels.length ? data.hotels.map(h => {
+      const level = h.occupancy_pct >= 95 ? "text-danger" : h.occupancy_pct >= 85 ? "text-warn" : "text-ok";
+      const fillClass = h.occupancy_pct >= 95 ? "bg-danger" : h.occupancy_pct >= 85 ? "bg-warn" : "bg-ok";
+      const live = h.last_updated ? "LIVE" : "DEMO";
+      const ago = h.last_updated ? new Date(h.last_updated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "seed data";
+      return `<div class="row-card p-3">
+        <div class="flex items-center justify-between gap-2">
+          <div><div class="font-bold text-sm">🏨 ${escapeHtml(h.name)}</div><div class="text-[10px] text-muted mt-1">${h.distance_km != null ? h.distance_km + " km from venue" : "Distance unavailable"} · ${live} · updated ${ago}</div></div>
+          <div class="text-right"><div class="text-lg font-extrabold ${level}">${h.available_rooms}</div><div class="text-[9px] text-muted uppercase">rooms free</div></div>
+        </div>
+        <div class="flex items-center justify-between mt-2 text-[10px] text-muted"><span>${h.occupied_rooms}/${h.capacity} occupied</span><span>${h.occupancy_pct}% full</span></div>
+        <div class="gauge"><div class="gauge-fill ${fillClass}" style="width:${Math.min(h.occupancy_pct, 100)}%"></div></div>
+      </div>`;
+    }).join("") : '<div class="text-xs text-muted">No connected hotel inventory yet.</div>';
+    document.getElementById("hotel-data-note").textContent = data.note || "";
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Live hotel data is temporarily unavailable.</div>'; }
+}
+
+async function loadUserTransport() {
+  const el = document.getElementById("user-transport");
+  el.innerHTML = '<div class="text-xs text-muted">Loading transport options…</div>';
+  try {
+    const data = await api("/api/attendee/transport");
+    const local = data.local || {};
+    const buses = (local.buses && local.buses.city) || [];
+    const trains = (local.trains && local.trains.suburban) || [];
+    const flights = (data.flights && data.flights.arrivals) || [];
+    let html = "";
+    if (buses.length) html += `<div class="mb-3"><div class="eyebrow mb-2">🚌 City buses</div>${buses.slice(0, 4).map(x => `<div class="row-card px-3 py-2 mb-2 flex justify-between"><span class="text-xs"><b>${escapeHtml(x.route)}</b><br><span class="text-muted">${escapeHtml(x.description)}</span></span><span class="text-xs font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    if (trains.length) html += `<div class="mb-3"><div class="eyebrow mb-2">🚆 Suburban trains</div>${trains.slice(0, 3).map(x => `<div class="row-card px-3 py-2 mb-2 flex justify-between"><span class="text-xs"><b>${escapeHtml(x.line)}</b><br><span class="text-muted">${escapeHtml(x.destination)}</span></span><span class="text-xs font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    if (flights.length) html += `<div><div class="eyebrow mb-2">✈️ Airport arrivals</div>${flights.slice(0, 3).map(x => `<div class="row-card px-3 py-2 mb-2 flex justify-between"><span class="text-xs"><b>${escapeHtml(x.airline)}</b><br><span class="text-muted">from ${escapeHtml(x.origin)}</span></span><span class="text-xs font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    html += `<div class="text-[10px] text-muted mt-2">Transport schedules shown here are illustrative/demo feed data, not live operator tracking.</div>`;
+    el.innerHTML = html || '<div class="text-xs text-muted">No transport feed available for this event.</div>';
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Transport data is temporarily unavailable.</div>'; }
 }
 
 (async function loadEvent() {
@@ -487,7 +630,11 @@ async function sendChat() {
 }
 
 loadGates();
+loadUserHotels();
+loadUserTransport();
 setInterval(loadGates, 5000);
+setInterval(loadUserHotels, 10000);
+setInterval(loadUserTransport, 15000);
 </script>
 </body>
 </html>

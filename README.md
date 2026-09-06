@@ -27,5 +27,27 @@ Data lives in `backend/vyavastha.db` (SQLite, created automatically, seeded with
 
 ## Not yet wired up
 
-- Real YOLO camera detection (from `crowd-prediction-ai`) — intentionally held off until the teammate's remaining KAIRO code (the prior hackathon build this project is built on) arrives, per the integration point noted in `WINNING_PLAN.md` Section 7. The phone-as-IP-camera setup (Section 7.1) is documented and ready to wire into `engine.py` once that code lands.
 - LLM explanation layer (Section 8's grounded copilot).
+
+## Optional live YOLO crowd detection
+
+The main app runs without computer-vision packages. To enable a local IP
+camera/video feed for a venue zone, install the optional worker dependencies:
+
+```
+cd backend
+python -m pip install -r requirements-yolo.txt
+```
+
+Start a feed with `POST /api/cameras`, for example:
+
+```json
+{"zone_id": 1, "stream_url": "http://192.168.1.42:8080/video", "model_path": "yolov8n.pt", "sample_seconds": 1}
+```
+
+The worker counts COCO's `person` class, writes each observation to
+`crowd_snapshots`, and updates that zone's existing risk/alert pipeline.
+Use `GET /api/cameras` to inspect it, `DELETE /api/cameras/1` to stop it, and
+`GET /api/zones/1/crowd-history` to inspect the source-tagged count history.
+Without a feed, existing check-ins, manual count posts, and scenarios continue
+to work normally.

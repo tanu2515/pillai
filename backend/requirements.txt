@@ -4,3 +4,7 @@ sqlalchemy
 pydantic
 psycopg2-binary
 python-dotenv
+# Optional live-camera crowd detection. The API still starts without these
+# packages; install them to enable POST /api/cameras.
+opencv-python
+ultralytics

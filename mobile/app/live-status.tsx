@@ -155,6 +155,7 @@ export default function LiveStatus() {
               {evac.routes[0].distance_km != null ? ` (${evac.routes[0].distance_km} km)` : ""}
               {evac.routes[0].is_accessible ? " ♿" : ""}
               {evac.all_exits_congested ? " — all exits under pressure, proceed with caution" : ""}
+              {!evac.from_attendee_location ? " · distance from venue centre — enable location for distance from you" : ""}
             </Text>
           ) : (
             <Text style={styles.mutedText}>
