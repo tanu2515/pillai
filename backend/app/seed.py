@@ -6,9 +6,9 @@ from . import models
 from .regions import DEFAULT_REGION
 
 # 10 zones total, one owner domain each:
-#   Venue Manager        -> Main Hall, VIP Zone, Gate 1, Gate 2, Gate 3
-#   Transport Operator   -> Corridor A, Corridor B, Transport Hub
-#   Hospitality Operator -> Hotel A, Hotel B
+#   Event Command Operator (domain=venue)      -> Main Hall, VIP Zone, Gate 1, Gate 2, Gate 3
+#   Event Command Operator (domain=transport)  -> Corridor A, Corridor B, Transport Hub
+#   Event Command Operator (domain=hospitality)-> Hotel A, Hotel B
 # Gate 2 -> Corridor B -> Hotel A stays the canonical SRS Appendix chain
 # (Gate 2 ~115%, Corridor B ~108%, Hotel A ~97% after the default "Session
 # Release" scenario's 11-tick ramp). Real-world location_note grounding is
@@ -66,6 +66,19 @@ def create_zones_and_resources(db: Session, event: models.Event):
     ]
     db.add_all(resources)
     db.flush()
+
+
+def create_default_resources(db: Session):
+    """Bus/staff/medical resource pools for a newly-live event. Created
+    separately from zones (unlike create_zones_and_resources above) because
+    there's no UI to add these directly — a new event's zones are instead
+    built up by hand via Event Setup's Add Gate/Hotel/Transport forms."""
+    db.add_all([
+        models.Resource(type="bus", quantity_total=20, quantity_available=20),
+        models.Resource(type="staff", quantity_total=40, quantity_available=40),
+        models.Resource(type="medical", quantity_total=10, quantity_available=10),
+    ])
+    db.commit()
 
 
 def seed_transit_routes(db: Session):

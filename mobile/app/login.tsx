@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { apiPost, setEmail as saveEmail, getApiBase, setApiBase } from "../src/api";
 import { colors, radius, spacing } from "../src/theme";
 
-const ROLES = ["Attendee", "Event Command Operator", "Hospitality Operator", "Transport Operator", "Venue Manager", "Administrator"];
+const ROLES = ["Attendee", "Event Command Operator"];
 
 export default function Login() {
   const [email, setEmailInput] = useState("");

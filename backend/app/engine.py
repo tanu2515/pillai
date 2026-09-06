@@ -345,11 +345,9 @@ def reset_simulation(db):
     db.query(models.SimState).delete()
     db.query(models.LogEntry).delete()
     db.commit()
-    from .seed import seed_if_empty
-    seed_if_empty(db)
 
 
-# --- scenario authoring (Administrator) ------------------------------------
+# --- scenario authoring (Event Command Operator) ---------------------------
 
 def list_scenarios(db):
     scenarios = db.query(models.Scenario).order_by(models.Scenario.id).all()
@@ -537,8 +535,8 @@ BUS_CAPACITY_EACH = 50
 
 def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0, from_zone="Gate 2", to_zone="Gate 3"):
     """Generalized to any (from_zone, to_zone) pair — defaults to Gate 2/Gate 3
-    so the existing dashboard keeps working unchanged, but any operator- or
-    Administrator-added zone pair can now be previewed the same way."""
+    so the existing dashboard keeps working unchanged, but any
+    operator-added zone pair can now be previewed the same way."""
     gate2 = db.query(models.Zone).filter(models.Zone.name == from_zone).first()
     gate3 = db.query(models.Zone).filter(models.Zone.name == to_zone).first()
     if not gate2 or not gate3:
@@ -1124,7 +1122,10 @@ def list_events(db, search=None, category=None, section=None):
     """section: None (all) | "popular" (featured) | "recommended" (featured,
     different slice) | "near_you" (same region as whichever event is live —
     a stand-in for real geolocation) | "upcoming" (status=upcoming, soonest first)."""
-    q = db.query(models.Event)
+    # 'paused' events are an Event Command Operator's own inactive events
+    # (see _deactivate_current_live_event) — internal back-office state, never
+    # part of the public catalog an attendee browses.
+    q = db.query(models.Event).filter(models.Event.status != "paused")
     if search:
         q = q.filter(models.Event.name.ilike(f"%{search}%"))
     if category:
@@ -1460,11 +1461,10 @@ def trigger_emergency(db, zone_id, message):
     )
     db.add(alert)
     db.flush()
-    for role in ("Event Command Operator", "Venue Manager", "Transport Operator", "Hospitality Operator"):
-        db.add(models.Notification(
-            event_id=alert.event_id, alert_id=alert.id, audience_role=role, zone_domain=None,
-            title=f"EMERGENCY — {zone.name}", message=message, priority="CRITICAL",
-        ))
+    db.add(models.Notification(
+        event_id=alert.event_id, alert_id=alert.id, audience_role="Event Command Operator", zone_domain=None,
+        title=f"EMERGENCY — {zone.name}", message=message, priority="CRITICAL",
+    ))
     db.add(models.Notification(
         event_id=alert.event_id, alert_id=alert.id, audience_role="Attendee", zone_domain=zone.domain,
         title="Emergency in progress", message=f"An emergency has been reported near {zone.name}. Please follow staff instructions and avoid the area.",
@@ -1595,11 +1595,10 @@ def request_accessibility_assistance(db, email=None, note=None, lat=None, lng=No
     message = f"{who} has requested a wheelchair-accessible exit" + (f" — {location_note}." if location_note else ".")
     if note:
         message += f" Note: {note}"
-    for role in ("Event Command Operator", "Venue Manager"):
-        db.add(models.Notification(
-            event_id=event.id if event else None, audience_role=role, zone_domain=None,
-            title="♿ Accessibility assistance requested", message=message, priority="HIGH",
-        ))
+    db.add(models.Notification(
+        event_id=event.id if event else None, audience_role="Event Command Operator", zone_domain=None,
+        title="♿ Accessibility assistance requested", message=message, priority="HIGH",
+    ))
     db.commit()
     if event:
         state = get_state_row(db)
@@ -1751,14 +1750,35 @@ def event_setup_summary(db):
         for z in zones if z.domain == "transport"
     ]
 
-    bus = db.query(models.Resource).filter(models.Resource.type == "bus").first()
+    resources_by_type = {r.type: r for r in db.query(models.Resource).all()}
+    bus = resources_by_type.get("bus")
 
     return {
         "configured": True, "event_name": event.name,
         "venue": {"id": venue.id, "name": venue.name, "lat": venue.lat, "lng": venue.lng} if venue else None,
+        "venue_lat": event.venue_lat, "venue_lng": event.venue_lng,
         "gates": gates, "hotels": hotels, "transport": transport,
         "buses": {"total": bus.quantity_total, "available": bus.quantity_available} if bus else None,
+        "resources": {
+            t: {"total": r.quantity_total, "available": r.quantity_available}
+            for t, r in resources_by_type.items()
+        },
     }
+
+
+def update_resource(db, resource_type, quantity_total):
+    """Edits a resource pool's total headcount (bus/staff/medical) — created
+    once per live event by _activate_event, otherwise never had any way to
+    change afterward. Preserves how many are currently in use (the
+    total/available delta) rather than resetting availability to full."""
+    resource = db.query(models.Resource).filter(models.Resource.type == resource_type).first()
+    if not resource:
+        return None
+    in_use = resource.quantity_total - resource.quantity_available
+    resource.quantity_total = quantity_total
+    resource.quantity_available = max(quantity_total - in_use, 0)
+    db.commit()
+    return resource
 
 
 def update_gate_setup(db, zone_id, capacity, staff_assigned, is_accessible=None):
@@ -1839,49 +1859,53 @@ def update_transport_zone(db, zone_id, capacity=None, current_count=None, contac
     return zone
 
 
-# --- Event lifecycle (Administrator: create / edit / delete) ---------------
+# --- Event lifecycle (Event Command Operator: create / edit / delete) ------
 # One live event at a time (same architecture as before) — but the
-# Administrator can now actually wipe it and start a fresh one, instead of
-# only ever being able to edit the single event seeding created.
+# Event Command Operator can now actually wipe it and start a fresh one,
+# instead of only ever being able to edit the single event seeding created.
 
-def create_event(db, name, region, expected_attendance, safe_capacity):
-    """Replaces only the current live event — any other catalog events
-    (upcoming/completed) are untouched."""
+def _deactivate_current_live_event(db):
+    """Pauses (not deletes) whichever event is currently live, and wipes its
+    zones — every zone query in this module assumes only one event's zones
+    exist in the table at a time, so a paused event's zones are rebuilt
+    fresh if it's ever switched back to (see switch_to_event), rather than
+    persisted untouched. The Event row itself survives with status='paused',
+    keeping its name/region/capacity/owner for later."""
     old_live = get_live_event(db)
-    if old_live:
-        zone_ids = [z.id for z in db.query(models.Zone.id).filter(models.Zone.event_id == old_live.id)]
-        # Rows in *other* tables that reference these zones must be cleared
-        # before the Zone rows are deleted — Postgres checks a cross-table FK
-        # at the end of the zones DELETE statement, so a dangling reference
-        # left behind (a walk-in registration, an open alert, a declared
-        # emergency) fails with ForeignKeyViolation even though it's about to
-        # be cleaned up anyway.
-        db.query(models.VisitorProfile).filter(
-            (models.VisitorProfile.event_id == old_live.id) | (models.VisitorProfile.event_id.is_(None))
-        ).delete(synchronize_session=False)
-        if zone_ids:
-            db.query(models.Alert).filter(models.Alert.zone_id.in_(zone_ids)).update(
-                {"zone_id": None}, synchronize_session=False
-            )
-            db.query(models.SimState).filter(models.SimState.emergency_zone_id.in_(zone_ids)).update(
-                {"emergency_zone_id": None, "emergency_active": False}, synchronize_session=False
-            )
-        db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete(synchronize_session=False)
-        db.query(models.Event).filter(models.Event.id == old_live.id).delete()
+    if not old_live:
+        return
+    zone_ids = [z.id for z in db.query(models.Zone.id).filter(models.Zone.event_id == old_live.id)]
+    # Rows in *other* tables that reference these zones must be cleared
+    # before the Zone rows are deleted — Postgres checks a cross-table FK
+    # at the end of the zones DELETE statement, so a dangling reference
+    # left behind (a walk-in registration, an open alert, a declared
+    # emergency) fails with ForeignKeyViolation even though it's about to
+    # be cleaned up anyway.
+    db.query(models.VisitorProfile).filter(
+        (models.VisitorProfile.event_id == old_live.id) | (models.VisitorProfile.event_id.is_(None))
+    ).delete(synchronize_session=False)
+    if zone_ids:
+        db.query(models.Alert).filter(models.Alert.zone_id.in_(zone_ids)).update(
+            {"zone_id": None}, synchronize_session=False
+        )
+        db.query(models.SimState).filter(models.SimState.emergency_zone_id.in_(zone_ids)).update(
+            {"emergency_zone_id": None, "emergency_active": False}, synchronize_session=False
+        )
+    db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete(synchronize_session=False)
+    old_live.status = "paused"
     db.query(models.Resource).delete()
     db.query(models.LogEntry).delete()
     db.commit()
 
-    event = models.Event(
-        name=name, region=region,
-        expected_attendance=expected_attendance, safe_capacity=safe_capacity,
-        status="live",
-    )
-    db.add(event)
-    db.flush()
 
-    from .seed import create_zones_and_resources
-    create_zones_and_resources(db, event)
+def _activate_event(db, event):
+    """Makes `event` (already inserted/flushed) the live one — no zones are
+    auto-created; the operator builds gates/hotels/transport zones themselves
+    via Event Setup's Add Gate/Hotel/Transport forms. Only the bus/staff/
+    medical resource pools are created automatically (no UI exists to add
+    those directly). Shared by create_event and switch_to_event."""
+    from .seed import create_default_resources
+    create_default_resources(db)
 
     state = get_state_row(db)
     if state:
@@ -1893,8 +1917,75 @@ def create_event(db, name, region, expected_attendance, safe_capacity):
         db.add(models.SimState(tick=0, scenario_active=False, trigger_tick=-1))
     db.commit()
 
-    apply_region(db, region, rename=False)
+    apply_region(db, event.region, rename=False)
     return event
+
+
+def create_event(db, name, region, expected_attendance, safe_capacity, owner_email=None, venue_lat=None, venue_lng=None):
+    """Replaces only the current live event — any other catalog events
+    (upcoming/paused/completed) are untouched. venue_lat/lng is the point the
+    operator picked on a map at creation time — an anchor so the gate/hotel/
+    transport location pickers in Event Setup have somewhere sensible to
+    center on, since zones are no longer auto-created here."""
+    _deactivate_current_live_event(db)
+
+    event = models.Event(
+        name=name, region=region,
+        expected_attendance=expected_attendance, safe_capacity=safe_capacity,
+        status="live", owner_email=owner_email,
+        venue_lat=venue_lat, venue_lng=venue_lng,
+    )
+    db.add(event)
+    db.flush()
+    return _activate_event(db, event)
+
+
+def switch_to_event(db, event_id, owner_email):
+    """An Event Command Operator switching which of their own events is live.
+    Returns None if the event doesn't exist, isn't theirs, or isn't
+    live/paused (e.g. a public catalog listing). No-op if already live."""
+    target = db.get(models.Event, event_id)
+    if not target or target.owner_email != owner_email or target.status not in ("live", "paused"):
+        return None
+    if target.status == "live":
+        return target
+    _deactivate_current_live_event(db)
+    target.status = "live"
+    db.flush()
+    return _activate_event(db, target)
+
+
+def list_all_events(db):
+    """Every event regardless of owner/status — the Back Office 'Manage
+    Events' surface, so an orphaned or someone-else's event can still be
+    found and deleted, not just switched between by its own owner."""
+    events = db.query(models.Event).order_by(models.Event.id.desc()).all()
+    return [
+        {
+            "id": e.id, "name": e.name, "status": e.status, "region": e.region,
+            "owner_email": e.owner_email,
+            "expected_attendance": e.expected_attendance, "safe_capacity": e.safe_capacity,
+        }
+        for e in events
+    ]
+
+
+def list_operator_events(db, owner_email):
+    """Events this Event Command Operator owns and could switch between —
+    used to decide whether login shows a picker."""
+    events = (
+        db.query(models.Event)
+        .filter(models.Event.owner_email == owner_email, models.Event.status.in_(["live", "paused"]))
+        .order_by(models.Event.id.desc())
+        .all()
+    )
+    return [
+        {
+            "id": e.id, "name": e.name, "status": e.status, "region": e.region,
+            "expected_attendance": e.expected_attendance, "safe_capacity": e.safe_capacity,
+        }
+        for e in events
+    ]
 
 
 def delete_event(db):
@@ -1920,7 +2011,24 @@ def delete_event(db):
     db.commit()
 
 
-# --- India region grounding (Administrator: Event Configuration) -----------
+def delete_event_by_id(db, event_id):
+    """Hard-deletes any single event by id, live or paused — full Delete
+    coverage for the Back Office event list, not just 'whichever is live'
+    (delete_event above). A paused event already has no zones of its own
+    (see _deactivate_current_live_event), so only the live case needs that
+    fuller zone/visitor/alert cleanup."""
+    event = db.get(models.Event, event_id)
+    if not event:
+        return False
+    if event.status == "live":
+        delete_event(db)
+    else:
+        db.delete(event)
+        db.commit()
+    return True
+
+
+# --- India region grounding (Event Command Operator: Event Configuration) --
 # Re-anchors the fixed 10-zone template to a real venue/transport hub/airport/
 # hotel for whichever Indian state/UT is selected — one real-world skin over
 # the same structure and risk engine, not a separate simulation per state.
@@ -1934,8 +2042,8 @@ def apply_region(db, state_name, rename=True):
     city = region["city"]
     venue = region["venue"] or "the venue"
 
-    # rename=False when called right after create_event() — the Administrator
-    # already chose a name there, region-grounding shouldn't silently replace it.
+    # rename=False when called right after create_event() — the Event Command
+    # Operator already chose a name there, region-grounding shouldn't silently replace it.
     if rename:
         event.name = f"{city} Mega Fest"
     event.region = state_name

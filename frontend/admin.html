@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>VYAVASTHA — Administrator</title>
+<title>VYAVASTHA — Back Office</title>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -48,7 +50,10 @@
   .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
   .dropdown-btn:hover{ border-color:#1976D2; }
   .dropdown-caret{ color:#64748B; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; max-height:200px; overflow-y:auto; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
+  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid #E2E8F0; padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:#123B6D; border-radius:0; }
+  input.dropdown-search:focus{ outline:none; border-color:#1976D2; }
+  .dropdown-panel > div{ max-height:200px; overflow-y:auto; }
   .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
   .dropdown-item:hover{ background:rgba(25,118,210,.08); }
   .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
@@ -61,11 +66,45 @@
     <div class="flex items-center gap-3">
       <a href="/"><img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-8 h-8 rounded-lg" /></a>
       <h1 class="text-sm font-extrabold m-0 tracking-[0.1em] uppercase flex items-center gap-2">
-        <span id="event-title">VYAVASTHA — Administrator</span>
-        <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">ADMINISTRATOR</span>
+        <span id="event-title">VYAVASTHA — Back Office</span>
+        <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">EVENT COMMAND OPERATOR</span>
       </h1>
     </div>
-    <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+    <div class="flex items-center gap-3">
+      <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
+      <button id="switch-event-link" class="hidden text-xs text-accent hover:underline font-bold" onclick="openEventPicker()">Switch Event ▾</button>
+      <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+    </div>
+  </div>
+</div>
+
+<div id="event-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="bg-panel border border-border rounded-2xl p-5 max-w-sm w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Switch Event</h2>
+    <p class="text-muted text-xs m-0 mb-4">Pick which of your events should be live.</p>
+    <div id="event-picker-list" class="flex flex-col gap-2 mb-3"></div>
+    <button class="text-xs text-muted hover:text-accent hover:underline font-medium" onclick="closeEventPicker()">Cancel</button>
+  </div>
+</div>
+
+<div id="map-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="bg-panel border border-border rounded-2xl p-4 max-w-lg w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Pick a location</h2>
+    <p class="text-muted text-xs m-0 mb-3">Search a place name, or click the map directly, then confirm.</p>
+    <div class="flex gap-2 mb-2">
+      <input type="text" id="map-picker-search" placeholder="Search venue, address or city…" class="p-2.5 text-xs flex-1"
+             onkeydown="if(event.key==='Enter'){event.preventDefault(); searchMapPickerLocation();}" />
+      <button type="button" class="btn-ghost rounded-lg px-3 py-2 text-xs" onclick="searchMapPickerLocation()">SEARCH</button>
+    </div>
+    <div id="map-picker-search-status" class="text-[10.5px] text-muted mb-2"></div>
+    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+    <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
+      <span id="map-picker-coords" class="text-xs text-muted font-mono">No point selected yet — click the map.</span>
+      <div class="flex gap-2">
+        <button class="btn-ghost rounded-lg px-3 py-1.5 text-xs" onclick="closeMapPicker()">Cancel</button>
+        <button class="btn-primary rounded-lg px-3 py-1.5 text-xs" onclick="confirmMapPicker()">USE THIS LOCATION</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -112,7 +151,10 @@
         <button type="button" class="dropdown-btn" id="region-dropdown-btn" onclick="toggleRegionDropdown()">
           Select a region <span class="dropdown-caret">▾</span>
         </button>
-        <div class="dropdown-panel hidden" id="region-dropdown-panel"></div>
+        <div class="dropdown-panel hidden" id="region-dropdown-panel">
+          <input type="text" class="dropdown-search" placeholder="Search state or city…" oninput="renderRegionPanel(this.value)" />
+          <div id="region-dropdown-items"></div>
+        </div>
       </div>
       <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="applyRegion()">APPLY REGION</button>
       <span id="region-status" class="text-xs text-ok"></span>
@@ -122,8 +164,8 @@
   <div class="bg-panel border border-border rounded-xl p-4 mb-4">
     <h2 class="eyebrow mb-1">Create New Event</h2>
     <p class="text-[10.5px] text-muted mb-3">
-      Wipes the current event and starts a fresh one — 10 zones seeded and grounded in whichever
-      region you pick, with the name and headcounts you set here (not overwritten by the region).
+      Pauses the current event (you can switch back to it later) and starts a fresh one with no zones
+      yet — add gates, hotels and transport for it from Event Setup once it's live.
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
       <div>
@@ -139,12 +181,26 @@
         <input type="number" id="new-ev-capacity" class="w-full p-2.5 text-sm font-mono" value="60000" />
       </div>
     </div>
+    <div class="flex gap-2 items-end flex-wrap mb-3">
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Venue latitude</label>
+        <input type="number" step="any" id="new-ev-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono w-28" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Venue longitude</label>
+        <input type="number" step="any" id="new-ev-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono w-28" />
+      </div>
+      <button type="button" class="btn-ghost rounded-lg px-3 py-2 text-xs" onclick="openMapPicker('new-ev-lat','new-ev-lng')">📍 Pick on map</button>
+    </div>
     <div class="flex gap-3 items-center flex-wrap">
       <div class="dropdown" id="new-ev-region-dropdown">
         <button type="button" class="dropdown-btn" id="new-ev-region-btn" onclick="toggleNewEventRegionDropdown()">
           Select a region <span class="dropdown-caret">▾</span>
         </button>
-        <div class="dropdown-panel hidden" id="new-ev-region-panel"></div>
+        <div class="dropdown-panel hidden" id="new-ev-region-panel">
+          <input type="text" class="dropdown-search" placeholder="Search state or city…" oninput="renderNewEventRegionPanel(this.value)" />
+          <div id="new-ev-region-items"></div>
+        </div>
       </div>
       <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="createEvent()">CREATE EVENT</button>
       <span id="new-event-status" class="text-xs text-ok"></span>
@@ -198,12 +254,143 @@
 <script>
 async function api(path, opts) {
   opts = opts || {};
-  opts.headers = { ...(opts.headers || {}), "X-User-Role": "Administrator" };
+  opts.headers = { ...(opts.headers || {}), "X-User-Role": "Event Command Operator" };
   const res = await fetch(path, opts);
   return res.json();
 }
 function row(inner) { return `<div class="row-card flex items-center gap-3 px-3 py-2.5 mb-2 text-sm">${inner}</div>`; }
 const LEVEL_COLOR = { LOW: "bg-ok", MODERATE: "bg-warn", HIGH: "bg-high", CRITICAL: "bg-danger" };
+function getOperatorEmail() { return sessionStorage.getItem("vyavastha_email") || ""; }
+
+// --- Map location picker (Create New Event's venue location) ---------------
+let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null;
+let mapPickerTargetLat = null, mapPickerTargetLng = null;
+
+function openMapPicker(latInputId, lngInputId) {
+  mapPickerTargetLat = latInputId;
+  mapPickerTargetLng = lngInputId;
+  mapPickerPoint = null;
+  document.getElementById("map-picker-coords").textContent = "No point selected yet — click the map.";
+  document.getElementById("map-picker-search").value = "";
+  document.getElementById("map-picker-search-status").textContent = "";
+  document.getElementById("map-picker-overlay").classList.remove("hidden");
+
+  setTimeout(() => {
+    const existingLat = parseFloat(document.getElementById(latInputId).value);
+    const existingLng = parseFloat(document.getElementById(lngInputId).value);
+    const hasExisting = !isNaN(existingLat) && !isNaN(existingLng);
+    const startLat = hasExisting ? existingLat : 20.5937;
+    const startLng = hasExisting ? existingLng : 78.9629;
+
+    if (!mapPickerInstance) {
+      mapPickerInstance = L.map("map-picker-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapPickerInstance);
+      mapPickerInstance.on("click", (e) => setMapPickerPoint(e.latlng.lat, e.latlng.lng));
+    }
+    mapPickerInstance.setView([startLat, startLng], hasExisting ? 14 : 5);
+    mapPickerInstance.invalidateSize();
+    if (hasExisting) setMapPickerPoint(existingLat, existingLng);
+  }, 50);
+}
+
+function setMapPickerPoint(lat, lng) {
+  mapPickerPoint = { lat, lng };
+  if (mapPickerMarker) mapPickerInstance.removeLayer(mapPickerMarker);
+  mapPickerMarker = L.marker([lat, lng]).addTo(mapPickerInstance);
+  document.getElementById("map-picker-coords").textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+async function searchMapPickerLocation() {
+  const query = document.getElementById("map-picker-search").value.trim();
+  const status = document.getElementById("map-picker-search-status");
+  if (!query) { status.textContent = "Type a place name to search."; return; }
+  status.textContent = "Searching…";
+  try {
+    const res = await fetch("/api/hotels/geocode", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); status.textContent = b.detail || "Location not found."; return; }
+    const data = await res.json();
+    mapPickerInstance.setView([data.lat, data.lng], 15);
+    setMapPickerPoint(data.lat, data.lng);
+    status.textContent = data.display_name || "";
+  } catch (e) {
+    status.textContent = "Search unavailable right now.";
+  }
+}
+
+function closeMapPicker() {
+  document.getElementById("map-picker-overlay").classList.add("hidden");
+}
+
+function confirmMapPicker() {
+  if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
+  document.getElementById(mapPickerTargetLat).value = mapPickerPoint.lat.toFixed(6);
+  document.getElementById(mapPickerTargetLng).value = mapPickerPoint.lng.toFixed(6);
+  closeMapPicker();
+}
+
+async function refreshSwitchEventLink() {
+  const email = getOperatorEmail();
+  if (!email) return;
+  const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+  document.getElementById("switch-event-link").classList.toggle("hidden", events.length <= 1);
+}
+
+async function openEventPicker() {
+  document.getElementById("event-picker-overlay").classList.remove("hidden");
+  await renderEventPickerList();
+}
+
+async function renderEventPickerList() {
+  const email = getOperatorEmail();
+  const events = await api("/api/admin/all-events");
+  document.getElementById("event-picker-list").innerHTML = events.length ? events.map(ev => `
+    <div class="border border-border rounded-xl p-3">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-bold">${ev.name}</span>
+        ${ev.status === "live" ? '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>' : `<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">${ev.status.toUpperCase()}</span>`}
+      </div>
+      <div class="text-muted text-[11px] mt-0.5">${ev.region || ""} ${ev.owner_email ? "· " + ev.owner_email : "· no owner"}</div>
+      <div class="flex gap-2 mt-2">
+        ${ev.status !== "live" ? `<button class="btn-primary rounded-lg px-3 py-1 text-[11px]" onclick="pickEvent(${ev.id}, '${email.replace(/'/g, "\\'")}')" ${ev.owner_email !== email ? "disabled title=\"Not your event\"" : ""}>SWITCH TO</button>` : ""}
+        <button class="btn-danger rounded-lg px-3 py-1 text-[11px]" onclick="deleteEventFromPicker(${ev.id}, '${ev.name.replace(/'/g, "\\'")}')">DELETE</button>
+      </div>
+    </div>
+  `).join("") : `<p class="text-xs text-muted m-0">No events exist yet.</p>`;
+}
+
+function closeEventPicker() {
+  document.getElementById("event-picker-overlay").classList.add("hidden");
+}
+
+async function pickEvent(eventId, email) {
+  const currentEvent = await api("/api/event");
+  if (currentEvent.configured) {
+    const state = await api("/api/state");
+    if (state.zones.length > 0) {
+      const ok = confirm(
+        `Switching pauses "${currentEvent.name}" and PERMANENTLY DELETES its ${state.zones.length} zone(s) ` +
+        `(gates, hotels, transport). This cannot be undone; switching back later will not restore them. Continue?`
+      );
+      if (!ok) return;
+    }
+  }
+  await api("/api/admin/switch-event", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, email }),
+  });
+  location.reload();
+}
+
+async function deleteEventFromPicker(eventId, name) {
+  if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
+  await api(`/api/admin/events/${eventId}`, { method: "DELETE" });
+  await renderEventPickerList();
+  await loadEvent();
+  await loadZones();
+  await refreshSwitchEventLink();
+}
 
 async function loadEvent() {
   const ev = await api("/api/event");
@@ -294,12 +481,14 @@ async function loadRegions() {
   }
 }
 
-function renderRegionPanel() {
-  document.getElementById("region-dropdown-panel").innerHTML = regionList.map(r => `
+function renderRegionPanel(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? regionList.filter(r => r.state.toLowerCase().includes(q) || r.city.toLowerCase().includes(q)) : regionList;
+  document.getElementById("region-dropdown-items").innerHTML = filtered.length ? filtered.map(r => `
     <div class="dropdown-item ${r.state === selectedRegionState ? 'selected' : ''}"
          onclick="selectRegion('${r.state.replace(/'/g, "\\'")}', '${(r.state + ' — ' + r.city).replace(/'/g, "\\'")}')">
       ${r.state} — ${r.city}
-    </div>`).join("");
+    </div>`).join("") : `<div class="dropdown-item text-muted">No match</div>`;
 }
 
 function selectRegion(state, label) {
@@ -310,7 +499,14 @@ function selectRegion(state, label) {
 }
 
 function toggleRegionDropdown() {
-  document.getElementById("region-dropdown-panel").classList.toggle("hidden");
+  const panel = document.getElementById("region-dropdown-panel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    const search = panel.querySelector(".dropdown-search");
+    search.value = "";
+    renderRegionPanel();
+    search.focus();
+  }
 }
 
 document.addEventListener("click", (e) => {
@@ -335,12 +531,14 @@ async function applyRegion() {
 // --- create new event: its own region dropdown, separate from Event Region's ---
 let selectedNewEventRegion = null;
 
-function renderNewEventRegionPanel() {
-  document.getElementById("new-ev-region-panel").innerHTML = regionList.map(r => `
+function renderNewEventRegionPanel(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? regionList.filter(r => r.state.toLowerCase().includes(q) || r.city.toLowerCase().includes(q)) : regionList;
+  document.getElementById("new-ev-region-items").innerHTML = filtered.length ? filtered.map(r => `
     <div class="dropdown-item ${r.state === selectedNewEventRegion ? 'selected' : ''}"
          onclick="selectNewEventRegion('${r.state.replace(/'/g, "\\'")}', '${(r.state + ' — ' + r.city).replace(/'/g, "\\'")}')">
       ${r.state} — ${r.city}
-    </div>`).join("");
+    </div>`).join("") : `<div class="dropdown-item text-muted">No match</div>`;
 }
 
 function selectNewEventRegion(state, label) {
@@ -351,7 +549,14 @@ function selectNewEventRegion(state, label) {
 }
 
 function toggleNewEventRegionDropdown() {
-  document.getElementById("new-ev-region-panel").classList.toggle("hidden");
+  const panel = document.getElementById("new-ev-region-panel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    const search = panel.querySelector(".dropdown-search");
+    search.value = "";
+    renderNewEventRegionPanel();
+    search.focus();
+  }
 }
 
 document.addEventListener("click", (e) => {
@@ -363,15 +568,31 @@ document.addEventListener("click", (e) => {
 async function createEvent() {
   const status = document.getElementById("new-event-status");
   const name = document.getElementById("new-ev-name").value.trim();
-  if (!name) { status.textContent = "Name is required."; return; }
-  if (!selectedNewEventRegion) { status.textContent = "Pick a region first."; return; }
-  if (!confirm(`Create "${name}"? This replaces the current event entirely.`)) return;
+  const venue_lat = parseFloat(document.getElementById("new-ev-lat").value);
+  const venue_lng = parseFloat(document.getElementById("new-ev-lng").value);
+  if (!name) { alert("Event name is required."); return; }
+  if (isNaN(venue_lat) || isNaN(venue_lng)) { alert("Pick the venue location on the map first (or type its latitude/longitude)."); return; }
+  if (!selectedNewEventRegion) {
+    alert("Pick a region first — use the region dropdown just above the CREATE EVENT button, in this Create New Event section (not the Event Region section above it).");
+    return;
+  }
+  const currentEvent = await api("/api/event");
+  let warning = `Create "${name}"? This pauses the current event and starts this one fresh, with no zones yet.`;
+  if (currentEvent.configured) {
+    const state = await api("/api/state");
+    if (state.zones.length > 0) {
+      warning = `Create "${name}"? This PERMANENTLY DELETES "${currentEvent.name}"'s ${state.zones.length} zone(s) ` +
+        `(gates, hotels, transport) — switching back to it later will not restore them. Continue?`;
+    }
+  }
+  if (!confirm(warning)) return;
 
   status.textContent = "Creating…";
   const body = {
-    name, region: selectedNewEventRegion,
+    name, region: selectedNewEventRegion, venue_lat, venue_lng,
     expected_attendance: parseInt(document.getElementById("new-ev-attendance").value) || 0,
     safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
+    owner_email: getOperatorEmail() || null,
   };
   await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   status.textContent = "Created.";
@@ -379,9 +600,10 @@ async function createEvent() {
   await loadEvent();
   await loadZones();
   await loadScenariosAdmin();
+  await refreshSwitchEventLink();
 }
 
-// --- scenarios (Administrator authoring) ------------------------------------
+// --- scenarios (Event Command Operator authoring) ----------------------------
 let zoneNamesForEffects = [];
 let editingScenarioId = null;
 
@@ -483,6 +705,7 @@ loadZones();
 loadUsers();
 loadRegions().then(renderNewEventRegionPanel);
 loadScenariosAdmin();
+refreshSwitchEventLink();
 </script>
 </body>
 </html>
