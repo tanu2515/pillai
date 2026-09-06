@@ -1,0 +1,5 @@
+# Install after requirements.txt only on the machine that reads camera feeds.
+# YOLO downloads yolov8n.pt automatically on first use unless model_path
+# points to a local weight file.
+opencv-python
+ultralytics

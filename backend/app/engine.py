@@ -97,6 +97,35 @@ def zone_risk(zone, db):
     return risk_factors(zone.current_count, zone.capacity, delta, zone.prev_delta, resource_pressure_pct)
 
 
+def ingest_crowd_count(db, zone_id, count, source="manual"):
+    """Apply one observed count and preserve its provenance for audit/history."""
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        return None
+    if count < 0:
+        raise ValueError("count must be zero or greater")
+
+    old_level = zone_risk(zone, db)["level"]
+    zone.prev_delta = zone.current_count - zone.last_count
+    zone.last_count = zone.current_count
+    zone.current_count = count
+    if count > (zone.peak_count or 0):
+        zone.peak_count = count
+        state = get_state_row(db)
+        zone.peak_tick = state.tick if state else 0
+    db.add(models.CrowdSnapshot(zone_id=zone.id, count=count, source=source))
+    db.commit()
+
+    risk = zone_risk(zone, db)
+    if old_level not in ("HIGH", "CRITICAL") and risk["level"] in ("HIGH", "CRITICAL"):
+        state = get_state_row(db)
+        _log(db, state.tick if state else 0, "zone_critical", f"{zone.name} crossed into {risk['level']} from {source}.", zone.domain)
+        _open_alert(db, zone, risk)
+    elif old_level in ("HIGH", "CRITICAL") and risk["level"] not in ("HIGH", "CRITICAL"):
+        _resolve_alerts_for_zone(db, zone.id)
+    return {"zone_id": zone.id, "zone": zone.name, "count": count, "source": source, "risk": risk}
+
+
 # --- simulation clock ---------------------------------------------------
 
 def get_live_event(db):
@@ -170,6 +199,8 @@ def advance_tick(db):
         zone.prev_delta = zone.current_count - zone.last_count
         zone.last_count = zone.current_count
         zone.current_count = new_count
+        if delta:
+            db.add(models.CrowdSnapshot(zone_id=zone.id, count=new_count, source="simulation"))
         if zone.current_count > (zone.peak_count or 0):
             zone.peak_count = zone.current_count
             zone.peak_tick = state.tick
@@ -962,6 +993,7 @@ def checkin(db, code):
         }
 
     zone.current_count += 1
+    db.add(models.CrowdSnapshot(zone_id=zone.id, count=zone.current_count, source="checkin"))
     visitor.checked_in = True
     db.commit()
     return {"status": "ok", "zone": zone.name, "remaining_capacity": zone.capacity - zone.current_count}
@@ -1428,7 +1460,7 @@ def trigger_emergency(db, zone_id, message):
     )
     db.add(alert)
     db.flush()
-    for role in ("Event Command Operator", "Venue Manager", "Transport Operator", "Hospitality Operator", "Administrator"):
+    for role in ("Event Command Operator", "Venue Manager", "Transport Operator", "Hospitality Operator"):
         db.add(models.Notification(
             event_id=alert.event_id, alert_id=alert.id, audience_role=role, zone_domain=None,
             title=f"EMERGENCY — {zone.name}", message=message, priority="CRITICAL",
@@ -1563,7 +1595,7 @@ def request_accessibility_assistance(db, email=None, note=None, lat=None, lng=No
     message = f"{who} has requested a wheelchair-accessible exit" + (f" — {location_note}." if location_note else ".")
     if note:
         message += f" Note: {note}"
-    for role in ("Event Command Operator", "Venue Manager", "Administrator"):
+    for role in ("Event Command Operator", "Venue Manager"):
         db.add(models.Notification(
             event_id=event.id if event else None, audience_role=role, zone_domain=None,
             title="♿ Accessibility assistance requested", message=message, priority="HIGH",

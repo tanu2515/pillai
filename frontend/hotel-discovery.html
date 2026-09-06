@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KAIRO — Nearby Hospitality Discovery</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+:root{--bg:#f7fafc;--panel:#fff;--ink:#172033;--muted:#68758a;--line:#dfe6ef;--blue:#2563eb;--green:#0f9d67;--amber:#b7791f;--red:#d63b3b;--shadow:0 10px 30px rgba(31,48,77,.08)}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f5f9ff 0,#f7fafc 50%,#fff 100%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+.page{max-width:1280px;margin:0 auto;padding:26px 20px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6b7a91}.title{font-size:30px;font-weight:800;margin:4px 0}.sub{font-size:13px;color:var(--muted);max-width:820px;line-height:1.45}.link{color:var(--blue);text-decoration:none;font-weight:600}.panel{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+.controls{display:grid;grid-template-columns:1.5fr .65fr .65fr .8fr auto;gap:10px;padding:14px}.control label{display:block;font-size:11px;color:var(--muted);margin:0 0 6px;font-weight:700}.control input,.control select{width:100%;height:42px;border:1px solid #ccd7e5;border-radius:11px;padding:0 12px;color:var(--ink);background:#fff;outline:none}.control input:focus,.control select:focus{border-color:#7ba4f8;box-shadow:0 0 0 3px rgba(37,99,235,.1)}button{border:0;border-radius:11px;padding:0 16px;height:42px;font-weight:800;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#eef4ff;color:#1d4ed8}.ghost{background:#fff;border:1px solid var(--line);color:#43526a}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}.status{font-size:12px;color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid #dfe6ef;font-size:11px;color:#526177;background:#fbfdff}.legend{display:flex;flex-wrap:wrap;gap:7px}
+.recommendation-panel{margin-top:16px;padding:16px}.recommend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.recommend-head h2,.transport-head h2{margin:4px 0 4px;font-size:20px}.recommend-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.recommend-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.recommend-card{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fbfdff}.recommend-title{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.recommend-main{font-size:18px;font-weight:900;margin-top:5px}.recommend-reason{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}.mini.empty{padding:20px 12px}.transport-panel{margin-top:16px;padding:16px}.transport-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.transport-actions{display:flex;gap:8px;align-items:center}.transport-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:14px;margin-top:14px}.transport-list{display:grid;gap:8px}.transport-card{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}.transport-card .topline{display:flex;justify-content:space-between;gap:8px}.transport-card .mode{font-size:14px;font-weight:800}.transport-card .subline{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}.transport-card .eta{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:#1d4ed8}.foot-note{margin-top:12px;color:#738097;font-size:11px;line-height:1.45}.kairo-pick{border-color:#8cb4ff;box-shadow:0 0 0 2px rgba(37,99,235,.08)}
+.main{display:grid;grid-template-columns:minmax(320px,.95fr) minmax(380px,1.05fr);gap:16px;margin-top:16px}.map-wrap{overflow:hidden;min-height:620px}.map-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}.map{height:560px}.list-wrap{padding:16px}.summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.summary h2{margin:0;font-size:20px}.summary small{color:var(--muted)}.list{display:grid;gap:10px;max-height:560px;overflow:auto;padding-right:4px}.card{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff;transition:.18s}.card:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(20,40,80,.07)}.card-top{display:flex;justify-content:space-between;gap:12px}.name{font-size:16px;font-weight:800}.distance{font-size:12px;color:#3d67bd;font-weight:800}.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.address{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.4}.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ok{color:var(--green);background:#edf9f4;border-color:#caeedf}.warn{color:var(--amber);background:#fff8e8;border-color:#f3dfac}.danger{color:var(--red);background:#fff0f0;border-color:#f0cdcd}.muted{color:#64748b;background:#f6f8fb}.empty{padding:45px 12px;text-align:center;color:var(--muted);border:1px dashed #ccd7e5;border-radius:15px}.loading{display:flex;gap:9px;align-items:center;color:var(--muted);padding:20px}.spinner{width:18px;height:18px;border:2px solid #dbe4f0;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.foot{margin-top:16px;padding:0 4px;color:#738097;font-size:11px;line-height:1.45}
+@media(max-width:1000px){.controls{grid-template-columns:1fr 1fr 1fr}.controls .wide{grid-column:1/-1}.main{grid-template-columns:1fr}.recommend-grid,.transport-grid{grid-template-columns:1fr}.map-wrap{min-height:420px}.map{height:420px}.list{max-height:none}}
+@media(max-width:600px){.page{padding:16px 12px 28px}.top{align-items:flex-start}.top .link{display:none}.title{font-size:24px}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:1/-1}.controls button{grid-column:1/-1}.transport-head{flex-direction:column}.transport-actions{width:100%}.transport-actions select{flex:1}.map{height:360px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow">KAIRO · PS-8</div>
+      <div class="title">Nearby Hospitality Discovery</div>
+      <div class="sub">Choose an event location and radius. KAIRO clears the previous result, queries the current location, and rebuilds the hotel list and map markers from scratch.</div>
+    </div>
+    <a class="link" href="/">← Event Manager</a>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <div class="control wide"><label>Event location</label><div style="display:flex;gap:8px"><input id="location" placeholder="Search venue, stadium, address or city" value="" style="flex:1"/><button id="clear-location" class="ghost" type="button" title="Clear event location" style="height:42px;padding:0 12px">Clear</button></div></div>
+      <div class="control"><label>Radius</label><select id="radius"><option value="500">0.5 km</option><option value="1000">1 km</option><option value="2000">2 km</option><option value="5000" selected>5 km</option><option value="10000">10 km</option></select></div>
+      <div class="control"><label>Minimum stars</label><select id="stars"><option value="0">Any mapped stars</option><option value="1">1★+</option><option value="2">2★+</option><option value="3">3★+</option><option value="4">4★+</option><option value="5">5★</option></select></div>
+      <div class="control"><label>Price class</label><select id="price"><option value="all">Any</option><option value="budget">Budget</option><option value="mid">Mid-range</option><option value="premium">Premium</option></select></div>
+      <button id="search" class="primary">Find Hotels</button>
+    </div>
+    <div class="toolbar">
+      <button id="use-map" class="ghost">Use map click as event</button>
+      <button id="clear" class="ghost">Clear results</button>
+      <div id="status" class="status">Ready.</div>
+      <div class="legend" style="margin-left:auto"><span class="pill">📍 Distance = straight-line radius</span><span class="pill">⭐ = mapped hotel star class</span></div>
+    </div>
+  </section>
+
+  <section class="panel recommendation-panel" id="recommendations-panel">
+  <div class="recommend-head">
+    <div>
+      <div class="eyebrow">KAIRO · Smart Suggestions</div>
+      <h2>Best stay & getting-around options</h2>
+      <p id="recommend-sub">Search an event location to generate recommendations using the current event context.</p>
+    </div>
+    <span class="pill">Decision support</span>
+  </div>
+  <div class="recommend-grid">
+    <div class="recommend-card" id="stay-recommendation"><div class="empty mini">No hotel recommendation yet.</div></div>
+    <div class="recommend-card" id="transport-recommendation"><div class="empty mini">No transport recommendation yet.</div></div>
+  </div>
+</section>
+
+<div class="main">
+    <section class="panel map-wrap">
+      <div class="map-head"><div><strong>Event + hotel map</strong><div id="centerLabel" class="status">No search yet</div></div><span id="markerCount" class="pill">0 markers</span></div>
+      <div id="map" class="map"></div>
+    </section>
+
+    <section class="panel list-wrap">
+      <div class="summary">
+        <div><h2><span id="visibleCount">0</span> hotels shown</h2><small><span id="foundCount">0</span> discovered in the selected radius</small></div>
+        <select id="sort" style="height:38px;border:1px solid #ccd7e5;border-radius:10px;padding:0 10px"><option value="distance">Nearest</option><option value="stars">Highest star class</option><option value="name">Name</option></select>
+      </div>
+      <div id="list" class="list"><div class="empty">Search an event location to discover nearby hospitality properties.</div></div>
+    </section>
+  </div>
+
+  <section class="panel transport-panel">
+  <div class="transport-head">
+    <div>
+      <div class="eyebrow">KAIRO · Transport</div>
+      <h2>All transport options</h2>
+      <p id="transport-context" class="status">Search an event location to load transport suggestions and current demo service options.</p>
+    </div>
+    <div class="transport-actions">
+      <select id="transport-filter" style="height:38px;border:1px solid #ccd7e5;border-radius:10px;padding:0 10px">
+        <option value="all">All modes</option>
+        <option value="bus">Buses</option>
+        <option value="train">Trains</option>
+        <option value="flight">Airport</option>
+        <option value="taxi">Taxi</option>
+        <option value="nearby">Nearby stops/hubs</option>
+      </select>
+      <button id="refresh-transport" class="secondary">Refresh</button>
+    </div>
+  </div>
+  <div class="transport-grid">
+    <div>
+      <div class="eyebrow mb-2">Nearby transport</div>
+      <div id="nearby-transport" class="transport-list"><div class="empty mini">Search a location to discover nearby transport points.</div></div>
+    </div>
+    <div>
+      <div class="eyebrow mb-2">Service options</div>
+      <div id="service-transport" class="transport-list"><div class="empty mini">Search a location to load service options.</div></div>
+    </div>
+  </div>
+  <div id="transport-note" class="foot-note">Live operator tracking is only shown when an integrated feed is available. The current KAIRO service list is a demo/illustrative feed.</div>
+</section>
+
+<div class="foot">
+    Hotel discovery uses OpenStreetMap/Overpass map data. Public map data does not provide private live room inventory or guest-review ratings for every property. KAIRO therefore never invents rooms/ratings. For connected properties, live availability should come from a PMS/partner feed. Price class is shown as mapped data when available; otherwise it is an estimate based on mapped hotel star class and is clearly labeled.
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const state = { hotels: [], center: null, markers: [], eventMarker: null, circle: null, partnerHotels: [], transport: null };
+const redEventIcon = L.divIcon({className:'', html:'<div style=\"width:18px;height:18px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 2px 8px rgba(220,38,38,.5);\"></div>', iconSize:[18,18], iconAnchor:[9,9], popupAnchor:[0,-10]});
+const map = L.map('map').setView([19.0330,73.0297], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+async function api(path, options={}){
+  const res=await fetch(path, options);
+  let data=null;
+  try{ data=await res.json(); }catch{}
+  if(!res.ok) throw new Error((data&&data.detail)||`Request failed (${res.status})`);
+  return data;
+}
+function kmLabel(km){return km < 1 ? Math.round(km*1000)+' m' : km.toFixed(2)+' km';}
+function clearMap(){
+  state.markers.forEach(m=>m.remove()); state.markers=[];
+  if(state.eventMarker){state.eventMarker.remove();state.eventMarker=null}
+  if(state.circle){state.circle.remove();state.circle=null}
+}
+function clearResults(msg='Search an event location to discover nearby hospitality properties.'){
+  state.hotels=[]; state.transport=null; state.partnerHotels=[]; clearMap();
+  document.getElementById('list').innerHTML=`<div class="empty">${esc(msg)}</div>`;
+  document.getElementById('visibleCount').textContent='0';
+  document.getElementById('foundCount').textContent='0';
+  document.getElementById('markerCount').textContent='0 markers';
+  const stay=document.getElementById('stay-recommendation'); if(stay) stay.innerHTML='<div class="empty mini">No hotel recommendation yet.</div>';
+  const tr=document.getElementById('transport-recommendation'); if(tr) tr.innerHTML='<div class="empty mini">No transport recommendation yet.</div>';
+  const nt=document.getElementById('nearby-transport'); if(nt) nt.innerHTML='<div class="empty mini">Search a location to discover nearby transport points.</div>';
+  const st=document.getElementById('service-transport'); if(st) st.innerHTML='<div class="empty mini">Search a location to load service options.</div>';
+}
+
+function markerFor(h, idx){
+  const m=L.marker([h.lat,h.lng]).addTo(map).bindPopup(`<strong>${esc(h.name)}</strong><br>${kmLabel(h.distance_km)} from event<br>${h.stars?`⭐ ${esc(h.stars)} stars<br>`:''}${esc(h.type)}`);
+  m.on('click',()=>document.querySelector(`[data-hotel-id="${CSS.escape(h.id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}));
+  state.markers.push(m);
+}
+function addEventOverlay(lat,lng,radius){
+  state.eventMarker=L.marker([lat,lng],{title:'Event location', icon:redEventIcon}).addTo(map).bindPopup('<strong>Event location</strong>').openPopup();
+  state.circle=L.circle([lat,lng],{radius,color:'#2563eb',fillColor:'#2563eb',fillOpacity:.06,weight:2}).addTo(map);
+}
+function sortedFiltered(){
+  let arr=[...state.hotels];
+  const minStars=Number(document.getElementById('stars').value);
+  const price=document.getElementById('price').value;
+  if(minStars>0) arr=arr.filter(h=>(h.stars??0)>=minStars);
+  if(price!=='all') arr=arr.filter(h=>h.price_band===price);
+  const sort=document.getElementById('sort').value;
+  if(sort==='stars') arr.sort((a,b)=>(b.stars??-1)-(a.stars??-1)||a.distance_km-b.distance_km);
+  else if(sort==='name') arr.sort((a,b)=>a.name.localeCompare(b.name));
+  else arr.sort((a,b)=>a.distance_km-b.distance_km);
+  return arr;
+}
+function inventoryForHotel(h){
+  const candidates=state.partnerHotels.filter(p=>p.lat!=null&&p.lng!=null&&h.lat!=null&&h.lng!=null);
+  let best=null, bestD=0.5;
+  for(const p of candidates){ const d=haversineKm(h.lat,h.lng,p.lat,p.lng); if(d<bestD){best=p;bestD=d;} }
+  return best;
+}
+function haversineKm(a,b,c,d){const R=6371.0088, p1=a*Math.PI/180,p2=c*Math.PI/180, dp=(c-a)*Math.PI/180, dl=(d-b)*Math.PI/180;const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return R*2*Math.asin(Math.sqrt(x));}
+function enrichHotel(h){ const p=inventoryForHotel(h); return {...h, inventory:p}; }
+function render(){
+  const arr=sortedFiltered().map(enrichHotel);
+  document.getElementById('visibleCount').textContent=arr.length;
+  document.getElementById('foundCount').textContent=state.hotels.length;
+  const list=document.getElementById('list');
+  if(!arr.length){list.innerHTML='<div class="empty">No hotels match the current filters. Try a larger radius or lower the filters.</div>'; renderHotelRecommendation([]); return;}
+  list.innerHTML=arr.map((h,i)=>{
+    const priceLabel=h.price_band==='budget'?'Budget':h.price_band==='mid'?'Mid-range':h.price_band==='premium'?'Premium':'Price not mapped';
+    const priceClass=h.price_band==='budget'?'ok':h.price_band==='mid'?'warn':h.price_band==='premium'?'danger':'muted';
+    const rating=h.stars!=null?`⭐ ${Number(h.stars).toFixed(0)} star class`:'⭐ Rating unavailable';
+    const live=h.inventory?`Live rooms: ${h.inventory.available_rooms}`:'Live rooms: unavailable';
+    const source=h.inventory?`<span class="pill ok">${esc(h.inventory.source||'partner feed')}</span>`:'<span class="pill muted">No inventory connection</span>';
+    const priceSource=h.price_source==='estimated_from_stars'?'Price estimated from mapped stars':'Price class from map data';
+    const recommended=i===0 && h.inventory && h.inventory.available_rooms>0;
+    return `<article class="card ${recommended?'kairo-pick':''}" data-hotel-id="${esc(h.id)}"><div class="card-top"><div><div class="name">${esc(h.name)} ${recommended?'<span class="pill ok">KAIRO PICK</span>':''}</div><div class="distance">${kmLabel(h.distance_km)} from event</div></div><span class="pill">#${i+1}</span></div><div class="badges"><span class="pill">${esc(h.type)}</span><span class="pill">${rating}</span><span class="pill ${priceClass}">${priceLabel}</span><span class="pill">${esc(live)}</span>${source}</div><div class="address">${esc(h.address)}</div><div class="meta">${h.phone?`<span class="pill">☎ ${esc(h.phone)}</span>`:''}${h.website?`<a class="pill" target="_blank" rel="noreferrer" href="${safeUrl(h.website)}">Website ↗</a>`:''}<span class="pill">${esc(priceSource)}</span></div></article>`;
+  }).join('');
+  renderHotelRecommendation(arr);
+}
+function renderHotelRecommendation(arr){
+  const box=document.getElementById('stay-recommendation'); if(!box)return;
+  let pick=arr.find(h=>h.inventory&&h.inventory.available_rooms>0) || arr.find(h=>h.stars!=null) || arr[0];
+  if(!pick){box.innerHTML='<div class="empty mini">No stay recommendation yet.</div>';return;}
+  const roomText=pick.inventory?`<b>${pick.inventory.available_rooms}</b> live rooms available`:'Live room inventory is not connected for this property';
+  const rating=pick.stars!=null?`⭐ ${Number(pick.stars).toFixed(0)} stars`:'Rating unavailable';
+  const price=pick.price_band==='budget'?'Budget':pick.price_band==='mid'?'Mid-range':pick.price_band==='premium'?'Premium':'Price not mapped';
+  const reason=pick.inventory?`Closest connected property with available inventory, ${rating}, ${price}, ${kmLabel(pick.distance_km)} from the event.`:`Best nearby mapped property based on distance/quality data. ${rating}; live rooms require a hotel/PMS partner feed.`;
+  box.innerHTML=`<div class="recommend-title">⭐ Stay recommendation</div><div class="recommend-main">${esc(pick.name)}</div><div class="recommend-reason">${kmLabel(pick.distance_km)} from event · ${roomText} · ${rating}</div><div class="recommend-reason">${esc(reason)}</div>`;
+}
+
+function safeUrl(v){try{const u=new URL(v,location.origin);return ['http:','https:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
+function savePrefs(){
+  localStorage.setItem('kairoHotelSearch', JSON.stringify({
+        radius:document.getElementById('radius').value,
+    stars:document.getElementById('stars').value,
+    price:document.getElementById('price').value,
+    sort:document.getElementById('sort').value
+  }));
+}
+function loadPrefs(){
+  try{
+    const p=JSON.parse(localStorage.getItem('kairoHotelSearch')||'null');
+    if(!p) return;
+    for(const [id,val] of Object.entries(p)){ if(id !== 'location' && document.getElementById(id) && val!=null) document.getElementById(id).value=val; }
+  }catch{}
+}
+
+async function loadPartnerHotelInventory(){
+  try{ const data=await api('/api/partner/hotels'); state.partnerHotels=Array.isArray(data)?data:[]; }catch(e){ state.partnerHotels=[]; }
+}
+function normalizeNearbyTransport(items){
+  return (items||[]).map(x=>{
+    const t=(x.type||'').toLowerCase();
+    let mode='nearby', icon='🚉';
+    if(t.includes('bus')){mode='bus';icon='🚌'}
+    else if(t.includes('rail')||t.includes('train')||t.includes('tram')||t.includes('transit')){mode='train';icon='🚆'}
+    else if(t.includes('airport')){mode='flight';icon='✈️'}
+    else if(t.includes('taxi')){mode='taxi';icon='🚕'}
+    return {...x,mode,icon,title:x.name,desc:`${x.type} · ${kmLabel(x.distance_km)} from event`};
+  });
+}
+function flattenTransport(data){
+  const out=[];
+  const local=data&&data.local?data.local:{};
+  (local.buses?.city||[]).forEach(x=>out.push({mode:'bus',icon:'🚌',title:x.route,desc:x.description,eta:x.arrives_in_min+' min',mapped:false,raw:x}));
+  (local.buses?.village||[]).forEach(x=>out.push({mode:'bus',icon:'🚌',title:x.route,desc:x.description,eta:x.arrives_in_min+' min',mapped:false,raw:x}));
+  (local.trains?.suburban||[]).forEach(x=>out.push({mode:'train',icon:'🚆',title:x.line,desc:x.destination+(x.via?' · '+x.via:''),eta:x.arrives_in_min+' min',mapped:false,raw:x}));
+  (local.trains?.long_distance||[]).forEach(x=>out.push({mode:'train',icon:'🚆',title:x.train,desc:x.destination+(x.via?' · '+x.via:''),eta:x.arrives_in_min+' min',mapped:false,raw:x}));
+  (data.flights?.arrivals||[]).forEach(x=>out.push({mode:'flight',icon:'✈️',title:x.airline,desc:'From '+x.origin,eta:x.arrives_in_min+' min',mapped:false,raw:x}));
+  return out;
+}
+function renderTransport(){
+  const data=state.transport, near=document.getElementById('nearby-transport'), service=document.getElementById('service-transport'); if(!data)return;
+  const filter=document.getElementById('transport-filter').value;
+  const nearby=normalizeNearbyTransport(data.nearby||[]);
+  const serviceAll=flattenTransport(data);
+  const combined=[...serviceAll,...nearby.map(x=>({mode:x.mode,icon:x.icon,title:x.name,desc:x.desc,eta:null,mapped:true,raw:x}))];
+  const all=combined.filter(x=>filter==='all'||filter===x.mode||filter==='nearby'&&x.mapped);
+  service.innerHTML=all.length?all.map((x,i)=>`<div class="transport-card"><div class="topline"><div><div class="mode">${x.icon} ${esc(x.title)}</div><div class="subline">${esc(x.desc)}</div></div><div class="eta">${x.eta?esc(x.eta):'Mapped'}</div></div><div class="meta"><span class="pill">${x.mapped?'Nearby mapped point':x.mode==='bus'?'Bus':x.mode==='train'?'Rail':x.mode==='taxi'?'Taxi':'Airport'}</span>${i===0?'<span class="pill ok">RECOMMENDED</span>':''}</div></div>`).join(''):'<div class="empty mini">No transport options found for this location.</div>';
+  const nearFiltered=(filter==='nearby'||filter==='all')?nearby:nearby.filter(x=>x.mode===filter);
+  near.innerHTML=nearFiltered.length?nearFiltered.map(x=>`<div class="transport-card"><div class="topline"><div><div class="mode">${x.icon} ${esc(x.name)}</div><div class="subline">${esc(x.type)} · ${kmLabel(x.distance_km)} from event</div></div><span class="pill">Mapped</span></div></div>`).join(''):'<div class="empty mini">No nearby transport points loaded for this location.</div>';
+  const dynamicBest=nearby.slice().sort((a,b)=>{
+    const rank=t=>t.mode==='train'?0:t.mode==='bus'?1:t.mode==='flight'?2:t.mode==='taxi'?3:4;
+    return rank(a)-rank(b)||a.distance_km-b.distance_km;
+  })[0]||null;
+  const listed=serviceAll.length?serviceAll.slice().sort((a,b)=>parseFloat(a.eta)-parseFloat(b.eta))[0]:null;
+  const rb=document.getElementById('transport-recommendation');
+  if(dynamicBest || listed){
+    rb.innerHTML=`<div class="recommend-title">🧭 Transport recommendation</div>`
+      + (dynamicBest?`<div class="recommend-main">${dynamicBest.icon} ${esc(dynamicBest.name)}</div><div class="recommend-reason">Nearest useful mapped option: ${esc(dynamicBest.type)}, ${kmLabel(dynamicBest.distance_km)} from the event.</div>`:'')
+      + (listed?`<div class="recommend-reason"><b>Listed service:</b> ${listed.icon} ${esc(listed.title)} · ${esc(listed.eta)} · ${esc(listed.desc)}</div>`:'')
+      + `<div class="recommend-reason">Live departure/seat data is shown only when a real operator feed is connected.</div>`;
+  } else { rb.innerHTML='<div class="empty mini">No transport recommendation available.</div>'; }
+  document.getElementById('transport-context').textContent=state.center?`Transport options for the selected event location (${state.center.lat.toFixed(4)}, ${state.center.lng.toFixed(4)}).`:'Search an event location to load transport.';
+  document.getElementById('transport-note').textContent=[data.note,data.nearbyNote].filter(Boolean).join(' · ')||'Transport points are discovered from the selected event location.';
+}
+function isNearPanvel(lat,lng){
+  return haversineKm(lat,lng,18.9894,73.1175) <= 18;
+}
+async function loadTransport(){
+  const empty={local:{buses:{city:[],village:[]},trains:{suburban:[],long_distance:[]}},flights:{arrivals:[]},note:'No live operator service feed connected for this location.'};
+  try{
+    if(!state.center){
+      state.transport={...empty,nearby:[],nearbyNote:'Select an event location first.'};
+      renderTransport();
+      return;
+    }
+    const nearbyPromise=api('/api/transport/discover-nearby',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:state.center.lat,lng:state.center.lng,radius_m:Number(document.getElementById('radius').value)})});
+    const servicePromise=isNearPanvel(state.center.lat,state.center.lng)?api('/api/attendee/transport'):Promise.resolve(empty);
+    const [serviceRes, nearbyRes]=await Promise.allSettled([servicePromise, nearbyPromise]);
+    const service=serviceRes.status==='fulfilled'?serviceRes.value:empty;
+    const nearby=nearbyRes.status==='fulfilled'?(nearbyRes.value.items||[]):[];
+    state.transport={...service,nearby,nearbyNote:nearbyRes.status==='fulfilled'?nearbyRes.value.note:'Nearby transport discovery failed. Check your internet connection.'};
+    renderTransport();
+  }catch(e){
+    state.transport={...empty,nearby:[],nearbyNote:e.message||'Nearby transport discovery unavailable.'};
+    renderTransport();
+  }
+}
+
+async function geocode(){
+  savePrefs();
+  const q=document.getElementById('location').value.trim();
+  if(q.length<2) throw new Error('Enter an event location');
+  const res=await fetch('/api/hotels/geocode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+  const data=await res.json(); if(!res.ok) throw new Error(data.detail||'Location not found');
+  return data;
+}
+async function discover(lat,lng,displayName){
+  // Clear immediately so previous event hotels can never remain visible.
+  clearResults('Loading hotels for the new event location…');
+  state.center={lat,lng};
+  const radius=Number(document.getElementById('radius').value);
+  const status=document.getElementById('status');
+  status.textContent='Discovering nearby hotels…';
+  const res=await fetch('/api/hotels/discover-nearby',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat,lng,radius_m:radius})});
+  const data=await res.json(); if(!res.ok) throw new Error(data.detail||'Hotel discovery failed');
+  state.hotels=data.hotels;
+  await loadPartnerHotelInventory();
+  await loadTransport();
+  clearMap(); addEventOverlay(lat,lng,radius);
+  state.hotels.forEach((h,i)=>markerFor(h,i));
+  map.fitBounds(L.latLngBounds([[lat,lng],...state.hotels.map(h=>[h.lat,h.lng])]),{padding:[24,24],maxZoom:15});
+  document.getElementById('centerLabel').textContent=`${displayName||'Event'} · ${lat.toFixed(5)}, ${lng.toFixed(5)} · ${radius/1000} km`;
+  document.getElementById('markerCount').textContent=state.hotels.length+' markers';
+  status.textContent=`Updated ${new Date().toLocaleTimeString()} · source: ${data.source}`;
+  render();
+}
+async function search(){
+  const btn=document.getElementById('search'); btn.disabled=true; btn.textContent='Searching…';
+  try{const loc=await geocode(); document.getElementById('location').value=loc.display_name; await discover(loc.lat,loc.lng,loc.display_name);}
+  catch(e){clearResults('');document.getElementById('status').textContent='Could not load hotels: '+e.message;}
+  finally{btn.disabled=false;btn.textContent='Find Hotels';}
+}
+map.on('click',async e=>{
+  document.getElementById('location').value=`Map location (${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)})`;
+  try{await discover(e.latlng.lat,e.latlng.lng,'Selected map location');document.getElementById('status').textContent+=' · Map location selected';}catch(err){document.getElementById('status').textContent='Hotel discovery failed: '+err.message;}
+});
+document.getElementById('search').addEventListener('click',search);
+document.getElementById('clear').addEventListener('click',()=>{clearResults();document.getElementById('location').value=''; state.center=null; document.getElementById('centerLabel').textContent='No location selected'; document.getElementById('status').textContent='Cleared. Enter a new location or click the map.';});
+document.getElementById('clear-location').addEventListener('click',()=>{document.getElementById('location').value=''; state.center=null; clearResults(); document.getElementById('centerLabel').textContent='No location selected'; document.getElementById('status').textContent='Location cleared.';});
+document.getElementById('sort').addEventListener('change',()=>{savePrefs();render()});
+document.getElementById('stars').addEventListener('change',()=>{savePrefs();render()});
+document.getElementById('price').addEventListener('change',()=>{savePrefs();render()});
+document.getElementById('radius').addEventListener('change',()=>{savePrefs();if(state.center)discover(state.center.lat,state.center.lng,document.getElementById('location').value);});
+document.getElementById('use-map').addEventListener('click',()=>document.getElementById('status').textContent='Click anywhere on the map to move the event location and refresh the hotel list.');
+document.getElementById('transport-filter').addEventListener('change',renderTransport);
+document.getElementById('refresh-transport').addEventListener('click',loadTransport);
+document.getElementById('location').addEventListener('input',savePrefs);
+document.getElementById('location').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
+window.addEventListener('load',()=>{loadPrefs(); clearResults(); document.getElementById('status').textContent='Ready. Enter a location or click the map.';});
+</script>
+</body>
+</html>

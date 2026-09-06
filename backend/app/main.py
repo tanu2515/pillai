@@ -1,16 +1,21 @@
 from pathlib import Path
+import json
+import math
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from . import engine, models
+from .detector import detector
 from .regions import INDIA_REGIONS
 from .database import Base, SessionLocal, engine as db_engine, get_db
-from .seed import seed_if_empty
 
 Base.metadata.create_all(bind=db_engine)
 
@@ -22,9 +27,6 @@ with db_engine.begin() as conn:
     zone_columns = {c["name"] for c in inspect(db_engine).get_columns("zones")}
     if "is_accessible" not in zone_columns:
         conn.execute(text("ALTER TABLE zones ADD COLUMN is_accessible BOOLEAN NOT NULL DEFAULT FALSE"))
-
-with SessionLocal() as db:
-    seed_if_empty(db)
 
 app = FastAPI(title="VYAVASTHA — PS-8 Mega-Event Orchestration")
 
@@ -86,6 +88,18 @@ class ChatRequest(BaseModel):
 
 class ZoneCapacityUpdate(BaseModel):
     capacity: int
+
+
+class CrowdCountIngest(BaseModel):
+    count: int = Field(ge=0)
+    source: str = "manual"
+
+
+class CameraFeedRequest(BaseModel):
+    zone_id: int
+    stream_url: str
+    model_path: str = "yolov8n.pt"
+    sample_seconds: float = Field(default=1.0, ge=0.2, le=30)
 
 
 class EventUpdate(BaseModel):
@@ -153,6 +167,32 @@ class HotelUpdate(BaseModel):
     contact: str | None = None
     amenities: str | None = None
     manual_recommended: bool | None = None
+
+
+class HotelDiscoveryRequest(BaseModel):
+    lat: float
+    lng: float
+    radius_m: int = Field(default=5000, ge=100, le=50000)
+
+
+class GeocodeRequest(BaseModel):
+    query: str
+
+
+class TransportDiscoveryRequest(BaseModel):
+    lat: float
+    lng: float
+    radius_m: int = Field(default=5000, ge=100, le=50000)
+
+
+class HotelAvailabilityUpdate(BaseModel):
+    occupied_rooms: int
+
+
+class HotelWebhookUpdate(BaseModel):
+    hotel_id: int
+    occupied_rooms: int
+    source: str = "hotel_pms"
 
 
 class TransportZoneCreate(BaseModel):
@@ -239,7 +279,7 @@ DOMAIN_ROLES = {
     "transport": "Transport Operator",
     "hospitality": "Hospitality Operator",
 }
-FULL_ACCESS_ROLES = {"Administrator", "Event Command Operator"}
+FULL_ACCESS_ROLES = {"Event Command Operator"}
 
 
 def get_role(x_user_role: str | None = Header(default=None)):
@@ -255,8 +295,11 @@ def require_domain_access(role: str | None, domain: str | None):
 
 
 def require_admin(role: str | None):
-    if role is not None and role != "Administrator":
-        raise HTTPException(403, "Administrator role required")
+    # The Administrator role was folded into Event Command Operator — this
+    # back-office surface (event config, scenarios, users, raw tables) is now
+    # gated the same way as the rest of that role's access.
+    if role is not None and role != "Event Command Operator":
+        raise HTTPException(403, "Event Command Operator role required")
 
 
 @app.get("/api/event")
@@ -347,6 +390,64 @@ def trigger(req: ScenarioTrigger, db: Session = Depends(get_db)):
 def tick(db: Session = Depends(get_db)):
     engine.advance_tick(db)
     return engine.full_state(db)
+
+
+@app.post("/api/zones/{zone_id}/crowd-count")
+def ingest_crowd_count(zone_id: int, req: CrowdCountIngest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+    try:
+        result = engine.ingest_crowd_count(db, zone_id, req.count, req.source.strip()[:50] or "manual")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return result
+
+
+@app.get("/api/cameras")
+def camera_status():
+    return detector.status()
+
+
+@app.get("/api/zones/{zone_id}/crowd-history")
+def crowd_history(zone_id: int, limit: int = 60, db: Session = Depends(get_db)):
+    if not db.get(models.Zone, zone_id):
+        raise HTTPException(404, "zone not found")
+    rows = (
+        db.query(models.CrowdSnapshot)
+        .filter(models.CrowdSnapshot.zone_id == zone_id)
+        .order_by(models.CrowdSnapshot.captured_at.desc())
+        .limit(min(max(limit, 1), 500))
+        .all()
+    )
+    return [{"count": row.count, "source": row.source, "captured_at": row.captured_at.isoformat()} for row in rows]
+
+
+@app.post("/api/cameras")
+def start_camera(req: CameraFeedRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    zone = db.get(models.Zone, req.zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+
+    def record_count(zone_id: int, count: int):
+        with SessionLocal() as worker_db:
+            engine.ingest_crowd_count(worker_db, zone_id, count, "yolo")
+
+    detector.start(req.zone_id, req.stream_url, req.model_path, req.sample_seconds, record_count)
+    return {"started": req.zone_id, "message": "Camera worker started; inspect GET /api/cameras for live status."}
+
+
+@app.delete("/api/cameras/{zone_id}")
+def stop_camera(zone_id: int, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+    if not detector.stop(zone_id):
+        raise HTTPException(404, "camera feed not found")
+    return {"stopped": zone_id}
 
 
 @app.post("/api/reset")
@@ -665,7 +766,7 @@ def transport_local(db: Session = Depends(get_db)):
     return engine.local_transit_feed(db)
 
 
-# --- Administrator: event configuration only, no live-ops access ----------
+# --- Back office (Event Command Operator): event configuration, no live-ops-only access beyond that role ----------
 
 @app.patch("/api/admin/event")
 def admin_update_event(req: EventUpdate, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
@@ -731,6 +832,7 @@ def admin_raw_tables(db: Session = Depends(get_db), role: str | None = Depends(g
         "transit_routes": models.TransitRoute,
         "event_tiers": models.EventTier,
         "event_seats": models.EventSeat,
+        "hotel_inventory_snapshots": models.HotelInventorySnapshot,
     }
     out = {}
     for name, model in tables.items():
@@ -801,6 +903,357 @@ def read_notification(notification_id: int, db: Session = Depends(get_db)):
 @app.get("/api/hotels/recommendations")
 def hotel_recommendations(db: Session = Depends(get_db)):
     return engine.hotel_recommendations(db)
+
+
+# --- live nearby hotel/transport discovery (OpenStreetMap / Overpass) ------
+# Map data only — public OSM tags never carry a hotel's private live room
+# inventory, so live rooms are only ever shown for a connected KAIRO/partner
+# feed (HotelInventorySnapshot), never invented from map data.
+
+def _price_band_from_tags(tags: dict):
+    raw = str(tags.get("price_range") or tags.get("price") or "").strip().lower()
+    if raw in {"$", "1", "budget", "cheap", "low"}:
+        return "budget", "mapped"
+    if raw in {"$$", "2", "mid", "medium"}:
+        return "mid", "mapped"
+    if raw in {"$$$", "3", "premium", "high", "expensive"}:
+        return "premium", "mapped"
+    stars = None
+    try:
+        stars = float(str(tags.get("stars", "")).replace("★", "").strip())
+    except Exception:
+        pass
+    if stars is not None:
+        if stars <= 2:
+            return "budget", "estimated_from_stars"
+        if stars <= 4:
+            return "mid", "estimated_from_stars"
+        return "premium", "estimated_from_stars"
+    return "unknown", "unavailable"
+
+
+def _overpass_hotels(lat: float, lng: float, radius_m: int):
+    q = f"""
+    [out:json][timeout:25];
+    (
+      nwr["tourism"="hotel"](around:{int(radius_m)},{lat},{lng});
+      nwr["tourism"="motel"](around:{int(radius_m)},{lat},{lng});
+      nwr["tourism"="guest_house"](around:{int(radius_m)},{lat},{lng});
+      nwr["tourism"="hostel"](around:{int(radius_m)},{lat},{lng});
+    );
+    out center tags;
+    """
+    urls = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    ]
+    headers = {"User-Agent": "KAIRO-PS8-HotelDiscovery/2.0 (hackathon prototype)"}
+    last_error = None
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, data=q.encode("utf-8"), headers={**headers, "Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode("utf-8")).get("elements", [])
+        except Exception as exc:
+            last_error = exc
+    raise HTTPException(502, f"hotel discovery source unavailable: {last_error}")
+
+
+@app.post("/api/hotels/geocode")
+def hotel_geocode(req: GeocodeRequest):
+    query = req.query.strip()
+    if len(query) < 2:
+        raise HTTPException(400, "Enter a valid event location")
+    try:
+        qs = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1})
+        geo_req = urllib.request.Request(
+            "https://nominatim.openstreetmap.org/search?" + qs,
+            headers={"User-Agent": "KAIRO-PS8-HotelDiscovery/2.0"},
+        )
+        with urllib.request.urlopen(geo_req, timeout=15) as resp:
+            items = json.loads(resp.read().decode("utf-8"))
+        if not items:
+            raise HTTPException(404, "Location not found")
+        item = items[0]
+        return {
+            "lat": float(item["lat"]),
+            "lng": float(item["lon"]),
+            "display_name": item.get("display_name", query),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"location search unavailable: {exc}")
+
+
+@app.post("/api/hotels/discover-nearby")
+def discover_nearby_hotels(req: HotelDiscoveryRequest):
+    if not (-90 <= req.lat <= 90 and -180 <= req.lng <= 180):
+        raise HTTPException(400, "Invalid latitude/longitude")
+    radius = int(req.radius_m)
+    raw = _overpass_hotels(req.lat, req.lng, radius)
+    hotels = []
+    seen = set()
+    seen_named = set()
+    for el in raw:
+        tags = el.get("tags") or {}
+        center = el.get("center") or {}
+        lat = el.get("lat", center.get("lat"))
+        lng = el.get("lon", center.get("lon"))
+        if lat is None or lng is None:
+            continue
+        key = (el.get("type"), el.get("id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        d = engine._haversine_km(req.lat, req.lng, float(lat), float(lng))
+        if d * 1000 > radius + 1:
+            continue
+        name = tags.get("name") or tags.get("official_name")
+        if not name:
+            continue
+        kind = tags.get("tourism", "hotel").replace("_", " ").title()
+        stars = tags.get("stars")
+        try:
+            stars_num = float(stars)
+        except Exception:
+            stars_num = None
+        price_band, price_source = _price_band_from_tags(tags)
+        norm_name = " ".join(name.lower().split())
+        if norm_name in seen_named:
+            continue
+        seen_named.add(norm_name)
+        hotels.append({
+            "id": f"{el.get('type','nwr')}-{el.get('id')}",
+            "name": name,
+            "type": kind,
+            "lat": round(float(lat), 6),
+            "lng": round(float(lng), 6),
+            "distance_km": round(d, 2),
+            "stars": stars_num,
+            "rating": stars_num,
+            "rating_type": "hotel_star_class" if stars_num is not None else "unavailable",
+            "price_band": price_band,
+            "price_source": price_source,
+            "address": tags.get("addr:full") or " ".join(filter(None, [tags.get("addr:housenumber"), tags.get("addr:street"), tags.get("addr:city")])) or "Address not mapped",
+            "phone": tags.get("phone") or tags.get("contact:phone"),
+            "website": tags.get("website") or tags.get("contact:website"),
+            "live_inventory": None,
+            "inventory_source": "not_connected",
+        })
+    hotels.sort(key=lambda item: (item["distance_km"], item["name"].lower()))
+    return {
+        "center": {"lat": req.lat, "lng": req.lng},
+        "radius_m": radius,
+        "count": len(hotels),
+        "hotels": hotels,
+        "source": "OpenStreetMap / Overpass",
+        "fetched_at": datetime.utcnow().isoformat() + "Z",
+        "note": "Hotels are rediscovered from the current event coordinates on every request. Room availability is shown only for connected hotel/PMS/partner feeds; map data is not used to invent live inventory.",
+    }
+
+
+def _overpass_transport(lat: float, lng: float, radius_m: int):
+    q = f"""
+    [out:json][timeout:25];
+    (
+      nwr["highway"="bus_stop"](around:{int(radius_m)},{lat},{lng});
+      nwr["public_transport"="platform"](around:{int(radius_m)},{lat},{lng});
+      nwr["public_transport"="station"](around:{int(radius_m)},{lat},{lng});
+      nwr["railway"="station"](around:{int(radius_m)},{lat},{lng});
+      nwr["railway"="halt"](around:{int(radius_m)},{lat},{lng});
+      nwr["railway"="tram_stop"](around:{int(radius_m)},{lat},{lng});
+      nwr["aeroway"="aerodrome"](around:{int(radius_m)},{lat},{lng});
+      nwr["amenity"="taxi"](around:{int(radius_m)},{lat},{lng});
+    );
+    out center tags;
+    """
+    urls = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    ]
+    headers = {"User-Agent": "KAIRO-PS8-TransportDiscovery/1.0 (hackathon prototype)"}
+    last_error = None
+    for url in urls:
+        try:
+            request = urllib.request.Request(
+                url, data=q.encode("utf-8"),
+                headers={**headers, "Content-Type": "application/x-www-form-urlencoded"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=30) as resp:
+                return json.loads(resp.read().decode("utf-8")).get("elements", [])
+        except Exception as exc:
+            last_error = exc
+    raise HTTPException(502, f"transport discovery source unavailable: {last_error}")
+
+
+@app.post("/api/transport/discover-nearby")
+def discover_nearby_transport(req: TransportDiscoveryRequest):
+    if not (-90 <= req.lat <= 90 and -180 <= req.lng <= 180):
+        raise HTTPException(400, "Invalid latitude/longitude")
+    raw = _overpass_transport(req.lat, req.lng, int(req.radius_m))
+    out = []
+    seen = set()
+    for el in raw:
+        tags = el.get("tags") or {}
+        center = el.get("center") or {}
+        lat = el.get("lat", center.get("lat"))
+        lng = el.get("lon", center.get("lon"))
+        if lat is None or lng is None:
+            continue
+        name = tags.get("name") or tags.get("official_name")
+        if not name:
+            continue
+        key = (el.get("type"), el.get("id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        d = engine._haversine_km(req.lat, req.lng, float(lat), float(lng))
+        if d * 1000 > req.radius_m + 1:
+            continue
+        if tags.get("highway") == "bus_stop":
+            mode = "Bus stop"
+        elif tags.get("railway") in {"station", "halt"}:
+            mode = "Rail station"
+        elif tags.get("railway") == "tram_stop":
+            mode = "Tram stop"
+        elif tags.get("aeroway") == "aerodrome":
+            mode = "Airport"
+        elif tags.get("amenity") == "taxi":
+            mode = "Taxi stand"
+        elif tags.get("public_transport") == "station":
+            mode = "Transit station"
+        else:
+            mode = "Transit platform"
+        out.append({
+            "id": f"{el.get('type','nwr')}-{el.get('id')}",
+            "name": name,
+            "type": mode,
+            "lat": round(float(lat), 6),
+            "lng": round(float(lng), 6),
+            "distance_km": round(d, 2),
+        })
+    out.sort(key=lambda x: (x["distance_km"], x["name"].lower()))
+    return {
+        "center": {"lat": req.lat, "lng": req.lng},
+        "radius_m": int(req.radius_m),
+        "count": len(out),
+        "items": out,
+        "source": "OpenStreetMap / Overpass",
+        "fetched_at": datetime.utcnow().isoformat() + "Z",
+        "note": "Nearby transport points are mapped locations; live departure/seat availability requires an operator feed.",
+    }
+
+
+# --- hotel partner portal / PMS webhook (live inventory) --------------------
+
+def _hotel_snapshot(db: Session, hotel):
+    snap = db.query(models.HotelInventorySnapshot).filter_by(hotel_id=hotel.id).first()
+    occupied = snap.occupied_rooms if snap else hotel.current_count
+    available = snap.available_rooms if snap else max(hotel.capacity - hotel.current_count, 0)
+    return occupied, available, (snap.updated_at.isoformat() if snap else None), (snap.source if snap else "seed/demo")
+
+
+@app.get("/api/partner/hotels")
+def partner_hotels(db: Session = Depends(get_db)):
+    hotels = db.query(models.Zone).filter(models.Zone.type == "hotel").order_by(models.Zone.name).all()
+    out = []
+    for h in hotels:
+        occupied, available, updated_at, source = _hotel_snapshot(db, h)
+        out.append({
+            "id": h.id, "name": h.name, "capacity": h.capacity,
+            "occupied_rooms": occupied, "available_rooms": available,
+            "occupancy_pct": round((occupied / h.capacity) * 100, 1) if h.capacity else 0,
+            "lat": h.lat, "lng": h.lng, "last_updated": updated_at, "source": source,
+        })
+    return out
+
+
+@app.get("/api/partner/hotels/{hotel_id}")
+def partner_hotel(hotel_id: int, db: Session = Depends(get_db)):
+    h = db.get(models.Zone, hotel_id)
+    if not h or h.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    occupied, available, updated_at, source = _hotel_snapshot(db, h)
+    return {
+        "id": h.id, "name": h.name, "capacity": h.capacity,
+        "occupied_rooms": occupied, "available_rooms": available,
+        "occupancy_pct": round((occupied / h.capacity) * 100, 1) if h.capacity else 0,
+        "last_updated": updated_at, "source": source,
+    }
+
+
+def _update_hotel_rooms(db: Session, hotel_id: int, occupied_rooms: int, source: str):
+    h = db.get(models.Zone, hotel_id)
+    if not h or h.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    if occupied_rooms < 0 or occupied_rooms > h.capacity:
+        raise HTTPException(400, f"occupied_rooms must be between 0 and {h.capacity}")
+    h.last_count = h.current_count
+    h.prev_delta = occupied_rooms - h.current_count
+    h.current_count = occupied_rooms
+    h.peak_count = max(h.peak_count or 0, occupied_rooms)
+    available = max(h.capacity - occupied_rooms, 0)
+    now = datetime.now(timezone.utc)
+    snap = db.query(models.HotelInventorySnapshot).filter_by(hotel_id=h.id).first()
+    if not snap:
+        snap = models.HotelInventorySnapshot(hotel_id=h.id)
+        db.add(snap)
+    snap.occupied_rooms = occupied_rooms
+    snap.available_rooms = available
+    snap.source = source
+    snap.updated_at = now
+    db.commit()
+    return {
+        "hotel_id": h.id, "hotel": h.name,
+        "occupied_rooms": occupied_rooms, "available_rooms": available,
+        "occupancy_pct": round((occupied_rooms / h.capacity) * 100, 1) if h.capacity else 0,
+        "source": source, "last_updated": now.isoformat(), "status": "updated",
+    }
+
+
+@app.patch("/api/partner/hotels/{hotel_id}/availability")
+def partner_update_hotel(hotel_id: int, req: HotelAvailabilityUpdate, db: Session = Depends(get_db)):
+    return _update_hotel_rooms(db, hotel_id, req.occupied_rooms, "hotel_partner_portal")
+
+
+@app.post("/api/integrations/hotel/webhook")
+def hotel_webhook(req: HotelWebhookUpdate, db: Session = Depends(get_db)):
+    return _update_hotel_rooms(db, req.hotel_id, req.occupied_rooms, req.source)
+
+
+@app.get("/api/attendee/hotels")
+def attendee_hotels(db: Session = Depends(get_db)):
+    """Live connected hotel inventory for the attendee side.
+    Only hotels with KAIRO/partner inventory are shown as live; no room count is invented from map data."""
+    hotels = db.query(models.Zone).filter(models.Zone.type == "hotel").order_by(models.Zone.name).all()
+    out = []
+    venue = db.query(models.Zone).filter(models.Zone.type == "arena").first()
+    for h in hotels:
+        occupied, available, updated_at, source = _hotel_snapshot(db, h)
+        distance = engine._haversine_km(venue.lat, venue.lng, h.lat, h.lng) if venue else None
+        out.append({
+            "id": h.id, "name": h.name, "available_rooms": available,
+            "occupied_rooms": occupied, "capacity": h.capacity,
+            "occupancy_pct": round((occupied / h.capacity) * 100, 1) if h.capacity else 0,
+            "distance_km": round(distance, 1) if distance is not None else None,
+            "price_tier": h.price_tier, "live": True, "source": source,
+            "last_updated": updated_at,
+        })
+    out.sort(key=lambda x: (x["available_rooms"] <= 0, x["distance_km"] is None, x["distance_km"] or 999))
+    return {"hotels": out, "note": "Live room counts come from connected KAIRO partner inventory. Map-only hotels are not assigned room counts."}
+
+
+@app.get("/api/attendee/transport")
+def attendee_transport(db: Session = Depends(get_db)):
+    """Attendee-facing transport summary using the existing KAIRO transport feeds."""
+    local = engine.local_transit_feed(db)
+    flights = engine.transport_hub_arrivals(db)
+    demand = engine.transport_demand_prediction(db)
+    return {"local": local, "flights": flights, "demand": demand}
 
 
 # --- transport demand prediction (Section 14) -------------------------------

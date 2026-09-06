@@ -264,6 +264,32 @@
   </div>
 
   <div id="tab-hotels" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl mb-4">
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <h2 class="eyebrow">Discover Nearby Hotels</h2>
+        <a href="/hotel-partner.html" class="btn-ghost rounded-lg px-3 py-2 text-[11px] font-semibold">↗ Partner Portal</a>
+      </div>
+      <div class="flex gap-2 mb-3 flex-wrap items-end">
+        <div class="flex-1 min-w-[220px]">
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Event location</label>
+          <input type="text" id="hotel-search-loc" placeholder="Search venue, stadium, address or city" class="w-full p-2.5 text-sm" onkeydown="if(event.key==='Enter') searchNearbyHotels()" />
+        </div>
+        <div>
+          <label class="block text-[10.5px] font-semibold tracking-[.1em] uppercase text-muted mb-1.5">Radius</label>
+          <select id="hotel-search-radius" class="p-2.5 text-sm">
+            <option value="1000">1 km</option>
+            <option value="3000">3 km</option>
+            <option value="5000" selected>5 km</option>
+            <option value="10000">10 km</option>
+          </select>
+        </div>
+        <button class="btn-primary rounded-lg px-4 py-2.5 text-sm" onclick="searchNearbyHotels()">Find Hotels</button>
+      </div>
+      <div id="hotel-search-status" class="text-[10.5px] text-muted mb-2">Search the event's location to survey nearby hotels via OpenStreetMap.</div>
+      <div id="hotel-discovery-map" style="height:260px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;" class="mb-3"></div>
+      <div id="discovered-hotels-list"></div>
+    </section>
+
     <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
       <h2 class="eyebrow mb-3">Hotel Recommendations</h2>
       <div id="hotels-list"></div>
@@ -271,6 +297,12 @@
   </div>
 
   <div id="tab-transport" class="tab-panel hidden">
+    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl mb-4">
+      <h2 class="eyebrow mb-3">Nearby Transport Infrastructure</h2>
+      <div id="transport-discovery-status" class="text-[10.5px] text-muted mb-2">Search an event location in the Hotels tab to survey nearby transport infrastructure.</div>
+      <div id="nearby-transport-summary"></div>
+    </section>
+
     <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
       <h2 class="eyebrow mb-3">Transport Demand Prediction</h2>
       <div id="transport-demand-list"></div>
@@ -400,8 +432,8 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     // if the What-If tab wasn't visible yet, the map was born at 0×0 and
     // needs a nudge once its container actually has real dimensions.
     if (btn.dataset.tab === "whatif" && zoneMap) setTimeout(() => zoneMap.invalidateSize(), 50);
-    if (btn.dataset.tab === "hotels") loadHotels();
-    if (btn.dataset.tab === "transport") loadTransportDemand();
+    if (btn.dataset.tab === "hotels") { loadHotels(); initDiscoveryMap(); if (discoveryMap) setTimeout(() => discoveryMap.invalidateSize(), 50); }
+    if (btn.dataset.tab === "transport") { loadTransportDemand(); renderTransportPanel(); }
     if (btn.dataset.tab === "analytics") loadAnalytics();
   });
 });
@@ -1142,6 +1174,178 @@ async function sendChat() {
 }
 
 // --- Hotels / Transport demand / Post-event analytics (lazy-loaded per tab) -
+
+// --- Discover Nearby Hotels + Nearby Transport (OpenStreetMap/Overpass) ----
+
+let discoveryMap = null;
+let discoveryMarkers = [];
+let discoveryCenter = null;
+let discoveredHotels = [];
+let partnerHotelsForMatch = [];
+
+function initDiscoveryMap() {
+  if (discoveryMap) return;
+  discoveryMap = L.map("hotel-discovery-map", { zoomControl: true }).setView([19.033, 73.03], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors", maxZoom: 19,
+  }).addTo(discoveryMap);
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371.0088, p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+  const dp = (lat2 - lat1) * Math.PI / 180, dl = (lng2 - lng1) * Math.PI / 180;
+  const x = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(x));
+}
+
+function matchedInventoryFor(hotel) {
+  let best = null, bestD = 0.5;
+  for (const p of partnerHotelsForMatch) {
+    if (p.lat == null || p.lng == null) continue;
+    const d = haversineKm(hotel.lat, hotel.lng, p.lat, p.lng);
+    if (d < bestD) { best = p; bestD = d; }
+  }
+  return best;
+}
+
+function renderDiscoveredHotels() {
+  const box = document.getElementById("discovered-hotels-list");
+  if (!discoveredHotels.length) {
+    box.innerHTML = `<div class="text-xs text-muted">No hotels found in this radius.</div>`;
+    return;
+  }
+  // Operators plan capacity, not pick a room — a summed rollup (how much
+  // supply exists, how much of it is live-connected) is what's actionable
+  // here, not a scrolling one-by-one list of individual properties.
+  const priceLabel = { budget: "Budget", mid: "Mid-range", premium: "Premium", unknown: "Not priced" };
+  const bands = { budget: 0, mid: 0, premium: 0, unknown: 0 };
+  let connectedCount = 0, totalAvailableRooms = 0, starSum = 0, starCount = 0;
+  let nearest = null;
+  discoveredHotels.forEach(h => {
+    bands[h.price_band in bands ? h.price_band : "unknown"]++;
+    const inv = matchedInventoryFor(h);
+    if (inv) { connectedCount++; totalAvailableRooms += inv.available_rooms; }
+    if (h.stars != null) { starSum += h.stars; starCount++; }
+    if (!nearest || h.distance_km < nearest.distance_km) nearest = h;
+  });
+  const fmtDist = km => km < 1 ? Math.round(km * 1000) + " m" : km.toFixed(1) + " km";
+  box.innerHTML = `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${discoveredHotels.length}</div><div class="text-[10px] text-muted uppercase mt-1">Hotels found</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black ${connectedCount ? "text-ok" : ""}">${connectedCount}</div><div class="text-[10px] text-muted uppercase mt-1">Connected feed</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black text-ok">${totalAvailableRooms}</div><div class="text-[10px] text-muted uppercase mt-1">Live rooms free</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${nearest ? fmtDist(nearest.distance_km) : "—"}</div><div class="text-[10px] text-muted uppercase mt-1">Nearest property</div></div>
+    </div>
+    <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-[10.5px] text-muted">
+      <span>${bands.budget} budget</span><span>${bands.mid} mid-range</span><span>${bands.premium} premium</span><span>${bands.unknown} not priced</span>
+      ${starCount ? `<span>avg ${(starSum / starCount).toFixed(1)}★ star class (${starCount} rated)</span>` : ""}
+    </div>`;
+}
+
+async function searchNearbyHotels() {
+  const query = document.getElementById("hotel-search-loc").value.trim();
+  const status = document.getElementById("hotel-search-status");
+  if (query.length < 2) { status.textContent = "Enter an event location to search."; return; }
+  status.textContent = "Searching…";
+  try {
+    const geo = await api("/api/hotels/geocode", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+    });
+    await discoverHotelsFrom(geo.lat, geo.lng, geo.display_name);
+  } catch (e) {
+    status.textContent = "Search failed: " + e.message;
+  }
+}
+
+async function discoverHotelsFrom(lat, lng, label) {
+  const status = document.getElementById("hotel-search-status");
+  status.textContent = "Discovering nearby hotels…";
+  discoveryCenter = { lat, lng };
+  const radius = Number(document.getElementById("hotel-search-radius").value);
+  const data = await api("/api/hotels/discover-nearby", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lat, lng, radius_m: radius }),
+  });
+  discoveredHotels = data.hotels;
+  try { partnerHotelsForMatch = await api("/api/partner/hotels"); } catch { partnerHotelsForMatch = []; }
+
+  initDiscoveryMap();
+  discoveryMarkers.forEach(m => m.remove());
+  discoveryMarkers = [];
+  const eventMarker = L.circleMarker([lat, lng], { radius: 8, color: "#DC2626", fillColor: "#DC2626", fillOpacity: 1 })
+    .addTo(discoveryMap).bindPopup(`<strong>Event location</strong><br>${escapeHtml(label)}`);
+  discoveryMarkers.push(eventMarker);
+  discoveredHotels.forEach(h => {
+    const m = L.marker([h.lat, h.lng]).addTo(discoveryMap).bindPopup(`<strong>${escapeHtml(h.name)}</strong><br>${h.distance_km} km from event`);
+    discoveryMarkers.push(m);
+  });
+  discoveryMap.invalidateSize();
+  const bounds = L.latLngBounds([[lat, lng], ...discoveredHotels.map(h => [h.lat, h.lng])]);
+  discoveryMap.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+
+  renderDiscoveredHotels();
+  status.textContent = `${discoveredHotels.length} hotels found near ${label} · source: ${data.source}`;
+
+  document.getElementById("transport-discovery-status").textContent = `Nearby transport for ${label}:`;
+  await loadNearbyTransport();
+}
+
+// --- Transport tab: nearby mapped points + service feed + recommendation --
+
+let nearbyTransportItems = [];
+
+function classifyNearbyTransport(t) {
+  const type = (t.type || "").toLowerCase();
+  if (type.includes("bus")) return "bus";
+  if (type.includes("rail") || type.includes("train") || type.includes("tram")) return "train";
+  if (type.includes("airport")) return "flight";
+  if (type.includes("taxi")) return "taxi";
+  return "other";
+}
+
+async function loadNearbyTransport() {
+  if (!discoveryCenter) return;
+  document.getElementById("nearby-transport-summary").innerHTML = `<div class="text-xs text-muted">Loading nearby transport infrastructure…</div>`;
+  try {
+    const radius = Number(document.getElementById("hotel-search-radius")?.value || 5000);
+    const data = await api("/api/transport/discover-nearby", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: discoveryCenter.lat, lng: discoveryCenter.lng, radius_m: radius }),
+    });
+    nearbyTransportItems = data.items || [];
+  } catch (e) {
+    nearbyTransportItems = [];
+  }
+  renderTransportPanel();
+}
+
+function renderTransportPanel() {
+  const box = document.getElementById("nearby-transport-summary");
+  if (!nearbyTransportItems.length) {
+    box.innerHTML = `<div class="text-xs text-muted">${discoveryCenter ? "No nearby transport points found." : "Search an event location in the Hotels tab to survey nearby transport infrastructure."}</div>`;
+    return;
+  }
+  // Operators are planning shuttle/dispatch capacity, not catching a specific
+  // bus — a rollup of what infrastructure exists nearby is what's actionable
+  // here. Per-route schedules already live on the attendee-facing pages.
+  const counts = { bus: 0, train: 0, flight: 0, taxi: 0, other: 0 };
+  let nearest = null;
+  nearbyTransportItems.forEach(t => {
+    counts[classifyNearbyTransport(t)]++;
+    if (!nearest || t.distance_km < nearest.distance_km) nearest = t;
+  });
+  const fmtDist = km => km < 1 ? Math.round(km * 1000) + " m" : km.toFixed(1) + " km";
+  box.innerHTML = `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${nearbyTransportItems.length}</div><div class="text-[10px] text-muted uppercase mt-1">Points found</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${counts.bus}</div><div class="text-[10px] text-muted uppercase mt-1">🚌 Bus stops</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${counts.train}</div><div class="text-[10px] text-muted uppercase mt-1">🚆 Rail/transit</div></div>
+      <div class="row-card p-3 text-center"><div class="text-xl font-black">${fmtDist(nearest.distance_km)}</div><div class="text-[10px] text-muted uppercase mt-1">Nearest point</div></div>
+    </div>
+    <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-[10.5px] text-muted">
+      <span>${counts.flight} airport</span><span>${counts.taxi} taxi stand</span><span>${counts.other} other</span>
+    </div>`;
+}
 
 async function loadHotels() {
   const hotels = await api("/api/hotels/recommendations");
