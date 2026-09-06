@@ -268,10 +268,12 @@ def _resolve_alerts_for_zone(db, zone_id):
         db.commit()
 
 
-def list_alerts(db, status=None):
+def list_alerts(db, status=None, event_id=None):
     q = db.query(models.Alert).order_by(models.Alert.id.desc())
     if status:
         q = q.filter(models.Alert.status == status)
+    if event_id is not None:
+        q = q.filter(models.Alert.event_id == event_id)
     out = []
     for a in q.limit(100).all():
         zone = db.get(models.Zone, a.zone_id) if a.zone_id else None
@@ -418,7 +420,11 @@ def full_state(db):
         return {"configured": False, "tick": 0, "clock": event_clock_label(0),
                 "scenario_active": False, "zones": [], "resources": []}
 
-    zones = db.query(models.Zone).all()
+    # Scoped to the live event's own zones — a completed/catalog event (e.g.
+    # a seeded past event for post-event analytics) can carry its own
+    # permanent Zone rows now, so an unscoped query would leak them in here.
+    live = get_live_event(db)
+    zones = db.query(models.Zone).filter(models.Zone.event_id == live.id).all() if live else []
     resources = db.query(models.Resource).all()
 
     zone_out = []
@@ -486,6 +492,64 @@ def event_health_score(db):
         "open_alerts": len(open_alerts),
         "critical_alerts": critical_open,
     }
+
+
+PILLAR_LABELS = ["CROWD", "VENUE", "HOTELS", "TRANSPORT", "SAFETY"]
+
+
+def health_breakdown(db):
+    """Powers the Health Score breakdown modal — same per-zone risk scores
+    event_health_score already aggregates, just split five ways instead of
+    three (CROWD = gate zones, VENUE = the rest of the venue domain) so an
+    operator can see which specific pillar is dragging the score down, with
+    a real narrated reason instead of only a number."""
+    health = event_health_score(db)
+    live = get_live_event(db)
+    zones = db.query(models.Zone).filter(models.Zone.event_id == live.id).all() if live else []
+
+    groups = {
+        "CROWD": [z for z in zones if z.type == "gate"],
+        "VENUE": [z for z in zones if z.domain == "venue" and z.type != "gate"],
+        "HOTELS": [z for z in zones if z.domain == "hospitality"],
+        "TRANSPORT": [z for z in zones if z.domain == "transport"],
+    }
+
+    def worst_zone_reason(group_zones):
+        if not group_zones:
+            return None, 100, "LOW", "No zones configured for this domain yet."
+        scored = [(z, zone_risk(z, db)) for z in group_zones]
+        zone, r = max(scored, key=lambda zr: zr[1]["score"])
+        dominant = _dominant_factor(r)
+        pct = round(100 - sum(rr["score"] for _, rr in scored) / len(scored), 1)
+        return zone, pct, r["level"], _factor_sentence(zone, r, dominant)
+
+    pillars = []
+    for label in ["CROWD", "VENUE", "HOTELS", "TRANSPORT"]:
+        zone, pct, level, reason = worst_zone_reason(groups[label])
+        pillars.append({"label": label, "pct": pct, "level": level, "reason": reason})
+
+    safety_level = risk_level(100 - health["safety"])
+    safety_reason = (
+        f"{health['critical_alerts']} critical alert(s) open — safety score reduced."
+        if health["critical_alerts"] else
+        (f"{health['open_alerts']} open alert(s) being tracked." if health["open_alerts"] else "No open alerts.")
+    )
+    pillars.append({"label": "SAFETY", "pct": health["safety"], "level": safety_level, "reason": safety_reason})
+
+    worst_pillar = min(pillars, key=lambda p: p["pct"])
+    top_reason = (
+        "Health stable — all operational domains within safe thresholds."
+        if worst_pillar["level"] == "LOW" else
+        f"Health reduced because {worst_pillar['label'].title()} is {worst_pillar['level']} ({worst_pillar['reason']})"
+    )
+
+    recs = generate_recommendations(db)
+    worst_group = groups.get(worst_pillar["label"], [])
+    worst_names = {z.name for z in worst_group}
+    mitigation_rec = next((r for r in recs if worst_names & set(r["target_zones"])), None)
+    mitigation = mitigation_rec["label"] if mitigation_rec else "No mitigation needed right now."
+
+    return {"overall": health["overall"], "reason": top_reason, "mitigation": mitigation, "pillars": pillars}
 
 
 def causal_chain(db):
@@ -660,7 +724,8 @@ def _action_urgency(db, action):
     ranking reflect live state instead of only the action's fixed properties,
     so e.g. dispatching buses ranks higher once Corridor B is actually under
     pressure, not just because it's generically a decent action."""
-    zones_by_name = {z.name: z for z in db.query(models.Zone).all()}
+    live = get_live_event(db)
+    zones_by_name = {z.name: z for z in db.query(models.Zone).filter(models.Zone.event_id == live.id).all()} if live else {}
     scores = [zone_risk(zones_by_name[n], db)["score"] for n in action["target_zones"] if n in zones_by_name]
     return max(scores) if scores else 0
 
@@ -702,7 +767,8 @@ def preventive_alerts(db):
     looks identical to a MODERATE zone holding steady if you only look at the
     current score — this surfaces the ones with a short time_to_capacity_min
     so operators can intervene ahead of the surge instead of reacting to it."""
-    zones_by_name = {z.name: z for z in db.query(models.Zone).all()}
+    live = get_live_event(db)
+    zones_by_name = {z.name: z for z in db.query(models.Zone).filter(models.Zone.event_id == live.id).all()} if live else {}
     recs = generate_recommendations(db)
 
     alerts = []
@@ -768,9 +834,10 @@ def _occupancy_level(pct):
 
 def offpeak_recommendations(db):
     state = get_state_row(db)
-    if not state:
+    live = get_live_event(db)
+    if not state or not live:
         return []
-    gates = db.query(models.Zone).filter(models.Zone.type == "gate").all()
+    gates = db.query(models.Zone).filter(models.Zone.type == "gate", models.Zone.event_id == live.id).all()
 
     scenario = db.get(models.Scenario, state.active_scenario_id) if state.active_scenario_id else None
     ticks_since_trigger = state.tick - state.trigger_tick if state.scenario_active else -1
@@ -935,6 +1002,76 @@ def escalations(db):
         for z in state["zones"]
         if z["level"] in ("HIGH", "CRITICAL") and z["name"] not in covered
     ]
+
+
+def risk_register(db):
+    """Rule-based operational risk register — deliberately separate from the
+    5-factor zone_risk score used everywhere else: an operator reading this
+    table wants 'is this zone over its plain occupancy threshold', not a
+    blended score. Only surfaces zones at MEDIUM occupancy (60%) or above, so
+    quiet zones don't clutter the list; each row carries a concrete
+    recommended_action pulled from the same recommendation/prediction
+    functions already used elsewhere, not a duplicated scoring path."""
+    live = get_live_event(db)
+    if not live:
+        return []
+    zones = db.query(models.Zone).filter(models.Zone.event_id == live.id).all()
+    recs = generate_recommendations(db)
+    transport_preds = {t["zone_id"]: t for t in transport_demand_prediction(db)}
+    rows = []
+
+    for z in zones:
+        if not z.capacity:
+            continue
+        pct = round(z.current_count / z.capacity * 100, 1)
+
+        if z.type == "gate":
+            level = _occupancy_level(pct)
+            if level == "NORMAL":
+                continue
+            rec = next((r for r in recs if z.name in r["target_zones"]), None)
+            rows.append({
+                "risk_type": "CROWD CONGESTION", "zone_id": z.id, "zone_name": z.name,
+                "severity": "MEDIUM" if level == "MODERATE" else level,
+                "current_label": f"{pct}% density", "current_pct": pct, "threshold_label": "Threshold: 80%",
+                "status": "ACTIVE", "recommended_action": rec["label"] if rec else "Monitor",
+            })
+        elif z.domain == "hospitality":
+            level = _occupancy_level(pct)
+            if level == "NORMAL":
+                continue
+            rows.append({
+                "risk_type": "HOTEL CAPACITY", "zone_id": z.id, "zone_name": z.name,
+                "severity": "MEDIUM" if level == "MODERATE" else level,
+                "current_label": f"{pct}% occupancy", "current_pct": pct, "threshold_label": "Threshold: 90%",
+                "status": "ACTIVE",
+                "recommended_action": "Consider an alternate hotel" if pct > 90 else "Monitor",
+            })
+        elif z.domain == "transport":
+            if pct <= 85:
+                continue
+            severity = "CRITICAL" if pct > 99 else ("HIGH" if pct > 95 else "MEDIUM")
+            pred = transport_preds.get(z.id)
+            rows.append({
+                "risk_type": "TRANSPORT SHORTAGE", "zone_id": z.id, "zone_name": z.name,
+                "severity": severity,
+                "current_label": f"{pct}% utilization", "current_pct": pct, "threshold_label": "Threshold: 85%",
+                "status": "ACTIVE",
+                "recommended_action": pred["recommendation"] if pred else "Monitor",
+            })
+
+    emergency = emergency_status(db)
+    if emergency["active"]:
+        rows.append({
+            "risk_type": "EMERGENCY", "zone_id": emergency["zone_id"], "zone_name": emergency["zone_name"] or "Venue-wide",
+            "severity": "CRITICAL", "current_label": emergency["message"] or "Active emergency", "current_pct": None,
+            "threshold_label": "—", "status": "ACTIVE",
+            "recommended_action": "Follow emergency protocol, dispatch security.",
+        })
+
+    severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    rows.sort(key=lambda r: severity_order.get(r["severity"], 4))
+    return rows
 
 
 # --- registration & check-in (Section 7.2) ---------------------------------
@@ -1241,7 +1378,7 @@ def create_event_listing(
     return event
 
 
-def book_tier(db, event_id, tier_id, name, seat_id=None, email=None, quantity=1, hotel_zone_id=None, wants_transport=False):
+def book_tier(db, event_id, tier_id, name, seat_id=None, email=None, quantity=1, hotel_zone_id=None, wants_transport=False, budget_tier=None):
     """seat_id is optional even for a uses_seats tier — most of a large
     tier's capacity is general admission (only SEATS_PER_LARGE_TIER seats are
     individually numbered), so booking without one just draws from the same
@@ -1269,6 +1406,7 @@ def book_tier(db, event_id, tier_id, name, seat_id=None, email=None, quantity=1,
     booking = models.VisitorProfile(
         name=name, email=email, event_id=event_id, tier_id=tier_id, seat_id=seat.id if seat else None,
         quantity=quantity, hotel_zone_id=hotel_zone_id, wants_transport=wants_transport,
+        budget_tier=budget_tier if hotel_zone_id else None,
     )
     db.add(booking)
     if seat:
@@ -1279,6 +1417,64 @@ def book_tier(db, event_id, tier_id, name, seat_id=None, email=None, quantity=1,
     return {
         "status": "ok", "code": booking.code, "tier": tier.name, "quantity": quantity,
         "seat_label": seat.seat_label if seat else None, "price": tier.price, "total_price": tier.price * quantity,
+    }
+
+
+def attendee_plan(db, code):
+    """The personalized 'Plan' step: bundles a recommended gate, hotel,
+    transport note and arrival time for one booking — always live-computed
+    from the same recommendation functions the operator dashboard already
+    uses (gate_advisory/hotel_recommendations/transport_demand_prediction/
+    offpeak_recommendations), so re-polling this picks up any condition
+    change automatically instead of needing a separate 're-plan' step."""
+    booking = db.query(models.VisitorProfile).filter(models.VisitorProfile.code == code).first()
+    if not booking or not booking.event_id:
+        return None
+    event = db.get(models.Event, booking.event_id)
+    if not event:
+        return None
+
+    live = get_live_event(db)
+    is_live = bool(live and live.id == event.id)
+    if not is_live:
+        hint = schedule_offpeak_hint(event.event_time)
+        return {
+            "event_name": event.name, "is_live": False, "gate": None, "hotel": None, "transport": None,
+            "arrival": {"recommendation": hint} if hint else None,
+        }
+
+    tier = db.get(models.EventTier, booking.tier_id) if booking.tier_id else None
+    advisory = gate_advisory(db)
+
+    gate = None
+    if tier and tier.gate_name:
+        gate = next((g for g in advisory["gates"] if g["name"] == tier.gate_name), None)
+    if not gate and advisory["gates"]:
+        gate = min(advisory["gates"], key=lambda g: g["capacity_pressure_pct"])
+
+    hotel = None
+    if booking.hotel_zone_id is not None:
+        hotels = hotel_recommendations(db)
+        if hotels:
+            hotel = (
+                min(hotels, key=lambda h: abs((h["price_tier"] or 3) - booking.budget_tier))
+                if booking.budget_tier else hotels[0]
+            )
+
+    transport = None
+    if booking.wants_transport and gate and gate.get("linked_transport_zone_id"):
+        transport = next(
+            (t for t in transport_demand_prediction(db) if t["zone_id"] == gate["linked_transport_zone_id"]), None
+        )
+
+    off_peak = offpeak_recommendations(db)
+    arrival = None
+    if off_peak:
+        arrival = next((o for o in off_peak if gate and o["zone_id"] == gate["id"]), off_peak[0])
+    return {
+        "event_name": event.name, "is_live": True,
+        "gate": gate, "hotel": hotel, "transport": transport,
+        "arrival": arrival,
     }
 
 
@@ -1345,8 +1541,11 @@ def _haversine_km(lat1, lng1, lat2, lng2):
 
 
 def hotel_recommendations(db):
-    hotels = db.query(models.Zone).filter(models.Zone.type == "hotel").all()
-    venue = db.query(models.Zone).filter(models.Zone.type == "arena").first()
+    live = get_live_event(db)
+    if not live:
+        return []
+    hotels = db.query(models.Zone).filter(models.Zone.type == "hotel", models.Zone.event_id == live.id).all()
+    venue = db.query(models.Zone).filter(models.Zone.type == "arena", models.Zone.event_id == live.id).first()
     out = []
     for h in hotels:
         available_pct = round(max(0, h.capacity - h.current_count) / h.capacity * 100, 1) if h.capacity else 0
@@ -1367,7 +1566,7 @@ def hotel_recommendations(db):
             "price_tier": h.price_tier, "score": round(score, 1),
             "occupied_rooms": h.current_count, "total_rooms": h.capacity,
             "available_rooms": max(h.capacity - h.current_count, 0),
-            "reason": ", ".join(reasons),
+            "reason": ", ".join(reasons), "lat": h.lat, "lng": h.lng,
         })
     out.sort(key=lambda x: x["score"], reverse=True)
     manual = next((h for h in hotels if h.manual_recommended), None)
@@ -1382,7 +1581,10 @@ def hotel_recommendations(db):
 # critical" pattern preventive_alerts already uses for gates.
 
 def transport_demand_prediction(db):
-    transport_zones = db.query(models.Zone).filter(models.Zone.domain == "transport").all()
+    live = get_live_event(db)
+    if not live:
+        return []
+    transport_zones = db.query(models.Zone).filter(models.Zone.domain == "transport", models.Zone.event_id == live.id).all()
     resources = {r.type: r for r in db.query(models.Resource).all()}
     bus = resources.get("bus")
     out = []
@@ -1608,16 +1810,26 @@ def request_accessibility_assistance(db, email=None, note=None, lat=None, lng=No
 
 # --- post-event analytics / historical learning (Sections 31-32) ----------
 
-def event_analytics(db):
-    event = get_live_event(db)
-    zones = db.query(models.Zone).all()
-    visitors = db.query(models.VisitorProfile).all()
+def event_analytics(db, event_id=None):
+    """Defaults to the current live event; pass event_id to report on any
+    other event instead (e.g. a completed one), scoping zones/visitors/alerts
+    to that event so a past event's numbers don't mix with the live one's."""
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    zones = db.query(models.Zone).filter(models.Zone.event_id == event.id).all() if event else []
+    if event_id is None:
+        # legacy direct-gate registrations carry a null event_id, attributed
+        # to whichever event is live rather than a specific completed one
+        visitors = db.query(models.VisitorProfile).filter(
+            (models.VisitorProfile.event_id == event.id) | (models.VisitorProfile.event_id.is_(None))
+        ).all() if event else []
+    else:
+        visitors = db.query(models.VisitorProfile).filter(models.VisitorProfile.event_id == event.id).all()
     checked_in = [v for v in visitors if v.checked_in]
 
     peak_overall = max((z.peak_count / z.capacity * 100 if z.capacity else 0) for z in zones) if zones else 0
     most_problematic = max(zones, key=lambda z: (z.peak_count / z.capacity if z.capacity else 0)) if zones else None
 
-    all_alerts = list_alerts(db)
+    all_alerts = list_alerts(db, event_id=event.id) if event else []
     critical_incidents = sum(1 for a in all_alerts if a["severity"] == "CRITICAL")
     resolved_incidents = sum(1 for a in all_alerts if a["status"] == "resolved")
 
@@ -2093,7 +2305,8 @@ def gate_advisory(db):
     """Visitor Advisory: gate-by-gate status plus an alternate-gate suggestion
     if the fullest gate is under real pressure — always live-computed, not
     cached, so it reflects whatever the operators/simulator just did."""
-    gates = db.query(models.Zone).filter(models.Zone.type == "gate").all()
+    live = get_live_event(db)
+    gates = db.query(models.Zone).filter(models.Zone.type == "gate", models.Zone.event_id == live.id).all() if live else []
     out = []
     for g in gates:
         r = zone_risk(g, db)
@@ -2101,7 +2314,8 @@ def gate_advisory(db):
             "id": g.id, "name": g.name,
             "current_count": g.current_count, "capacity": g.capacity,
             "remaining": max(g.capacity - g.current_count, 0),
-            "is_accessible": g.is_accessible,
+            "is_accessible": g.is_accessible, "lat": g.lat, "lng": g.lng,
+            "linked_transport_zone_id": g.linked_transport_zone_id,
             **r,
         })
     out.sort(key=lambda z: z["capacity_pressure_pct"], reverse=True)
@@ -2172,19 +2386,63 @@ def explain_zone(db, zone_id):
 
 
 def ai_advisor(db):
-    """Event-wide 'what should I do right now' — top zones by score, one
-    urgency-tagged line each, built the same way as explain_zone."""
+    """Structured 'what should I do right now' for the Command Centre's AI
+    Advisor panel — situation/top-risk/recommendation/expected-impact, all
+    derived from the same risk_register/generate_recommendations/run_whatif
+    the rest of the dashboard already uses, not a separate model."""
     state = full_state(db)
-    top = [z for z in state["zones"] if z["level"] != "LOW"][:5] or state["zones"][:3]
-    lines = []
-    for z in top:
-        zone = db.get(models.Zone, z["id"])
-        r = zone_risk(zone, db)
-        dominant = _dominant_factor(r)
-        lines.append(f"{URGENCY_TAG[z['level']]}: {_factor_sentence(zone, r, dominant)}")
-    text = "\n".join(lines) if lines else "All zones are currently LOW risk — nothing needs attention right now."
-    grounded = [f"zone:{z['name']}" for z in top] or ["state:all_zones"]
-    return {"text": text, "grounded_in": grounded, "error": None}
+    zones = state["zones"]
+    if not zones:
+        return {
+            "situation": "No event is currently live.", "top_risk": None, "recommendation": None,
+            "expected_impact": None, "waiting_time": None, "grounded_in": [], "error": None,
+        }
+
+    worst = max(zones, key=lambda z: z["score"])
+    worst_zone = db.get(models.Zone, worst["id"])
+    r = zone_risk(worst_zone, db)
+    situation = _factor_sentence(worst_zone, r, _dominant_factor(r))
+
+    if worst["level"] == "LOW":
+        return {
+            "situation": "All zones are currently LOW risk — nothing needs attention right now.",
+            "top_risk": None, "recommendation": None, "expected_impact": None, "waiting_time": None,
+            "grounded_in": [f"zone:{worst_zone.name}"], "error": None,
+        }
+
+    register = risk_register(db)
+    top_risk_row = next((row for row in register if row["zone_id"] == worst["id"]), None)
+    top_risk = {"type": top_risk_row["risk_type"], "zone_name": worst_zone.name} if top_risk_row else {
+        "type": "CROWD CONGESTION", "zone_name": worst_zone.name,
+    }
+
+    recs = generate_recommendations(db)
+    rec = next((rr for rr in recs if worst_zone.name in rr["target_zones"]), None)
+    recommendation = {"id": rec["id"], "label": rec["label"]} if rec else None
+
+    expected_impact, waiting_time = None, None
+    if rec:
+        before_pct = worst["capacity_pressure_pct"]
+        if worst_zone.name == "Gate 2":
+            whatif = run_whatif(db, redirect_count=2000, open_gate3=True)
+            if whatif:
+                expected_impact = {
+                    "before_pct": whatif["before"]["gate2"]["capacity_pressure_pct"],
+                    "after_pct": whatif["after"]["gate2"]["capacity_pressure_pct"],
+                }
+        if expected_impact is None:
+            expected_impact = {"before_pct": before_pct, "after_pct": clip(before_pct - rec["risk_reduction"], 0, 100)}
+
+        before_ttc = r["time_to_capacity_min"]
+        if before_ttc is not None:
+            ratio = expected_impact["after_pct"] / before_pct if before_pct else 0
+            waiting_time = {"before_min": before_ttc, "after_min": round(before_ttc * ratio, 1)}
+
+    return {
+        "situation": situation, "top_risk": top_risk, "recommendation": recommendation,
+        "expected_impact": expected_impact, "waiting_time": waiting_time,
+        "grounded_in": [f"zone:{worst_zone.name}"], "error": None,
+    }
 
 
 def attendee_advisory(db):

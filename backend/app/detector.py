@@ -62,7 +62,8 @@ class CrowdDetector:
         except ImportError:
             feed.error = "YOLO dependencies missing. Install opencv-python and ultralytics."
             return
-        capture = cv2.VideoCapture(feed.stream_url)
+        source = int(feed.stream_url) if feed.stream_url.isdigit() else feed.stream_url
+        capture = cv2.VideoCapture(source)
         if not capture.isOpened():
             feed.error = "Could not open the camera stream. Check its URL and network access."
             return

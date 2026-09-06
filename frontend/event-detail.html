@@ -351,10 +351,12 @@ async function loadEvent() {
 let bookingQty = 1;
 let wantsHotel = false;
 let wantsTransport = false;
+let budgetTier = 3;
+const BUDGET_OPTIONS = [{ label: "Budget", value: 1 }, { label: "Mid-range", value: 3 }, { label: "Premium", value: 5 }];
 
 function openBookingSheet() {
   if (!selectedTier) return;
-  bookingQty = 1; wantsHotel = false; wantsTransport = false; selectedSeatId = null;
+  bookingQty = 1; wantsHotel = false; wantsTransport = false; budgetTier = 3; selectedSeatId = null;
   renderBookingSheet();
   document.getElementById("booking-veil").classList.add("show");
 }
@@ -399,6 +401,10 @@ function renderBookingSheet() {
         <div class="tab-opt ${!wantsHotel ? "active" : ""}" onclick="setHotel(false)">No hotel</div>
         <div class="tab-opt ${wantsHotel ? "active" : ""}" onclick="setHotel(true)">Add hotel</div>
       </div>
+      ${wantsHotel ? `
+      <div class="tab-group mt-2">
+        ${BUDGET_OPTIONS.map(b => `<div class="tab-opt ${budgetTier === b.value ? "active" : ""}" onclick="setBudget(${b.value})">${b.label}</div>`).join("")}
+      </div>` : ""}
     </div>` : ""}
     ${showTransportToggle ? `
     <div class="card p-3 mb-3">
@@ -428,6 +434,7 @@ function changeQty(delta) {
 }
 function setHotel(v) { wantsHotel = v; renderBookingSheet(); }
 function setTransport(v) { wantsTransport = v; renderBookingSheet(); }
+function setBudget(v) { budgetTier = v; renderBookingSheet(); }
 
 async function openSeatPicker() {
   const seats = await api(`/api/events/${eventId}/tiers/${selectedTier.id}/seats`);
@@ -454,6 +461,7 @@ async function confirmBooking() {
     body: JSON.stringify({
       name, email: getEmail() || null, seat_id: selectedSeatId, quantity: selectedSeatId ? 1 : bookingQty,
       wants_transport: wantsTransport, hotel_zone_id: wantsHotel && eventData.hotels.length ? eventData.hotels[0].zone_id : null,
+      budget_tier: wantsHotel ? budgetTier : null,
     }),
   });
   if (res.status !== "ok") { document.getElementById("booking-error").textContent = res.message || "Something went wrong. Please try again."; return; }
@@ -461,7 +469,30 @@ async function confirmBooking() {
   await loadEvent();
 }
 
-function showConfirmation(res) {
+function planSectionHtml(plan) {
+  if (!plan.is_live) {
+    return `<div class="card p-3 mt-3 text-left"><div class="eyebrow mb-1">Your Plan</div>
+      <p class="text-muted text-xs m-0">${plan.arrival?.recommendation || "Your personalized plan will be ready once the event goes live."}</p></div>`;
+  }
+  const navLink = (lat, lng) => lat != null && lng != null
+    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener" class="text-accent text-[10.5px] font-bold no-underline">🧭 Navigate</a>` : "";
+  const rows = [];
+  if (plan.gate) rows.push(`
+    <div class="flex items-center justify-between py-1.5">
+      <span class="text-xs">Gate: <b>${plan.gate.name}</b> · <span style="color:${LEVEL_HEX[plan.gate.level]}">${plan.gate.level}</span></span>
+      ${navLink(plan.gate.lat, plan.gate.lng)}
+    </div>`);
+  if (plan.hotel) rows.push(`
+    <div class="flex items-center justify-between py-1.5">
+      <span class="text-xs">Hotel: <b>${plan.hotel.name}</b></span>
+      ${navLink(plan.hotel.lat, plan.hotel.lng)}
+    </div>`);
+  if (plan.transport) rows.push(`<p class="text-muted text-xs m-0 py-1">🚍 ${plan.transport.recommendation}</p>`);
+  if (plan.arrival) rows.push(`<p class="text-muted text-xs m-0 py-1">🕒 ${plan.arrival.recommendation}</p>`);
+  return `<div class="card p-3 mt-3 text-left"><div class="eyebrow mb-1">Your Plan</div>${rows.join("")}</div>`;
+}
+
+async function showConfirmation(res) {
   const sheet = document.getElementById("booking-sheet");
   sheet.innerHTML = `
     <div class="text-center py-2">
@@ -472,9 +503,16 @@ function showConfirmation(res) {
       <div class="text-2xl tracking-[5px] text-center font-mono font-bold text-accent my-3">${res.code}</div>
       <p class="text-muted text-xs">${res.tier}${res.seat_label ? " · Seat " + res.seat_label : ""}${res.quantity > 1 ? " · Qty " + res.quantity : ""} · ₹${res.total_price.toLocaleString()}</p>
       <p class="text-muted text-[10.5px] mt-2">Show this code / QR at the gate. Find it anytime under My Events.</p>
+      <div id="plan-section"></div>
       <button class="btn-primary w-full py-3 rounded-xl text-sm mt-4" onclick="location.href='my-events.html'">GO TO MY EVENTS</button>
     </div>`;
   try { new QRCode(document.getElementById("qr-code"), { text: res.code, width: 140, height: 140, colorDark: "#123B6D", colorLight: "#ffffff" }); } catch (e) {}
+  try {
+    const plan = await api(`/api/my-plan?code=${res.code}`);
+    document.getElementById("plan-section").innerHTML = planSectionHtml(plan);
+  } catch (e) {
+    // Plan is a bonus on top of a successful booking — don't block the confirmation screen on it.
+  }
 }
 
 loadEvent();

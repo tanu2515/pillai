@@ -194,6 +194,22 @@
       <div id="hotels-list" class="mb-4"></div>
       <div class="row-card p-4">
         <h3 class="eyebrow mb-3">Add a hotel</h3>
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <label class="text-[10px] text-muted uppercase tracking-wide">Radius
+            <select id="h-radius" class="p-2.5 text-xs">
+              <option value="500">0.5 km</option>
+              <option value="1000">1 km</option>
+              <option value="2000">2 km</option>
+              <option value="5000" selected>5 km</option>
+              <option value="10000">10 km</option>
+            </select>
+          </label>
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="findNearbyHotelsForAdd()">🔎 FIND NEARBY HOTELS</button>
+          <select id="h-discovered" class="p-2.5 text-xs flex-1 min-w-[220px] hidden" onchange="pickDiscoveredHotel()">
+            <option value="">Select a hotel…</option>
+          </select>
+        </div>
+        <div id="h-discover-status" class="text-xs text-muted mb-2"></div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <input type="text" id="h-name" placeholder="Hotel name" class="p-2.5 text-xs" />
           <input type="number" id="h-rooms" placeholder="Total rooms" class="p-2.5 text-xs font-mono" />
@@ -449,6 +465,7 @@ function escapeHtml(s) {
 function renderCamBlock(zoneId) {
   const el = document.getElementById(`cam-block-${zoneId}`);
   if (!el) return;
+  if (document.activeElement && document.activeElement.id === `cam-url-${zoneId}`) return;
   const cam = cameraStatusMap[zoneId];
   if (cam && cam.running) {
     el.innerHTML = `
@@ -568,6 +585,48 @@ async function removeHotel(id) {
   await load();
 }
 
+let discoveredHotelsForAdd = [];
+
+async function findNearbyHotelsForAdd() {
+  const status = document.getElementById("h-discover-status");
+  const select = document.getElementById("h-discovered");
+  if (eventVenueLat == null || eventVenueLng == null) {
+    status.textContent = "Set the event's venue location first (Event tab) before searching nearby hotels.";
+    return;
+  }
+  status.textContent = "Searching nearby hotels…";
+  select.classList.add("hidden");
+  try {
+    const radius_m = Number(document.getElementById("h-radius").value);
+    const data = await api("/api/hotels/discover-nearby", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: eventVenueLat, lng: eventVenueLng, radius_m }),
+    });
+    discoveredHotelsForAdd = data.hotels || [];
+    if (!discoveredHotelsForAdd.length) {
+      status.textContent = "No hotels found in that radius. Try a larger radius, or add one manually below.";
+      return;
+    }
+    select.innerHTML = '<option value="">Select a hotel…</option>' + discoveredHotelsForAdd.map((h, i) =>
+      `<option value="${i}">${escapeHtml(h.name)} — ${h.distance_km} km${h.stars ? ` · ${h.stars}★` : ""}</option>`
+    ).join("");
+    select.classList.remove("hidden");
+    status.textContent = `${discoveredHotelsForAdd.length} hotel(s) found. Pick one, then fill in rooms/price below and click ADD HOTEL.`;
+  } catch (e) {
+    status.textContent = "Couldn't search nearby hotels: " + e.message;
+  }
+}
+
+function pickDiscoveredHotel() {
+  const idx = document.getElementById("h-discovered").value;
+  if (idx === "") return;
+  const h = discoveredHotelsForAdd[idx];
+  document.getElementById("h-name").value = h.name;
+  document.getElementById("h-lat").value = h.lat;
+  document.getElementById("h-lng").value = h.lng;
+  if (h.phone) document.getElementById("h-contact").value = h.phone;
+}
+
 async function addHotel() {
   const body = {
     name: document.getElementById("h-name").value.trim(),
@@ -585,6 +644,8 @@ async function addHotel() {
   await api("/api/event-setup/hotels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   ["h-name", "h-rooms", "h-price", "h-contact", "h-amenities", "h-lat", "h-lng"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("hotel-add-status").textContent = "";
+  document.getElementById("h-discovered").classList.add("hidden");
+  document.getElementById("h-discover-status").textContent = "";
   showToast("Hotel added.");
   await load();
 }

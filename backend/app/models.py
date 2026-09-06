@@ -155,6 +155,7 @@ class VisitorProfile(Base):
     quantity = Column(Integer, default=1)
     hotel_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)  # optional add-on picked at booking time
     wants_transport = Column(Boolean, default=False)  # optional add-on: request a shuttle/bus assignment
+    budget_tier = Column(Integer, nullable=True)  # 1-5, set only when hotel_zone_id is requested; matches Zone.price_tier scale
     code = Column(String, default=lambda: uuid.uuid4().hex[:8])
     checked_in = Column(Boolean, default=False)
     walk_in = Column(Boolean, default=False)

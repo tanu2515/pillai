@@ -82,6 +82,7 @@
     <div class="tab-btn" data-tab="active" onclick="switchTab(this)">Active</div>
     <div class="tab-btn" data-tab="past" onclick="switchTab(this)">Past</div>
   </div>
+  <section id="notif-box" class="card p-4 mt-6 hidden fade-up"></section>
   <section id="bookings-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6"></section>
 </div>
 
@@ -98,6 +99,10 @@ const API = "";
 async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
 let bookingsData = { upcoming: [], active: [], past: [] };
 let activeTab = "upcoming";
+let plansByCode = {};
+let notifs = [];
+const LEVEL_HEX = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" };
+const NOTIF_ICON = { CRITICAL: "🔴", HIGH: "🟠", MEDIUM: "🟡", LOW: "🟢" };
 
 function getEmail() { try { return sessionStorage.getItem("vyavastha_email") || ""; } catch (e) { return ""; } }
 function saveEmail() {
@@ -130,7 +135,38 @@ function bookingCard(b, i) {
       ${b.hotel_name ? `<div class="text-[10.5px] text-muted mt-1">🏨 ${b.hotel_name}</div>` : ""}
       ${b.wants_transport ? `<div class="text-[10.5px] text-muted mt-1">🚌 Transport requested</div>` : ""}
       <button class="qr-btn w-full mt-3 py-2 rounded-lg text-xs" onclick='showQr(${JSON.stringify(b.code)})'>VIEW QR CODE — ${b.code}</button>
+      ${activeTab === "active" ? planBlockHtml(plansByCode[b.code]) : ""}
     </div>`;
+}
+
+function planBlockHtml(plan) {
+  if (!plan || !plan.is_live) return "";
+  const navLink = (lat, lng) => lat != null && lng != null
+    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener" class="text-accent text-[10px] font-bold no-underline">🧭 Navigate</a>` : "";
+  const rows = [];
+  if (plan.gate) rows.push(`<div class="flex items-center justify-between py-1"><span class="text-[10.5px]">Gate: <b>${plan.gate.name}</b> · <span style="color:${LEVEL_HEX[plan.gate.level]}">${plan.gate.level}</span></span>${navLink(plan.gate.lat, plan.gate.lng)}</div>`);
+  if (plan.hotel) rows.push(`<div class="flex items-center justify-between py-1"><span class="text-[10.5px]">Hotel: <b>${plan.hotel.name}</b></span>${navLink(plan.hotel.lat, plan.hotel.lng)}</div>`);
+  if (plan.transport) rows.push(`<div class="text-[10.5px] text-muted py-1">🚍 ${plan.transport.recommendation}</div>`);
+  if (plan.arrival) rows.push(`<div class="text-[10.5px] text-muted py-1">🕒 ${plan.arrival.recommendation}</div>`);
+  if (!rows.length) return "";
+  return `<div class="mt-3 pt-3" style="border-top:1px solid #E7EEF7;"><div class="eyebrow mb-1" style="font-size:9.5px;">Your Plan</div>${rows.join("")}</div>`;
+}
+
+function renderNotifs() {
+  const box = document.getElementById("notif-box");
+  if (activeTab !== "active" || !notifs.length) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  box.innerHTML = `<div class="eyebrow mb-2">🔔 Notifications</div>` + notifs.map(n => `
+    <div class="flex items-start gap-2 py-1 cursor-pointer" onclick="markNotifRead(${n.id})">
+      <span class="text-sm">${NOTIF_ICON[n.priority] || "🟡"}</span>
+      <span class="text-xs">${n.message}</span>
+    </div>`).join("");
+}
+
+async function markNotifRead(id) {
+  await api(`/api/notifications/${id}/read`, { method: "POST" });
+  notifs = notifs.filter(n => n.id !== id);
+  renderNotifs();
 }
 
 function render() {
@@ -138,6 +174,7 @@ function render() {
   document.getElementById("bookings-list").innerHTML = list.length
     ? list.map(bookingCard).join("")
     : `<div class="text-center text-muted text-xs py-16 col-span-full">No ${activeTab} events yet.</div>`;
+  renderNotifs();
 }
 
 function showQr(code) {
@@ -158,10 +195,22 @@ async function load() {
   document.getElementById("noemail").classList.add("hidden");
   document.getElementById("body-view").classList.remove("hidden");
   bookingsData = await api(`/api/my-bookings?email=${encodeURIComponent(email)}`);
+
+  if (bookingsData.active && bookingsData.active.length) {
+    const entries = await Promise.all(bookingsData.active.map(async b => {
+      try { return [b.code, await api(`/api/my-plan?code=${b.code}`)]; } catch (e) { return null; }
+    }));
+    plansByCode = Object.fromEntries(entries.filter(Boolean));
+    try { notifs = (await api("/api/notifications?role=Attendee")).slice(0, 3); } catch (e) { notifs = []; }
+  } else {
+    plansByCode = {};
+    notifs = [];
+  }
   render();
 }
 
 load();
+setInterval(load, 8000);
 </script>
 </body>
 </html>
