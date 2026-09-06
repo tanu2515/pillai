@@ -27,6 +27,12 @@ with db_engine.begin() as conn:
     zone_columns = {c["name"] for c in inspect(db_engine).get_columns("zones")}
     if "is_accessible" not in zone_columns:
         conn.execute(text("ALTER TABLE zones ADD COLUMN is_accessible BOOLEAN NOT NULL DEFAULT FALSE"))
+    event_columns = {c["name"] for c in inspect(db_engine).get_columns("events")}
+    if "owner_email" not in event_columns:
+        conn.execute(text("ALTER TABLE events ADD COLUMN owner_email VARCHAR"))
+    if "venue_lat" not in event_columns:
+        conn.execute(text("ALTER TABLE events ADD COLUMN venue_lat FLOAT"))
+        conn.execute(text("ALTER TABLE events ADD COLUMN venue_lng FLOAT"))
 
 app = FastAPI(title="VYAVASTHA — PS-8 Mega-Event Orchestration")
 
@@ -113,6 +119,18 @@ class EventCreate(BaseModel):
     region: str
     expected_attendance: int
     safe_capacity: int
+    owner_email: str | None = None
+    venue_lat: float
+    venue_lng: float
+
+
+class SwitchEventRequest(BaseModel):
+    event_id: int
+    email: str
+
+
+class ResourceUpdate(BaseModel):
+    quantity_total: int = Field(ge=0)
 
 
 class RegionUpdate(BaseModel):
@@ -271,14 +289,10 @@ class BookTierRequest(BaseModel):
 
 # --- role enforcement (backward-compatible) ---------------------------------
 # Reads an optional X-User-Role header. Absent header = full access (every
-# client that predates this change keeps working exactly as before); a
-# client that *does* send a role is held to that role's domain, same scoping
-# command-center.html already does client-side via ROLE_CONFIG.
-DOMAIN_ROLES = {
-    "venue": "Venue Manager",
-    "transport": "Transport Operator",
-    "hospitality": "Hospitality Operator",
-}
+# client that predates this change keeps working exactly as before). No
+# operator role is domain-scoped anymore (Venue/Transport/Hospitality
+# Operator were all folded into Event Command Operator), so any role other
+# than that one is simply denied on these domain-gated actions.
 FULL_ACCESS_ROLES = {"Event Command Operator"}
 
 
@@ -287,11 +301,8 @@ def get_role(x_user_role: str | None = Header(default=None)):
 
 
 def require_domain_access(role: str | None, domain: str | None):
-    if role is None or role in FULL_ACCESS_ROLES:
-        return
-    if domain and DOMAIN_ROLES.get(domain) == role:
-        return
-    raise HTTPException(403, f"role '{role}' cannot act on domain '{domain}'")
+    if role is not None and role not in FULL_ACCESS_ROLES:
+        raise HTTPException(403, f"role '{role}' cannot act on domain '{domain}'")
 
 
 def require_admin(role: str | None):
@@ -311,6 +322,7 @@ def get_event(db: Session = Depends(get_db)):
         "configured": True, "id": event.id, "name": event.name, "region": event.region,
         "expected_attendance": event.expected_attendance,
         "safe_capacity": event.safe_capacity, "status": event.status,
+        "venue_lat": event.venue_lat, "venue_lng": event.venue_lng,
     }
 
 
@@ -656,6 +668,16 @@ def patch_gate_setup(zone_id: int, req: GateSetupUpdate, db: Session = Depends(g
     return {"id": zone.id}
 
 
+@app.patch("/api/event-setup/resources/{resource_type}")
+def patch_resource(resource_type: str, req: ResourceUpdate, db: Session = Depends(get_db)):
+    if resource_type not in ("bus", "staff", "medical"):
+        raise HTTPException(400, "resource_type must be bus, staff, or medical")
+    resource = engine.update_resource(db, resource_type, req.quantity_total)
+    if resource is None:
+        raise HTTPException(404, "no event configured yet")
+    return {"type": resource.type, "quantity_total": resource.quantity_total, "quantity_available": resource.quantity_available}
+
+
 @app.get("/api/evacuation-routes")
 def get_evacuation_routes(
     accessible_only: bool = False, lat: float | None = None, lng: float | None = None, db: Session = Depends(get_db),
@@ -788,7 +810,11 @@ def admin_create_event(req: EventCreate, db: Session = Depends(get_db), role: st
         raise HTTPException(400, "unknown state/UT")
     if not req.name.strip():
         raise HTTPException(400, "name is required")
-    event = engine.create_event(db, req.name.strip(), req.region, req.expected_attendance, req.safe_capacity)
+    owner_email = req.owner_email.strip().lower() if req.owner_email else None
+    event = engine.create_event(
+        db, req.name.strip(), req.region, req.expected_attendance, req.safe_capacity, owner_email,
+        req.venue_lat, req.venue_lng,
+    )
     return {"id": event.id, "name": event.name, "region": event.region}
 
 
@@ -797,6 +823,41 @@ def admin_delete_event(db: Session = Depends(get_db), role: str | None = Depends
     require_admin(role)
     engine.delete_event(db)
     return {"configured": False}
+
+
+@app.delete("/api/admin/events/{event_id}")
+def admin_delete_event_by_id(event_id: int, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Deletes any single event (live or paused) by id — unlike DELETE
+    /api/admin/event above, which always acts on whichever is live."""
+    require_admin(role)
+    if not engine.delete_event_by_id(db, event_id):
+        raise HTTPException(404, "event not found")
+    return {"deleted": event_id}
+
+
+@app.get("/api/admin/my-events")
+def admin_my_events(email: str, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Events owned by this Event Command Operator — used by the login/
+    header 'Switch Event' picker to decide whether it has anything to show."""
+    require_admin(role)
+    return engine.list_operator_events(db, email.strip().lower())
+
+
+@app.get("/api/admin/all-events")
+def admin_all_events(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Every event regardless of owner/status — Back Office's 'Manage
+    Events' list, so orphaned or other operators' events can be deleted too."""
+    require_admin(role)
+    return engine.list_all_events(db)
+
+
+@app.post("/api/admin/switch-event")
+def admin_switch_event(req: SwitchEventRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    require_admin(role)
+    event = engine.switch_to_event(db, req.event_id, req.email.strip().lower())
+    if event is None:
+        raise HTTPException(404, "event not found, not yours, or not switchable")
+    return {"id": event.id, "name": event.name, "status": event.status}
 
 
 @app.patch("/api/admin/zones/{zone_id}")
@@ -1274,7 +1335,7 @@ def staff_suggestions(db: Session = Depends(get_db)):
 
 @app.post("/api/emergency/trigger")
 def emergency_trigger(req: EmergencyTrigger, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
-    if role is not None and role not in FULL_ACCESS_ROLES | {"Venue Manager"}:
+    if role is not None and role not in FULL_ACCESS_ROLES:
         raise HTTPException(403, f"role '{role}' cannot declare an emergency")
     result = engine.trigger_emergency(db, req.zone_id, req.message)
     if result is None:
@@ -1284,7 +1345,7 @@ def emergency_trigger(req: EmergencyTrigger, db: Session = Depends(get_db), role
 
 @app.post("/api/emergency/clear")
 def emergency_clear(db: Session = Depends(get_db), role: str | None = Depends(get_role)):
-    if role is not None and role not in FULL_ACCESS_ROLES | {"Venue Manager"}:
+    if role is not None and role not in FULL_ACCESS_ROLES:
         raise HTTPException(403, f"role '{role}' cannot clear an emergency")
     return engine.clear_emergency(db)
 

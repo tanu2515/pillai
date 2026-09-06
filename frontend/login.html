@@ -68,12 +68,8 @@
     <label class="eyebrow block mb-1.5">Role</label>
     <div class="selectwrap mb-5">
       <select id="role" class="w-full p-3 text-sm">
-        <option value="Administrator">Administrator</option>
         <option value="Attendee">Attendee</option>
         <option value="Event Command Operator" selected>Event Command Operator</option>
-        <option value="Hospitality Operator">Hospitality Operator</option>
-        <option value="Transport Operator">Transport Operator</option>
-        <option value="Venue Manager">Venue Manager</option>
       </select>
     </div>
 
@@ -88,14 +84,19 @@
   </p>
 </div>
 
+<div id="event-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="bg-panel border border-border rounded-2xl p-5 max-w-sm w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Which event?</h2>
+    <p class="text-muted text-xs m-0 mb-4">You manage more than one event — pick the one to work on now.</p>
+    <div id="event-picker-list" class="flex flex-col gap-2 mb-3"></div>
+    <button class="text-xs text-muted hover:text-accent hover:underline font-medium" onclick="skipEventPicker()">Skip — keep current live event →</button>
+  </div>
+</div>
+
 <script>
 const ROLE_DEST = {
-  "Administrator": "admin.html",
   "Attendee": "events.html",
   "Event Command Operator": "command-center.html?role=command",
-  "Hospitality Operator": "command-center.html?role=hospitality",
-  "Transport Operator": "command-center.html?role=transport",
-  "Venue Manager": "command-center.html?role=venue",
 };
 
 async function doLogin() {
@@ -131,12 +132,64 @@ async function doLogin() {
     // the live Command Centre — returning operators skip straight there.
     const dest = (data.status === "signup" && data.role === "Event Command Operator")
       ? "event-setup.html" : ROLE_DEST[data.role];
-    setTimeout(() => { window.location.href = dest; }, 400);
+
+    if (data.role === "Event Command Operator") {
+      await resolveOperatorEvent(data.email, dest);
+    } else {
+      setTimeout(() => { window.location.href = dest; }, 400);
+    }
   } catch (e) {
     statusEl.textContent = "";
     errorEl.textContent = "Something went wrong signing in. Please try again.";
     errorEl.classList.remove("hidden");
   }
+}
+
+let pendingDest = null;
+
+async function resolveOperatorEvent(email, dest) {
+  pendingDest = dest;
+  try {
+    const res = await fetch(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+    const events = res.ok ? await res.json() : [];
+    if (events.length <= 1) {
+      if (events.length === 1 && events[0].status !== "live") {
+        await switchToEvent(email, events[0].id);
+      }
+      window.location.href = dest;
+      return;
+    }
+    document.getElementById("event-picker-list").innerHTML = events.map(ev => `
+      <button onclick="pickEvent('${email.replace(/'/g, "\\'")}', ${ev.id})"
+              class="text-left border border-border rounded-xl p-3 hover:border-accent transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-sm font-bold">${ev.name}</span>
+          ${ev.status === "live" ? '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>' : '<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">PAUSED</span>'}
+        </div>
+        <div class="text-muted text-[11px] mt-0.5">${ev.region || ""}</div>
+      </button>
+    `).join("");
+    document.getElementById("event-picker-overlay").classList.remove("hidden");
+  } catch (e) {
+    window.location.href = dest;
+  }
+}
+
+async function switchToEvent(email, eventId) {
+  await fetch("/api/admin/switch-event", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, email }),
+  });
+}
+
+async function pickEvent(email, eventId) {
+  await switchToEvent(email, eventId);
+  window.location.href = pendingDest;
+}
+
+function skipEventPicker() {
+  window.location.href = pendingDest;
 }
 
 document.getElementById("email").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
@@ -149,7 +202,7 @@ if (preselect && ROLE_DEST[preselect]) document.getElementById("role").value = p
   try {
     const res = await fetch("/api/event");
     const data = await res.json();
-    el.textContent = data.configured ? data.name : "No event configured yet — an Administrator sets this up first.";
+    el.textContent = data.configured ? data.name : "No event configured yet — an Event Command Operator sets this up first.";
   } catch (e) {
     el.textContent = "VYAVASTHA";
   }

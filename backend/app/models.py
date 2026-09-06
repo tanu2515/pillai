@@ -10,9 +10,6 @@ from .database import Base
 ROLES = [
     "Attendee",
     "Event Command Operator",
-    "Hospitality Operator",
-    "Transport Operator",
-    "Venue Manager",
 ]
 
 # Every zone belongs to exactly one operator domain, so role-scoping is a
@@ -25,7 +22,11 @@ class Event(Base):
     browses/searches) — but only ONE ever has status="live" at a time, and
     every existing crowd-monitoring/risk-engine function (zones, alerts,
     scenarios, the simulation clock) only ever operates on that one, via
-    engine.get_live_event(). status: upcoming | live | completed."""
+    engine.get_live_event(). status: upcoming | live | paused | completed.
+    'paused' is an Event Command Operator's own event that isn't currently
+    the live one — kept around (name/region/capacity/owner) so they can
+    switch back to it later, but its zones are rebuilt fresh on switch-back
+    rather than persisted (see engine._deactivate_current_live_event)."""
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True)
@@ -42,7 +43,10 @@ class Event(Base):
     region = Column(String, nullable=True)  # key into regions.INDIA_REGIONS
     expected_attendance = Column(Integer, nullable=False)
     safe_capacity = Column(Integer, nullable=False)
-    status = Column(String, default="live")  # upcoming | live | completed
+    status = Column(String, default="live")  # upcoming | live | paused | completed
+    owner_email = Column(String, nullable=True)  # Event Command Operator who created it, for the multi-event picker
+    venue_lat = Column(Float, nullable=True)  # picked on a map at creation time — anchors where gate/hotel/transport pickers center
+    venue_lng = Column(Float, nullable=True)
 
 
 class EventTier(Base):
@@ -184,7 +188,7 @@ class UserAccount(Base):
 
 
 class Scenario(Base):
-    """A named disruption/demand event an Administrator can author: which
+    """A named disruption/demand event an Event Command Operator can author: which
     zones ramp, by how much per tick, and for how long. Replaces what used to
     be hardcoded Gate-2-only ramp constants in engine.py — the Event Command
     Operator picks one of these to trigger, and it's just data now, not code."""
@@ -259,7 +263,7 @@ class Attendee(Base):
 class EventAttendee(Base):
     """Attendee <-> Event, many-to-many. event_name/event_date are snapshotted
     at registration time so a past registration stays meaningful even after
-    an Administrator later deletes/replaces the live simulated event (Event
+    an Event Command Operator later deletes/replaces the live simulated event (Event
     rows are singleton-per-live-simulation, per create_event's own comment —
     this table is what actually lets one attendee carry multiple events)."""
     __tablename__ = "event_attendees"

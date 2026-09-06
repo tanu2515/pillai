@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -48,6 +50,17 @@
   .rec-badge{ font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff; background:#22C55E; border-radius:20px; padding:2px 8px; }
   .toast{ position:fixed; bottom:20px; right:20px; background:#123B6D; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
   .toast.show{ display:block; }
+  .dropdown{ position:relative; min-width:220px; }
+  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:#1976D2; }
+  .dropdown-caret{ color:#64748B; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
+  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid #E2E8F0; padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:#123B6D; border-radius:0; }
+  input.dropdown-search:focus{ outline:none; border-color:#1976D2; }
+  .dropdown-panel > div{ max-height:200px; overflow-y:auto; }
+  .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
+  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
+  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
 </style>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
@@ -63,7 +76,38 @@
     </div>
     <div class="flex items-center gap-3">
       <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
+      <button id="switch-event-link" class="hidden text-xs text-accent hover:underline font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+    </div>
+  </div>
+</div>
+
+<div id="event-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="row-card p-5 max-w-sm w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Switch Event</h2>
+    <p class="text-muted text-xs m-0 mb-4">Pick which of your events should be live.</p>
+    <div id="event-picker-list" class="flex flex-col gap-2 mb-3"></div>
+    <button class="text-xs text-muted hover:text-accent hover:underline font-medium" onclick="closeEventPicker()">Cancel</button>
+  </div>
+</div>
+
+<div id="map-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="row-card p-4 max-w-lg w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Pick a location</h2>
+    <p class="text-muted text-xs m-0 mb-3">Search a place name, or click the map directly, then confirm.</p>
+    <div class="flex gap-2 mb-2">
+      <input type="text" id="map-picker-search" placeholder="Search venue, address or city…" class="p-2.5 text-xs flex-1"
+             onkeydown="if(event.key==='Enter'){event.preventDefault(); searchMapPickerLocation();}" />
+      <button type="button" class="btn-secondary rounded-lg px-3 py-2 text-xs" onclick="searchMapPickerLocation()">SEARCH</button>
+    </div>
+    <div id="map-picker-search-status" class="text-[10.5px] text-muted mb-2"></div>
+    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+    <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
+      <span id="map-picker-coords" class="text-xs text-muted font-mono">No point selected yet — click the map.</span>
+      <div class="flex gap-2">
+        <button class="btn-secondary rounded-lg px-3 py-1.5 text-xs" onclick="closeMapPicker()">Cancel</button>
+        <button class="btn-primary rounded-lg px-3 py-1.5 text-xs" onclick="confirmMapPicker()">USE THIS LOCATION</button>
+      </div>
     </div>
   </div>
 </div>
@@ -93,15 +137,28 @@
         <input type="number" id="new-ev-capacity" class="w-full p-2.5 text-sm font-mono" value="60000" />
       </div>
     </div>
+    <div class="flex gap-2 items-center justify-center flex-wrap max-w-2xl mx-auto mb-3">
+      <label class="text-[10px] text-muted uppercase tracking-wide">Venue location
+        <input type="number" step="any" id="new-ev-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono w-28 block mt-1" />
+      </label>
+      <input type="number" step="any" id="new-ev-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono w-28 mt-4" />
+      <button type="button" class="btn-secondary rounded-lg px-3 py-2 text-xs mt-4" onclick="openMapPicker('new-ev-lat','new-ev-lng')">📍 Pick on map</button>
+    </div>
     <div class="flex gap-3 items-center justify-center flex-wrap max-w-2xl mx-auto">
-      <select id="new-ev-region" class="p-2.5 text-sm min-w-[220px]">
-        <option value="">Select a region…</option>
-      </select>
+      <div class="dropdown" id="new-ev-region-dropdown">
+        <button type="button" class="dropdown-btn" id="new-ev-region-btn" onclick="toggleNewEventRegionDropdown()">
+          Select a region <span class="dropdown-caret">▾</span>
+        </button>
+        <div class="dropdown-panel hidden" id="new-ev-region-panel">
+          <input type="text" class="dropdown-search" placeholder="Search state or city…" oninput="renderNewEventRegionPanel(this.value)" />
+          <div id="new-ev-region-items"></div>
+        </div>
+      </div>
       <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="createEventInline()">CREATE EVENT</button>
       <span id="new-event-status" class="text-xs text-ok"></span>
     </div>
     <p class="text-xs text-muted text-center mt-4 mb-0">
-      Prefer the full admin controls? <a href="admin.html" class="text-accent hover:underline font-bold">Go to Administrator →</a>
+      Prefer the full back-office controls? <a href="admin.html" class="text-accent hover:underline font-bold">Go to Back Office →</a>
     </p>
   </div>
 
@@ -114,7 +171,22 @@
 
     <!-- GATES -->
     <section id="tab-gates" class="mt-4">
-      <div id="gates-list"></div>
+      <div id="gates-list" class="mb-4"></div>
+      <div class="row-card p-4">
+        <h3 class="eyebrow mb-3">Add a gate</h3>
+        <p class="text-[10.5px] text-muted mb-3">Prefer clicking a map instead? Add it from the Command Centre's Overview map — it shows up here too.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <input type="text" id="g-name" placeholder="Gate name" class="p-2.5 text-xs" />
+          <input type="number" id="g-new-capacity" placeholder="Capacity" class="p-2.5 text-xs font-mono" />
+          <input type="number" step="any" id="g-new-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
+          <input type="number" step="any" id="g-new-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
+        </div>
+        <div class="flex gap-2 mt-3 items-center">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('g-new-lat','g-new-lng')">📍 Pick on map</button>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addGate()">ADD GATE</button>
+        </div>
+        <div id="gate-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
     </section>
 
     <!-- HOTELS -->
@@ -131,18 +203,19 @@
           <input type="number" step="any" id="h-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
           <input type="number" step="any" id="h-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
         </div>
-        <button class="btn-primary mt-3 px-4 py-2 rounded-lg text-xs" onclick="addHotel()">ADD HOTEL</button>
+        <div class="flex gap-2 mt-3 items-center">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('h-lat','h-lng')">📍 Pick on map</button>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addHotel()">ADD HOTEL</button>
+        </div>
         <div id="hotel-add-status" class="text-xs text-muted mt-2"></div>
       </div>
     </section>
 
     <!-- TRANSPORT -->
     <section id="tab-transport" class="mt-4 hidden">
-      <div class="row-card p-4 mb-4 flex items-center justify-between">
-        <div>
-          <div class="eyebrow mb-1">Bus fleet</div>
-          <div class="text-sm font-mono" id="bus-fleet-summary">—</div>
-        </div>
+      <div class="row-card p-4 mb-4">
+        <h3 class="eyebrow mb-3">Resources</h3>
+        <div id="resources-list" class="flex flex-col gap-2"></div>
       </div>
       <div id="transport-list" class="mb-4"></div>
       <div class="row-card p-4">
@@ -158,7 +231,10 @@
           <input type="number" step="any" id="t-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
           <input type="number" step="any" id="t-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
         </div>
-        <button class="btn-primary mt-3 px-4 py-2 rounded-lg text-xs" onclick="addTransport()">ADD TRANSPORT ZONE</button>
+        <div class="flex gap-2 mt-3 items-center">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('t-lat','t-lng')">📍 Pick on map</button>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addTransport()">ADD TRANSPORT ZONE</button>
+        </div>
         <div id="transport-add-status" class="text-xs text-muted mt-2"></div>
       </div>
     </section>
@@ -170,6 +246,124 @@
 <script>
 const API = "";
 async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+function getOperatorEmail() { return sessionStorage.getItem("vyavastha_email") || ""; }
+
+// --- Map location picker (shared by the create-event field and every add-a-gate/hotel/transport form) ---
+let eventVenueLat = null, eventVenueLng = null;
+let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null;
+let mapPickerTargetLat = null, mapPickerTargetLng = null;
+
+function openMapPicker(latInputId, lngInputId) {
+  mapPickerTargetLat = latInputId;
+  mapPickerTargetLng = lngInputId;
+  mapPickerPoint = null;
+  document.getElementById("map-picker-coords").textContent = "No point selected yet — click the map.";
+  document.getElementById("map-picker-search").value = "";
+  document.getElementById("map-picker-search-status").textContent = "";
+  document.getElementById("map-picker-overlay").classList.remove("hidden");
+
+  setTimeout(() => {
+    const existingLat = parseFloat(document.getElementById(latInputId).value);
+    const existingLng = parseFloat(document.getElementById(lngInputId).value);
+    const hasExisting = !isNaN(existingLat) && !isNaN(existingLng);
+    const hasVenue = eventVenueLat != null && eventVenueLng != null;
+    const startLat = hasExisting ? existingLat : (hasVenue ? eventVenueLat : 20.5937);
+    const startLng = hasExisting ? existingLng : (hasVenue ? eventVenueLng : 78.9629);
+    const zoom = hasExisting || hasVenue ? 14 : 5;
+
+    if (!mapPickerInstance) {
+      mapPickerInstance = L.map("map-picker-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapPickerInstance);
+      mapPickerInstance.on("click", (e) => setMapPickerPoint(e.latlng.lat, e.latlng.lng));
+    }
+    mapPickerInstance.setView([startLat, startLng], zoom);
+    mapPickerInstance.invalidateSize();
+    if (hasExisting) setMapPickerPoint(existingLat, existingLng);
+  }, 50);
+}
+
+function setMapPickerPoint(lat, lng) {
+  mapPickerPoint = { lat, lng };
+  if (mapPickerMarker) mapPickerInstance.removeLayer(mapPickerMarker);
+  mapPickerMarker = L.marker([lat, lng]).addTo(mapPickerInstance);
+  document.getElementById("map-picker-coords").textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+async function searchMapPickerLocation() {
+  const query = document.getElementById("map-picker-search").value.trim();
+  const status = document.getElementById("map-picker-search-status");
+  if (!query) { status.textContent = "Type a place name to search."; return; }
+  status.textContent = "Searching…";
+  try {
+    const res = await fetch("/api/hotels/geocode", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); status.textContent = b.detail || "Location not found."; return; }
+    const data = await res.json();
+    mapPickerInstance.setView([data.lat, data.lng], 15);
+    setMapPickerPoint(data.lat, data.lng);
+    status.textContent = data.display_name || "";
+  } catch (e) {
+    status.textContent = "Search unavailable right now.";
+  }
+}
+
+function closeMapPicker() {
+  document.getElementById("map-picker-overlay").classList.add("hidden");
+}
+
+function confirmMapPicker() {
+  if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
+  document.getElementById(mapPickerTargetLat).value = mapPickerPoint.lat.toFixed(6);
+  document.getElementById(mapPickerTargetLng).value = mapPickerPoint.lng.toFixed(6);
+  closeMapPicker();
+}
+
+async function refreshSwitchEventLink() {
+  const email = getOperatorEmail();
+  if (!email) return;
+  const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+  document.getElementById("switch-event-link").classList.toggle("hidden", events.length <= 1);
+}
+
+async function openEventPicker() {
+  const email = getOperatorEmail();
+  const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+  document.getElementById("event-picker-list").innerHTML = events.map(ev => `
+    <button onclick="pickEvent(${ev.id})" class="text-left border border-border rounded-xl p-3 hover:border-accent transition">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-bold">${ev.name}</span>
+        ${ev.status === "live" ? '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>' : '<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">PAUSED</span>'}
+      </div>
+      <div class="text-muted text-[11px] mt-0.5">${ev.region || ""}</div>
+    </button>
+  `).join("");
+  document.getElementById("event-picker-overlay").classList.remove("hidden");
+}
+
+function closeEventPicker() {
+  document.getElementById("event-picker-overlay").classList.add("hidden");
+}
+
+async function pickEvent(eventId) {
+  if (setupData && setupData.configured) {
+    const gateCount = setupData.gates.length, hotelCount = setupData.hotels.length, transportCount = setupData.transport.length;
+    const total = gateCount + hotelCount + transportCount;
+    if (total > 0) {
+      const ok = confirm(
+        `Switching pauses "${setupData.event_name}" and PERMANENTLY DELETES its zones — ` +
+        `${gateCount} gate(s), ${hotelCount} hotel(s), ${transportCount} transport zone(s). ` +
+        `This cannot be undone; switching back later will not restore them. Continue?`
+      );
+      if (!ok) return;
+    }
+  }
+  await api("/api/admin/switch-event", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, email: getOperatorEmail() }),
+  });
+  location.reload();
+}
 
 let setupData = null;
 
@@ -207,7 +401,98 @@ function gateRow(g) {
         Accessible exit
       </label>
       <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveGate(${g.id})">SAVE</button>
+      <button class="btn-danger px-3 py-1.5 rounded-lg text-[11px]" onclick="removeGate(${g.id})">DELETE</button>
+      <div id="cam-block-${g.id}" class="w-full mt-1 pt-2 border-t" style="border-color:#E2E8F0;"></div>
     </div>`;
+}
+
+async function addGate() {
+  const status = document.getElementById("gate-add-status");
+  const body = {
+    name: document.getElementById("g-name").value.trim(),
+    capacity: parseInt(document.getElementById("g-new-capacity").value) || 0,
+    lat: parseFloat(document.getElementById("g-new-lat").value),
+    lng: parseFloat(document.getElementById("g-new-lng").value),
+    domain: "venue", type: "gate",
+  };
+  if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
+    status.textContent = "Name, capacity, latitude and longitude are required.";
+    return;
+  }
+  const res = await fetch("/api/zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); status.textContent = b.detail || "Couldn't add this gate."; return; }
+  ["g-name", "g-new-capacity", "g-new-lat", "g-new-lng"].forEach(id => document.getElementById(id).value = "");
+  status.textContent = "";
+  showToast("Gate added.");
+  await load();
+}
+
+async function removeGate(id) {
+  if (!confirm("Delete this gate?")) return;
+  const res = await fetch(`/api/zones/${id}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this gate."); return; }
+  showToast("Gate deleted.");
+  await load();
+}
+
+// --- Live camera (phone/IP-camera → YOLO person count) ----------------------
+// Counts only — no video/frames are stored anywhere; each sampled frame is
+// discarded right after it's counted (see backend/app/detector.py). Only the
+// resulting integer + timestamp is written to crowd_snapshots.
+
+let cameraStatusMap = {};
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderCamBlock(zoneId) {
+  const el = document.getElementById(`cam-block-${zoneId}`);
+  if (!el) return;
+  const cam = cameraStatusMap[zoneId];
+  if (cam && cam.running) {
+    el.innerHTML = `
+      <div class="flex items-center gap-2 flex-wrap text-[10.5px]">
+        <span class="text-ok font-bold">🎥 LIVE CAMERA</span>
+        <span class="font-mono">${cam.last_count != null ? cam.last_count + " people detected" : "waiting for first frame…"}</span>
+        <span class="text-muted">${cam.last_updated ? new Date(cam.last_updated * 1000).toLocaleTimeString() : ""}</span>
+        <button class="btn-danger px-2 py-1 rounded text-[10px] ml-auto" onclick="stopCamera(${zoneId})">STOP CAMERA</button>
+      </div>
+      ${cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
+  } else {
+    el.innerHTML = `
+      <div class="flex items-center gap-2 flex-wrap">
+        <input type="text" class="small-input flex-1 min-w-[200px]" id="cam-url-${zoneId}"
+               placeholder="Phone/IP camera stream URL, e.g. http://192.168.1.42:8080/video" />
+        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10.5px]" onclick="startCamera(${zoneId})">📷 START CAMERA</button>
+      </div>
+      ${cam && cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
+  }
+}
+
+async function startCamera(zoneId) {
+  const input = document.getElementById(`cam-url-${zoneId}`);
+  const url = input ? input.value.trim() : "";
+  if (!url) { showToast("Enter a camera stream URL first."); return; }
+  const res = await fetch("/api/cameras", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zone_id: zoneId, stream_url: url, model_path: "yolov8n.pt", sample_seconds: 1.0 }),
+  });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't start the camera."); return; }
+  showToast("Camera worker starting…");
+  await loadCameraStatuses();
+}
+
+async function stopCamera(zoneId) {
+  await fetch(`/api/cameras/${zoneId}`, { method: "DELETE" });
+  showToast("Camera stopped.");
+  await loadCameraStatuses();
+}
+
+async function loadCameraStatuses() {
+  const list = await api("/api/cameras");
+  cameraStatusMap = Object.fromEntries(list.map(c => [c.zone_id, c]));
+  (setupData?.gates || []).forEach(g => renderCamBlock(g.id));
 }
 
 async function saveGate(id) {
@@ -367,31 +652,99 @@ async function addTransport() {
   await load();
 }
 
-// --- Create event inline (skips the Administrator step) --------------------
+// --- Resources (bus/staff/medical pools) -------------------------------------
+
+const RESOURCE_LABELS = { bus: "Buses", staff: "Staff", medical: "Medical units" };
+
+function renderResources(resources) {
+  const types = ["bus", "staff", "medical"];
+  document.getElementById("resources-list").innerHTML = types.map(type => {
+    const r = resources[type];
+    return `
+      <div class="row-card flex items-center gap-3 px-4 py-3 flex-wrap">
+        <div class="flex-1 min-w-[100px] font-bold text-sm">${RESOURCE_LABELS[type]}</div>
+        <div class="text-muted text-[10.5px] font-mono">${r ? `${r.available} available` : "not set up yet"}</div>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Total
+          <input type="number" class="small-input w-24" id="res-${type}" value="${r ? r.total : 0}" />
+        </label>
+        <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveResource('${type}')">SAVE</button>
+      </div>`;
+  }).join("");
+}
+
+async function saveResource(type) {
+  const quantity_total = parseInt(document.getElementById(`res-${type}`).value) || 0;
+  await api(`/api/event-setup/resources/${type}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity_total }),
+  });
+  showToast(`${RESOURCE_LABELS[type]} updated.`);
+  await load();
+}
+
+// --- Create event inline (skips the Back Office step) -----------------------
+
+let regionListForCreate = [];
+let selectedNewEventRegion = null;
 
 async function loadRegionsForCreate() {
-  const regions = (await api("/api/regions")).sort((a, b) => a.state.localeCompare(b.state));
-  document.getElementById("new-ev-region").innerHTML =
-    `<option value="">Select a region…</option>` +
-    regions.map(r => `<option value="${r.state}">${r.state} — ${r.city}</option>`).join("");
+  regionListForCreate = (await api("/api/regions")).sort((a, b) => a.state.localeCompare(b.state));
+  renderNewEventRegionPanel();
 }
+
+function renderNewEventRegionPanel(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? regionListForCreate.filter(r => r.state.toLowerCase().includes(q) || r.city.toLowerCase().includes(q)) : regionListForCreate;
+  document.getElementById("new-ev-region-items").innerHTML = filtered.length ? filtered.map(r => `
+    <div class="dropdown-item ${r.state === selectedNewEventRegion ? 'selected' : ''}"
+         onclick="selectNewEventRegion('${r.state.replace(/'/g, "\\'")}', '${(r.state + ' — ' + r.city).replace(/'/g, "\\'")}')">
+      ${r.state} — ${r.city}
+    </div>`).join("") : `<div class="dropdown-item text-muted">No match</div>`;
+}
+
+function selectNewEventRegion(state, label) {
+  selectedNewEventRegion = state;
+  document.getElementById("new-ev-region-btn").innerHTML = `${label} <span class="dropdown-caret">▾</span>`;
+  document.getElementById("new-ev-region-panel").classList.add("hidden");
+  renderNewEventRegionPanel();
+}
+
+function toggleNewEventRegionDropdown() {
+  const panel = document.getElementById("new-ev-region-panel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    const search = panel.querySelector(".dropdown-search");
+    search.value = "";
+    renderNewEventRegionPanel();
+    search.focus();
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("new-ev-region-dropdown").contains(e.target)) {
+    document.getElementById("new-ev-region-panel").classList.add("hidden");
+  }
+});
 
 async function createEventInline() {
   const status = document.getElementById("new-event-status");
   const name = document.getElementById("new-ev-name").value.trim();
-  const region = document.getElementById("new-ev-region").value;
-  if (!name) { status.textContent = "Name is required."; return; }
-  if (!region) { status.textContent = "Pick a region first."; return; }
+  const venue_lat = parseFloat(document.getElementById("new-ev-lat").value);
+  const venue_lng = parseFloat(document.getElementById("new-ev-lng").value);
+  if (!name) { alert("Event name is required."); return; }
+  if (isNaN(venue_lat) || isNaN(venue_lng)) { alert("Pick the venue location on the map first (or type its latitude/longitude)."); return; }
+  if (!selectedNewEventRegion) { alert("Pick a region first — use the region dropdown just above the CREATE EVENT button."); return; }
 
   status.textContent = "Creating…";
   const body = {
-    name, region,
+    name, region: selectedNewEventRegion, venue_lat, venue_lng,
     expected_attendance: parseInt(document.getElementById("new-ev-attendance").value) || 0,
     safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
+    owner_email: getOperatorEmail() || null,
   };
   await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   status.textContent = "Created.";
   await load();
+  await refreshSwitchEventLink();
 }
 
 // --- Load ----------------------------------------------------------------
@@ -403,6 +756,8 @@ async function load() {
     document.getElementById("setup-body").classList.add("hidden");
     return;
   }
+  eventVenueLat = setupData.venue_lat;
+  eventVenueLng = setupData.venue_lng;
   document.getElementById("not-configured").classList.add("hidden");
   document.getElementById("setup-body").classList.remove("hidden");
   document.getElementById("event-title").textContent = "EVENT SETUP — " + setupData.event_name;
@@ -410,17 +765,18 @@ async function load() {
 
   document.getElementById("gates-list").innerHTML = setupData.gates.map(gateRow).join("") ||
     `<p class="text-xs text-muted">No gates configured.</p>`;
+  await loadCameraStatuses();
   document.getElementById("hotels-list").innerHTML = setupData.hotels.map(hotelRow).join("") ||
     `<p class="text-xs text-muted">No hotels configured yet — add one below.</p>`;
   document.getElementById("transport-list").innerHTML = setupData.transport.map(transportRow).join("") ||
     `<p class="text-xs text-muted">No transport zones configured yet — add one below.</p>`;
-  document.getElementById("bus-fleet-summary").textContent = setupData.buses
-    ? `${setupData.buses.available} / ${setupData.buses.total} buses available`
-    : "No bus fleet configured.";
+  renderResources(setupData.resources || {});
 }
 
 loadRegionsForCreate();
 load();
+refreshSwitchEventLink();
+setInterval(() => { if (setupData?.configured) loadCameraStatuses(); }, 4000);
 </script>
 </body>
 </html>

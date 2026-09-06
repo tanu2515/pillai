@@ -129,6 +129,8 @@
       </span>
       <span id="readonly-note" class="text-xs text-muted italic hidden">Live event clock is run by the Event Command Operator</span>
       <button id="emergency-btn" class="btn-danger rounded-lg px-3 py-2 text-xs hidden" onclick="openEmergencyModal()">🚨 Emergency</button>
+      <a id="back-office-link" href="/admin.html" class="text-xs text-accent hover:underline ml-1 font-medium hidden">Back Office →</a>
+      <button id="switch-event-link" class="hidden text-xs text-accent hover:underline ml-1 font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
     </div>
@@ -143,6 +145,15 @@
     <button data-tab="analytics" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Analytics</button>
     <button data-tab="timeline" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap">Incident Timeline</button>
   </nav>
+</div>
+
+<div id="event-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="bg-panel border border-border rounded-2xl p-5 max-w-sm w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Switch Event</h2>
+    <p class="text-muted text-xs m-0 mb-4">Pick which of your events should be live.</p>
+    <div id="event-picker-list" class="flex flex-col gap-2 mb-3"></div>
+    <button class="text-xs text-muted hover:text-accent hover:underline font-medium" onclick="closeEventPicker()">Cancel</button>
+  </div>
 </div>
 
 <div id="emergency-banner" class="hidden bg-danger/15 border-b border-danger/50 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap relative z-[1]">
@@ -400,9 +411,6 @@ const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", HIGH: "text-high", 
 // event clock (only the Event Command Operator can).
 const ROLE_CONFIG = {
   command:     { label: "EVENT COMMAND OPERATOR", roleName: "Event Command Operator", tabs: ["overview", "whatif", "actions", "alerts", "hotels", "transport", "analytics", "timeline"], showSimControls: true,  showAiAdvisor: true, showEmergency: true,  domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
-  venue:       { label: "VENUE MANAGER",          roleName: "Venue Manager",           tabs: ["overview", "whatif", "actions", "alerts", "timeline"],                                    showSimControls: false, showAiAdvisor: false, showEmergency: true,  domain: "venue",       whatifFields: ["redirect","staff","gate3"] },
-  transport:   { label: "TRANSPORT OPERATOR",     roleName: "Transport Operator",      tabs: ["overview", "whatif", "actions", "alerts", "transport", "timeline"],                       showSimControls: false, showAiAdvisor: false, showEmergency: false, domain: "transport",   whatifFields: ["buses"] },
-  hospitality: { label: "HOSPITALITY OPERATOR",   roleName: "Hospitality Operator",    tabs: ["overview", "actions", "alerts", "hotels", "timeline"],                                    showSimControls: false, showAiAdvisor: false, showEmergency: false, domain: "hospitality", whatifFields: [] },
 };
 const roleParam = new URLSearchParams(location.search).get("role");
 const roleKey = ROLE_CONFIG[roleParam] ? roleParam : "command";
@@ -415,6 +423,7 @@ if (!roleCfg.showSimControls) {
 }
 if (roleCfg.showAiAdvisor) document.getElementById("ai-advisor-btn").classList.remove("hidden");
 if (roleCfg.showEmergency) document.getElementById("emergency-btn").classList.remove("hidden");
+if (roleKey === "command") document.getElementById("back-office-link").classList.remove("hidden");
 
 const ALL_WHATIF_FIELDS = ["redirect", "buses", "staff", "gate3"];
 ALL_WHATIF_FIELDS.forEach(f => {
@@ -445,6 +454,44 @@ async function api(path, opts) {
   const res = await fetch(API + path, opts);
   return res.json();
 }
+
+function getOperatorEmail() { return sessionStorage.getItem("vyavastha_email") || ""; }
+
+async function refreshSwitchEventLink() {
+  if (roleKey !== "command") return;
+  const email = getOperatorEmail();
+  if (!email) return;
+  const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+  document.getElementById("switch-event-link").classList.toggle("hidden", events.length <= 1);
+}
+
+async function openEventPicker() {
+  const email = getOperatorEmail();
+  const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
+  document.getElementById("event-picker-list").innerHTML = events.map(ev => `
+    <button onclick="pickEvent(${ev.id})" class="text-left border border-border rounded-xl p-3 hover:border-accent transition">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-bold">${ev.name}</span>
+        ${ev.status === "live" ? '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>' : '<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">PAUSED</span>'}
+      </div>
+      <div class="text-muted text-[11px] mt-0.5">${ev.region || ""}</div>
+    </button>
+  `).join("");
+  document.getElementById("event-picker-overlay").classList.remove("hidden");
+}
+
+function closeEventPicker() {
+  document.getElementById("event-picker-overlay").classList.add("hidden");
+}
+
+async function pickEvent(eventId) {
+  await api("/api/admin/switch-event", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, email: getOperatorEmail() }),
+  });
+  location.reload();
+}
+refreshSwitchEventLink();
 
 function groundedTag(list) {
   return list && list.length ? `<span class="grounded-tag">GROUNDED IN: ${list.join(", ")}</span>` : "";
@@ -787,7 +834,7 @@ async function loadScenarios() {
   document.getElementById("scenario-dropdown-panel").innerHTML = scenarioList.map(s => `
     <div class="dropdown-item ${s.id === selectedScenarioId ? 'selected' : ''}" onclick="selectScenario(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
       ${s.name}
-    </div>`).join("") || `<div class="dropdown-item text-muted">No scenarios yet — add one in Administrator</div>`;
+    </div>`).join("") || `<div class="dropdown-item text-muted">No scenarios yet — add one in Back Office</div>`;
   if (!selectedScenarioId && scenarioList.length) selectScenario(scenarioList[0].id, scenarioList[0].name);
 }
 
