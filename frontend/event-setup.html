@@ -216,12 +216,13 @@
           <input type="number" id="h-price" placeholder="Price tier 1-5" class="p-2.5 text-xs font-mono" min="1" max="5" />
           <input type="text" id="h-contact" placeholder="Contact (phone)" class="p-2.5 text-xs" />
           <input type="text" id="h-amenities" placeholder="Amenities (comma-separated)" class="p-2.5 text-xs sm:col-span-2" />
-          <input type="number" step="any" id="h-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
-          <input type="number" step="any" id="h-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
+          <input type="hidden" id="h-lat" />
+          <input type="hidden" id="h-lng" />
         </div>
-        <div class="flex gap-2 mt-3 items-center">
-          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('h-lat','h-lng')">📍 Pick on map</button>
-          <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addHotel()">ADD HOTEL</button>
+        <div class="flex gap-2 mt-3 items-center flex-wrap">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('h-lat','h-lng')">📍 Pick on map instead</button>
+          <span id="h-location-status" class="text-[10.5px] text-muted">No location set yet — search nearby or pick on map.</span>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs ml-auto" onclick="addHotel()">ADD HOTEL</button>
         </div>
         <div id="hotel-add-status" class="text-xs text-muted mt-2"></div>
       </div>
@@ -332,6 +333,7 @@ function confirmMapPicker() {
   if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
   document.getElementById(mapPickerTargetLat).value = mapPickerPoint.lat.toFixed(6);
   document.getElementById(mapPickerTargetLng).value = mapPickerPoint.lng.toFixed(6);
+  if (mapPickerTargetLat === "h-lat") refreshHotelLocationStatus();
   closeMapPicker();
 }
 
@@ -617,6 +619,15 @@ async function findNearbyHotelsForAdd() {
   }
 }
 
+function refreshHotelLocationStatus() {
+  const lat = parseFloat(document.getElementById("h-lat").value);
+  const lng = parseFloat(document.getElementById("h-lng").value);
+  const status = document.getElementById("h-location-status");
+  status.textContent = (!isNaN(lat) && !isNaN(lng))
+    ? `📍 Location set (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+    : "No location set yet — search nearby or pick on map.";
+}
+
 function pickDiscoveredHotel() {
   const idx = document.getElementById("h-discovered").value;
   if (idx === "") return;
@@ -625,6 +636,7 @@ function pickDiscoveredHotel() {
   document.getElementById("h-lat").value = h.lat;
   document.getElementById("h-lng").value = h.lng;
   if (h.phone) document.getElementById("h-contact").value = h.phone;
+  refreshHotelLocationStatus();
 }
 
 async function addHotel() {
@@ -646,6 +658,7 @@ async function addHotel() {
   document.getElementById("hotel-add-status").textContent = "";
   document.getElementById("h-discovered").classList.add("hidden");
   document.getElementById("h-discover-status").textContent = "";
+  refreshHotelLocationStatus();
   showToast("Hotel added.");
   await load();
 }
