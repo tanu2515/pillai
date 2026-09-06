@@ -451,7 +451,10 @@ async function confirmBooking() {
   if (!name) { document.getElementById("booking-error").textContent = "Enter your name to continue."; return; }
   const res = await api(`/api/events/${eventId}/tiers/${selectedTier.id}/book`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email: getEmail() || null, seat_id: selectedSeatId, quantity: selectedSeatId ? 1 : bookingQty, wants_transport: wantsTransport }),
+    body: JSON.stringify({
+      name, email: getEmail() || null, seat_id: selectedSeatId, quantity: selectedSeatId ? 1 : bookingQty,
+      wants_transport: wantsTransport, hotel_zone_id: wantsHotel && eventData.hotels.length ? eventData.hotels[0].zone_id : null,
+    }),
   });
   if (res.status !== "ok") { document.getElementById("booking-error").textContent = res.message || "Something went wrong. Please try again."; return; }
   showConfirmation(res);

@@ -154,6 +154,15 @@
         </div>
       </section>
 
+      <section class="card p-5 mt-6 fade-up" style="animation-delay:.18s">
+        <h2 class="eyebrow mb-3">♿ Accessibility &amp; Evacuation</h2>
+        <label class="flex items-center gap-2 text-sm mb-3">
+          <input type="checkbox" id="accessible-toggle" onchange="onAccessibleToggle()" />
+          I need a wheelchair-accessible exit
+        </label>
+        <div id="evac-status" class="text-sm"></div>
+      </section>
+
       <section class="card p-5 mt-6 fade-up" style="animation-delay:.2s">
         <h2 class="eyebrow mb-3">🕒 Best time to arrive</h2>
         <div id="offpeak-list" class="text-sm"></div>
@@ -268,6 +277,40 @@ async function loadGates() {
 
   await renderMap(gates);
   await renderOffPeak();
+  await renderEvacuation();
+}
+
+async function onAccessibleToggle() {
+  const checked = document.getElementById("accessible-toggle").checked;
+  if (checked) {
+    await api("/api/attendee/accessibility-request", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: getAttendeeEmail() || null }),
+    });
+  }
+  await renderEvacuation();
+}
+
+async function renderEvacuation() {
+  const accessibleOnly = document.getElementById("accessible-toggle").checked;
+  const data = await api(`/api/evacuation-routes?accessible_only=${accessibleOnly}`);
+  const el = document.getElementById("evac-status");
+  const top = data.routes[0];
+  const exitLine = top
+    ? `<b>${top.name}</b>${top.distance_km != null ? ` (${top.distance_km} km)` : ""}${top.is_accessible ? " ♿" : ""}`
+    : null;
+
+  if (data.emergency_active) {
+    el.innerHTML = `<span class="text-danger font-bold">🚨 Emergency near ${data.emergency_zone || "the venue"}.</span> ` +
+      (exitLine ? `Nearest safe exit: ${exitLine}.` : `No safe exit currently computed — follow staff instructions.`) +
+      (data.all_exits_congested ? ` <span class="text-muted">All exits are under pressure — proceed with caution.</span>` : "");
+  } else if (exitLine) {
+    el.innerHTML = `Recommended exit: ${exitLine}.`;
+  } else {
+    el.innerHTML = accessibleOnly
+      ? `<span class="text-muted">No accessible exit configured yet — ask a staff member for assistance.</span>`
+      : `<span class="text-muted">No gate data yet.</span>`;
+  }
 }
 
 const LEVEL_COLOR_OFFPEAK = { NORMAL: "text-ok", MODERATE: "text-warn", HIGH: "text-high", CRITICAL: "text-danger" };

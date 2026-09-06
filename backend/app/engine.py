@@ -296,10 +296,19 @@ def reset_simulation(db):
     (upcoming/completed, browsable via the event listing) are untouched."""
     live = get_live_event(db)
     if live:
-        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete()
+        zone_ids = [z.id for z in db.query(models.Zone.id).filter(models.Zone.event_id == live.id)]
+        # VisitorProfile/Alert rows referencing these zones must be cleared
+        # before the Zone rows are deleted, or Postgres raises a
+        # ForeignKeyViolation on the zones DELETE (checked at end of that
+        # statement, against tables it doesn't itself touch).
         db.query(models.VisitorProfile).filter(
             (models.VisitorProfile.event_id == live.id) | (models.VisitorProfile.event_id.is_(None))
         ).delete(synchronize_session=False)
+        if zone_ids:
+            db.query(models.Alert).filter(models.Alert.zone_id.in_(zone_ids)).update(
+                {"zone_id": None}, synchronize_session=False
+            )
+        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete(synchronize_session=False)
         db.query(models.Event).filter(models.Event.id == live.id).delete()
     db.query(models.Resource).delete()
     db.query(models.SimState).delete()
@@ -392,6 +401,7 @@ def full_state(db):
             "capacity": z.capacity, "current_count": z.current_count,
             "linked_transport_zone_id": z.linked_transport_zone_id,
             "linked_hospitality_zone_id": z.linked_hospitality_zone_id,
+            "is_accessible": z.is_accessible,
             # HIGH/CRITICAL is the operator-facing signal (color-coded, stable);
             # the raw score can dip briefly right when a ramp's per-tick delta
             # hits zero (flow-instability spike), so a HIGH/CRITICAL zone stays
@@ -1322,6 +1332,8 @@ def hotel_recommendations(db):
             "zone_id": h.id, "name": h.name, "available_pct": available_pct,
             "distance_km": round(distance_km, 1) if distance_km is not None else None,
             "price_tier": h.price_tier, "score": round(score, 1),
+            "occupied_rooms": h.current_count, "total_rooms": h.capacity,
+            "available_rooms": max(h.capacity - h.current_count, 0),
             "reason": ", ".join(reasons),
         })
     out.sort(key=lambda x: x["score"], reverse=True)
@@ -1457,6 +1469,112 @@ def emergency_status(db):
     }
 
 
+# --- accessibility & evacuation routing -------------------------------------
+# Ranks gates as safe-exit recommendations. Doubles as two different things:
+# during a declared emergency, it's evacuation guidance away from the
+# affected zone; day-to-day, it's how an attendee who needs a
+# wheelchair-accessible exit finds one without waiting for an emergency.
+# Excludes the emergency's own zone and sorts congested gates last so nobody
+# gets routed into another crowded exit.
+
+def _nearest_gate(db, lat, lng):
+    """Nearest gate zone to a given point, or None if no gates have a
+    position set yet. Shared by evacuation_routes (ranking) and the
+    accessibility-request notification (naming a gate for operators)."""
+    best, best_km = None, None
+    for g in db.query(models.Zone).filter(models.Zone.type == "gate").all():
+        if g.lat is None or g.lng is None:
+            continue
+        km = _haversine_km(lat, lng, g.lat, g.lng)
+        if best_km is None or km < best_km:
+            best, best_km = g, km
+    return (best, round(best_km, 2)) if best else (None, None)
+
+
+def evacuation_routes(db, accessible_only=False, lat=None, lng=None):
+    state = get_state_row(db)
+    emergency_active = bool(state and state.emergency_active)
+    emergency_zone = (
+        db.get(models.Zone, state.emergency_zone_id)
+        if emergency_active and state.emergency_zone_id else None
+    )
+    # Distance is measured from the attendee's own position when we have it
+    # — they're the one walking to an exit, so "nearest to me" is what
+    # matters, not "nearest to the emergency". Falls back to the emergency
+    # zone (best guess at where the crowd is) or the venue centroid.
+    if lat is not None and lng is not None:
+        origin_lat, origin_lng = lat, lng
+    else:
+        origin = emergency_zone or db.query(models.Zone).filter(models.Zone.type == "arena").first()
+        origin_lat = origin.lat if origin else None
+        origin_lng = origin.lng if origin else None
+
+    gates = db.query(models.Zone).filter(models.Zone.type == "gate").all()
+    level_rank = {"LOW": 0, "MODERATE": 1, "HIGH": 2, "CRITICAL": 3}
+    routes = []
+    for g in gates:
+        if emergency_zone and g.id == emergency_zone.id:
+            continue
+        if accessible_only and not g.is_accessible:
+            continue
+        r = zone_risk(g, db)
+        distance_km = (
+            _haversine_km(origin_lat, origin_lng, g.lat, g.lng)
+            if origin_lat is not None and origin_lng is not None and g.lat is not None else None
+        )
+        routes.append({
+            "id": g.id, "name": g.name, "level": r["level"],
+            "capacity_pressure_pct": r["capacity_pressure_pct"],
+            "is_accessible": g.is_accessible,
+            "distance_km": round(distance_km, 2) if distance_km is not None else None,
+        })
+
+    routes.sort(key=lambda r: (level_rank.get(r["level"], 9), r["distance_km"] if r["distance_km"] is not None else 1e9))
+    for i, r in enumerate(routes):
+        r["recommended"] = i == 0
+
+    return {
+        "emergency_active": emergency_active,
+        "emergency_zone": emergency_zone.name if emergency_zone else None,
+        "accessible_only": accessible_only,
+        "from_attendee_location": lat is not None and lng is not None,
+        "all_exits_congested": bool(routes and routes[0]["level"] in ("HIGH", "CRITICAL")),
+        "routes": routes,
+    }
+
+
+def request_accessibility_assistance(db, email=None, note=None, lat=None, lng=None, zone_name=None):
+    """An attendee flipping on 'I need a wheelchair-accessible exit' fires
+    this once (not on every poll) — surfaces as a Notification to the roles
+    who can actually act on it, same channel operators already watch for
+    alerts/emergencies, rather than a whole new UI surface. GPS (when the
+    device has it) names the nearest gate automatically instead of relying
+    on the attendee to know/pick one; zone_name is a manual fallback for
+    clients without location (e.g. the web attendee page's own gate)."""
+    event = get_live_event(db)
+    who = email or "An attendee"
+    location_note = None
+    if lat is not None and lng is not None:
+        gate, distance_km = _nearest_gate(db, lat, lng)
+        if gate:
+            location_note = f"nearest gate: {gate.name} ({distance_km} km)"
+    elif zone_name:
+        location_note = f"at {zone_name}"
+    message = f"{who} has requested a wheelchair-accessible exit" + (f" — {location_note}." if location_note else ".")
+    if note:
+        message += f" Note: {note}"
+    for role in ("Event Command Operator", "Venue Manager", "Administrator"):
+        db.add(models.Notification(
+            event_id=event.id if event else None, audience_role=role, zone_domain=None,
+            title="♿ Accessibility assistance requested", message=message, priority="HIGH",
+        ))
+    db.commit()
+    if event:
+        state = get_state_row(db)
+        _log(db, state.tick if state else 0, "accessibility_request", message, zone_domain=None)
+    return {"requested": True}
+
+
 # --- post-event analytics / historical learning (Sections 31-32) ----------
 
 def event_analytics(db):
@@ -1572,7 +1690,7 @@ def event_setup_summary(db):
     gates = [
         {
             "id": z.id, "name": z.name, "capacity": z.capacity, "current_count": z.current_count,
-            "staff_assigned": z.staff_assigned,
+            "staff_assigned": z.staff_assigned, "is_accessible": z.is_accessible,
         }
         for z in zones if z.type == "gate"
     ]
@@ -1611,12 +1729,14 @@ def event_setup_summary(db):
     }
 
 
-def update_gate_setup(db, zone_id, capacity, staff_assigned):
+def update_gate_setup(db, zone_id, capacity, staff_assigned, is_accessible=None):
     zone = db.get(models.Zone, zone_id)
     if not zone or zone.type != "gate":
         return None
     zone.capacity = capacity
     zone.staff_assigned = staff_assigned
+    if is_accessible is not None:
+        zone.is_accessible = is_accessible
     db.commit()
     return zone
 
@@ -1697,10 +1817,24 @@ def create_event(db, name, region, expected_attendance, safe_capacity):
     (upcoming/completed) are untouched."""
     old_live = get_live_event(db)
     if old_live:
-        db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete()
+        zone_ids = [z.id for z in db.query(models.Zone.id).filter(models.Zone.event_id == old_live.id)]
+        # Rows in *other* tables that reference these zones must be cleared
+        # before the Zone rows are deleted — Postgres checks a cross-table FK
+        # at the end of the zones DELETE statement, so a dangling reference
+        # left behind (a walk-in registration, an open alert, a declared
+        # emergency) fails with ForeignKeyViolation even though it's about to
+        # be cleaned up anyway.
         db.query(models.VisitorProfile).filter(
             (models.VisitorProfile.event_id == old_live.id) | (models.VisitorProfile.event_id.is_(None))
         ).delete(synchronize_session=False)
+        if zone_ids:
+            db.query(models.Alert).filter(models.Alert.zone_id.in_(zone_ids)).update(
+                {"zone_id": None}, synchronize_session=False
+            )
+            db.query(models.SimState).filter(models.SimState.emergency_zone_id.in_(zone_ids)).update(
+                {"emergency_zone_id": None, "emergency_active": False}, synchronize_session=False
+            )
+        db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete(synchronize_session=False)
         db.query(models.Event).filter(models.Event.id == old_live.id).delete()
     db.query(models.Resource).delete()
     db.query(models.LogEntry).delete()
@@ -1738,10 +1872,15 @@ def delete_event(db):
     Scenarios, user accounts, and other catalog events are untouched."""
     live = get_live_event(db)
     if live:
-        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete()
+        zone_ids = [z.id for z in db.query(models.Zone.id).filter(models.Zone.event_id == live.id)]
         db.query(models.VisitorProfile).filter(
             (models.VisitorProfile.event_id == live.id) | (models.VisitorProfile.event_id.is_(None))
         ).delete(synchronize_session=False)
+        if zone_ids:
+            db.query(models.Alert).filter(models.Alert.zone_id.in_(zone_ids)).update(
+                {"zone_id": None}, synchronize_session=False
+            )
+        db.query(models.Zone).filter(models.Zone.event_id == live.id).delete(synchronize_session=False)
         db.query(models.Event).filter(models.Event.id == live.id).delete()
     db.query(models.Resource).delete()
     db.query(models.SimState).delete()
@@ -1822,6 +1961,7 @@ def gate_advisory(db):
             "id": g.id, "name": g.name,
             "current_count": g.current_count, "capacity": g.capacity,
             "remaining": max(g.capacity - g.current_count, 0),
+            "is_accessible": g.is_accessible,
             **r,
         })
     out.sort(key=lambda z: z["capacity_pressure_pct"], reverse=True)

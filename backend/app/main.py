@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from . import engine, models
@@ -12,6 +13,16 @@ from .database import Base, SessionLocal, engine as db_engine, get_db
 from .seed import seed_if_empty
 
 Base.metadata.create_all(bind=db_engine)
+
+# create_all only creates missing tables, not missing columns on a table that
+# already exists — needed once a real event's zones already live in the DB
+# (no Alembic here, see database.py), so a model field added after the fact
+# is patched in by hand, guarded so it's a no-op once the column is present.
+with db_engine.begin() as conn:
+    zone_columns = {c["name"] for c in inspect(db_engine).get_columns("zones")}
+    if "is_accessible" not in zone_columns:
+        conn.execute(text("ALTER TABLE zones ADD COLUMN is_accessible BOOLEAN NOT NULL DEFAULT FALSE"))
+
 with SessionLocal() as db:
     seed_if_empty(db)
 
@@ -122,6 +133,7 @@ class ZoneLocationUpdate(BaseModel):
 class GateSetupUpdate(BaseModel):
     capacity: int
     staff_assigned: int | None = None
+    is_accessible: bool | None = None
 
 
 class HotelCreate(BaseModel):
@@ -169,6 +181,14 @@ class EmergencyTrigger(BaseModel):
 
 class AttendeeEmail(BaseModel):
     email: str
+
+
+class AccessibilityRequest(BaseModel):
+    email: str | None = None
+    note: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    zone_name: str | None = None
 
 
 class SetCurrentEvent(BaseModel):
@@ -529,10 +549,24 @@ def get_event_setup(db: Session = Depends(get_db)):
 
 @app.patch("/api/event-setup/gates/{zone_id}")
 def patch_gate_setup(zone_id: int, req: GateSetupUpdate, db: Session = Depends(get_db)):
-    zone = engine.update_gate_setup(db, zone_id, req.capacity, req.staff_assigned)
+    zone = engine.update_gate_setup(db, zone_id, req.capacity, req.staff_assigned, req.is_accessible)
     if zone is None:
         raise HTTPException(404, "gate not found")
     return {"id": zone.id}
+
+
+@app.get("/api/evacuation-routes")
+def get_evacuation_routes(
+    accessible_only: bool = False, lat: float | None = None, lng: float | None = None, db: Session = Depends(get_db),
+):
+    return engine.evacuation_routes(db, accessible_only=accessible_only, lat=lat, lng=lng)
+
+
+@app.post("/api/attendee/accessibility-request")
+def post_accessibility_request(req: AccessibilityRequest, db: Session = Depends(get_db)):
+    return engine.request_accessibility_assistance(
+        db, email=req.email, note=req.note, lat=req.lat, lng=req.lng, zone_name=req.zone_name,
+    )
 
 
 @app.post("/api/event-setup/hotels")

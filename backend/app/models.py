@@ -101,6 +101,7 @@ class Zone(Base):
     contact = Column(String, nullable=True)  # hotels/transport: phone or booking contact
     amenities = Column(String, nullable=True)  # hotels only: comma-separated, e.g. "WiFi, Breakfast, Shuttle"
     manual_recommended = Column(Boolean, default=False)  # hotels only: operator override — beats the algorithmic pick
+    is_accessible = Column(Boolean, nullable=False, default=False)  # gates: wheelchair-accessible entry/exit, factored into evacuation routing
     # A gate can point at the transport zone its exiting crowd flows onto, and
     # at the hospitality zone that absorbs same-night overflow demand — used
     # to compute that gate's resource_pressure factor (SRS Section 8.2).
