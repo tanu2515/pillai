@@ -77,9 +77,32 @@
     </p>
   </div>
 
-  <div id="not-configured" class="row-card p-6 text-center hidden">
-    <p class="text-sm text-muted m-0">No live event configured yet. Set one up in the Administrator screen first.</p>
-    <a href="admin.html" class="btn-primary inline-block mt-3 px-4 py-2 rounded-lg text-xs">GO TO ADMINISTRATOR</a>
+  <div id="not-configured" class="row-card p-6 hidden">
+    <p class="text-sm text-muted m-0 mb-4 text-center">No live event configured yet. Create one below to start setup.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 max-w-2xl mx-auto">
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Event name</label>
+        <input type="text" id="new-ev-name" class="w-full p-2.5 text-sm" placeholder="e.g. Chennai Music Fest" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Expected attendance</label>
+        <input type="number" id="new-ev-attendance" class="w-full p-2.5 text-sm font-mono" value="50000" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Safe capacity</label>
+        <input type="number" id="new-ev-capacity" class="w-full p-2.5 text-sm font-mono" value="60000" />
+      </div>
+    </div>
+    <div class="flex gap-3 items-center justify-center flex-wrap max-w-2xl mx-auto">
+      <select id="new-ev-region" class="p-2.5 text-sm min-w-[220px]">
+        <option value="">Select a region…</option>
+      </select>
+      <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="createEventInline()">CREATE EVENT</button>
+      <span id="new-event-status" class="text-xs text-ok"></span>
+    </div>
+    <p class="text-xs text-muted text-center mt-4 mb-0">
+      Prefer the full admin controls? <a href="admin.html" class="text-accent hover:underline font-bold">Go to Administrator →</a>
+    </p>
   </div>
 
   <div id="setup-body" class="hidden">
@@ -170,7 +193,7 @@ function gateRow(g) {
   return `
     <div class="row-card flex items-center gap-3 px-4 py-3 mb-2 flex-wrap">
       <div class="flex-1 min-w-[120px]">
-        <div class="font-bold text-sm">${g.name}</div>
+        <div class="font-bold text-sm">${g.name} ${g.is_accessible ? '<span title="Wheelchair-accessible">♿</span>' : ""}</div>
         <div class="text-muted text-[10.5px] font-mono">${g.current_count.toLocaleString()} / ${g.capacity.toLocaleString()} currently</div>
       </div>
       <label class="text-[10px] text-muted uppercase tracking-wide">Capacity
@@ -178,6 +201,10 @@ function gateRow(g) {
       </label>
       <label class="text-[10px] text-muted uppercase tracking-wide">Staff assigned
         <input type="number" class="small-input w-20" id="g-staff-${g.id}" value="${g.staff_assigned ?? ""}" />
+      </label>
+      <label class="text-[10px] text-muted uppercase tracking-wide flex items-center gap-1.5">
+        <input type="checkbox" id="g-access-${g.id}" ${g.is_accessible ? "checked" : ""} />
+        Accessible exit
       </label>
       <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveGate(${g.id})">SAVE</button>
     </div>`;
@@ -187,8 +214,9 @@ async function saveGate(id) {
   const capacity = parseInt(document.getElementById(`g-cap-${id}`).value);
   const staffVal = document.getElementById(`g-staff-${id}`).value;
   const staff_assigned = staffVal === "" ? null : parseInt(staffVal);
+  const is_accessible = document.getElementById(`g-access-${id}`).checked;
   await api(`/api/event-setup/gates/${id}`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capacity, staff_assigned }),
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capacity, staff_assigned, is_accessible }),
   });
   showToast("Gate updated.");
   await load();
@@ -339,6 +367,33 @@ async function addTransport() {
   await load();
 }
 
+// --- Create event inline (skips the Administrator step) --------------------
+
+async function loadRegionsForCreate() {
+  const regions = (await api("/api/regions")).sort((a, b) => a.state.localeCompare(b.state));
+  document.getElementById("new-ev-region").innerHTML =
+    `<option value="">Select a region…</option>` +
+    regions.map(r => `<option value="${r.state}">${r.state} — ${r.city}</option>`).join("");
+}
+
+async function createEventInline() {
+  const status = document.getElementById("new-event-status");
+  const name = document.getElementById("new-ev-name").value.trim();
+  const region = document.getElementById("new-ev-region").value;
+  if (!name) { status.textContent = "Name is required."; return; }
+  if (!region) { status.textContent = "Pick a region first."; return; }
+
+  status.textContent = "Creating…";
+  const body = {
+    name, region,
+    expected_attendance: parseInt(document.getElementById("new-ev-attendance").value) || 0,
+    safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
+  };
+  await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  status.textContent = "Created.";
+  await load();
+}
+
 // --- Load ----------------------------------------------------------------
 
 async function load() {
@@ -364,6 +419,7 @@ async function load() {
     : "No bus fleet configured.";
 }
 
+loadRegionsForCreate();
 load();
 </script>
 </body>

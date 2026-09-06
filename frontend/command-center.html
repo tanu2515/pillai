@@ -147,6 +147,7 @@
 
 <div id="emergency-banner" class="hidden bg-danger/15 border-b border-danger/50 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap relative z-[1]">
   <span class="text-danger text-sm font-bold">🚨 EMERGENCY — <span id="emergency-banner-zone"></span>: <span id="emergency-banner-message" class="font-normal"></span></span>
+  <span id="evac-recommendation" class="text-xs text-ink font-semibold"></span>
   <button id="emergency-clear-btn" class="btn-danger rounded-lg px-3 py-1.5 text-xs hidden" onclick="clearEmergency()">Clear Emergency</button>
 </div>
 
@@ -446,7 +447,7 @@ function renderZones(state) {
     <div class="row-card clickable flex items-center gap-3 px-3 py-2.5 mb-2 text-sm" onclick="openRiskModal(${z.id})">
       <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${LEVEL_COLOR[z.level]}" style="box-shadow:0 0 6px currentColor;"></div>
       <div class="flex-1">
-        <div>${z.name} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
+        <div>${z.name} ${z.type === "gate" && z.is_accessible ? '<span title="Wheelchair-accessible exit">♿</span>' : ""} <span class="text-muted text-[10px] uppercase">· ${z.domain}</span></div>
         ${z.location_note ? `<div class="text-muted text-[10.5px] font-mono">${z.location_note}</div>` : ""}
         ${gaugeBar(z, "mt-1.5 w-full max-w-[220px]")}
       </div>
@@ -679,13 +680,20 @@ function renderStaffSuggestions(list) {
   `).join("");
 }
 
-function renderEmergencyStatus(status) {
+async function renderEmergencyStatus(status) {
   const banner = document.getElementById("emergency-banner");
-  if (!status.active) { banner.classList.add("hidden"); return; }
+  const evac = document.getElementById("evac-recommendation");
+  if (!status.active) { banner.classList.add("hidden"); evac.textContent = ""; return; }
   banner.classList.remove("hidden");
   document.getElementById("emergency-banner-zone").textContent = status.zone_name || "";
   document.getElementById("emergency-banner-message").textContent = status.message || "";
   document.getElementById("emergency-clear-btn").classList.toggle("hidden", !roleCfg.showEmergency);
+
+  const routes = await api("/api/evacuation-routes");
+  const top = routes.routes[0];
+  if (!top) { evac.textContent = "No safe exit computed."; return; }
+  const congestedNote = routes.all_exits_congested ? " — all exits under pressure, proceed with caution" : "";
+  evac.textContent = `Nearest safe exit: ${top.name}${top.distance_km != null ? ` (${top.distance_km} km)` : ""}${top.is_accessible ? " ♿" : ""}${congestedNote}`;
 }
 
 async function refresh() {
@@ -1137,11 +1145,17 @@ async function sendChat() {
 
 async function loadHotels() {
   const hotels = await api("/api/hotels/recommendations");
+  const priceLabel = tier => tier ? ["", "Budget", "Economy", "Mid-range", "Premium", "Luxury"][tier] || `Tier ${tier}` : "—";
   document.getElementById("hotels-list").innerHTML = hotels.map(h => `
     <div class="row-card p-3 mb-2 text-sm ${h.recommended ? 'border-ok/60' : ''}">
       <div class="flex items-center justify-between flex-wrap gap-1">
         <span class="font-bold">${h.name}${h.recommended ? ' ⭐' : ''}</span>
         <span class="font-mono text-ok font-bold">${h.score}</span>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap mt-1.5 text-[10.5px]">
+        <span class="font-mono">${h.occupied_rooms}/${h.total_rooms} rooms occupied</span>
+        <span class="font-mono text-ok">${h.available_rooms} available</span>
+        <span class="text-muted">${priceLabel(h.price_tier)}${h.price_tier ? ` (${h.price_tier}/5)` : ''}</span>
       </div>
       <div class="text-muted text-[10.5px] mt-1">${h.reason}</div>
     </div>
