@@ -3,16 +3,17 @@ import json
 import math
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from . import engine, models
+from . import engine, ml_advisory, models
 from .detector import detector
 from .regions import INDIA_REGIONS
 from .database import Base, SessionLocal, engine as db_engine, get_db
@@ -104,6 +105,20 @@ class CrowdCountIngest(BaseModel):
 class CameraFeedRequest(BaseModel):
     zone_id: int
     stream_url: str
+    model_path: str = "yolov8n.pt"
+    sample_seconds: float = Field(default=1.0, ge=0.2, le=30)
+
+
+class WebcamFeedRequest(BaseModel):
+    zone_id: int
+    device_index: int = 0  # OpenCV camera index on the BACKEND machine -- see POST /api/cameras/webcam's docstring
+    model_path: str = "yolov8n.pt"
+    sample_seconds: float = Field(default=1.0, ge=0.2, le=30)
+
+
+class RtspFeedRequest(BaseModel):
+    zone_id: int
+    rtsp_url: str  # operator-provided, authorized stream only -- see POST /api/cameras/rtsp's docstring
     model_path: str = "yolov8n.pt"
     sample_seconds: float = Field(default=1.0, ge=0.2, le=30)
 
@@ -281,6 +296,15 @@ class EventListingCreate(BaseModel):
     tiers: list[TierSpec]
 
 
+class EventSportsDetailsRequest(BaseModel):
+    sport: str
+    competition: str | None = None
+    tournament_gender: str | None = None
+    stage: str | None = None
+    team_home: str | None = None
+    team_away: str | None = None
+
+
 class BookTierRequest(BaseModel):
     name: str
     email: str | None = None
@@ -442,6 +466,11 @@ def crowd_history(zone_id: int, limit: int = 60, db: Session = Depends(get_db)):
 
 @app.post("/api/cameras")
 def start_camera(req: CameraFeedRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Generic/original entry point -- a free-typed stream URL (the existing
+    Event Setup 'Phone/IP camera stream URL' box, e.g. a phone running an IP
+    Webcam app over HTTP MJPEG, not necessarily RTSP). Kept as-is for backward
+    compatibility; POST /api/cameras/webcam and /rtsp below are the same
+    underlying pipeline with a clearer, source-specific contract."""
     zone = db.get(models.Zone, req.zone_id)
     if not zone:
         raise HTTPException(404, "zone not found")
@@ -451,8 +480,92 @@ def start_camera(req: CameraFeedRequest, db: Session = Depends(get_db), role: st
         with SessionLocal() as worker_db:
             engine.ingest_crowd_count(worker_db, zone_id, count, "yolo")
 
-    detector.start(req.zone_id, req.stream_url, req.model_path, req.sample_seconds, record_count)
+    detector.start(req.zone_id, req.stream_url, req.model_path, req.sample_seconds, record_count, source_type="manual")
     return {"started": req.zone_id, "message": "Camera worker started; inspect GET /api/cameras for live status."}
+
+
+@app.post("/api/cameras/webcam")
+def start_camera_from_webcam(req: WebcamFeedRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Starts the BACKEND MACHINE's local webcam via OpenCV's device index
+    (cv2.VideoCapture(0), same as detector.py already supports for any
+    digit-string stream_url) -- NOT the operator's browser webcam. A
+    browser's camera stream never reaches this backend process; capturing
+    that would need a separate WebRTC/MediaRecorder upload path, which this
+    endpoint does not attempt. For the hackathon this backend-machine
+    webcam (e.g. a laptop's built-in camera, when the backend runs on the
+    demo laptop) is the intended path."""
+    zone = db.get(models.Zone, req.zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+
+    def record_count(zone_id: int, count: int):
+        with SessionLocal() as worker_db:
+            engine.ingest_crowd_count(worker_db, zone_id, count, "yolo")
+
+    detector.start(req.zone_id, str(req.device_index), req.model_path, req.sample_seconds, record_count, source_type="webcam")
+    return {"started": req.zone_id, "message": "Webcam worker started; inspect GET /api/cameras for live status."}
+
+
+@app.post("/api/cameras/rtsp")
+def start_camera_from_rtsp(req: RtspFeedRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
+    """Starts a worker against an OPERATOR-PROVIDED, authorized CCTV/IP-camera
+    stream URL (typically rtsp://, though the same OpenCV call also accepts
+    an http(s):// MJPEG stream some IP cameras use -- both go through the
+    identical cv2.VideoCapture(url) -> YOLO pipeline, no separate CCTV
+    implementation). This does NOT connect to, or claim access to, any real
+    government/municipal/venue CCTV network -- it only starts a worker
+    against whatever authorized URL the operator explicitly supplies."""
+    zone = db.get(models.Zone, req.zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+    url = req.rtsp_url.strip()
+    if "://" not in url:
+        raise HTTPException(400, "rtsp_url must be a full stream URL, e.g. rtsp://user:pass@host:port/path")
+
+    def record_count(zone_id: int, count: int):
+        with SessionLocal() as worker_db:
+            engine.ingest_crowd_count(worker_db, zone_id, count, "yolo")
+
+    detector.start(req.zone_id, url, req.model_path, req.sample_seconds, record_count, source_type="rtsp")
+    return {"started": req.zone_id, "message": "RTSP camera worker started; inspect GET /api/cameras for live status."}
+
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+
+
+@app.post("/api/cameras/upload")
+def start_camera_from_upload(
+    zone_id: int = Form(...), sample_seconds: float = Form(1.0), model_path: str = Form("yolov8n.pt"),
+    file: UploadFile = File(...), db: Session = Depends(get_db), role: str | None = Depends(get_role),
+):
+    """Same detector.start() pipeline as POST /api/cameras (webcam device-index
+    or CCTV/RTSP stream_url) — a video file is just a third source cv2.VideoCapture
+    already accepts, so this only adds the one missing piece: getting the
+    uploaded bytes onto disk first, then pointing the existing worker at that
+    path. No separate perception pipeline.
+
+    Registered BEFORE the DELETE /api/cameras/{zone_id} route below on purpose:
+    Starlette matches routes in registration order, and {zone_id} (untyped in
+    the path template) would otherwise swallow the literal "upload" segment."""
+    zone = db.get(models.Zone, zone_id)
+    if not zone:
+        raise HTTPException(404, "zone not found")
+    require_domain_access(role, zone.domain)
+
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    suffix = Path(file.filename or "upload.mp4").suffix or ".mp4"
+    saved_path = UPLOAD_DIR / f"zone{zone_id}_{uuid.uuid4().hex[:8]}{suffix}"
+    with open(saved_path, "wb") as out:
+        out.write(file.file.read())
+
+    def record_count(zid: int, count: int):
+        with SessionLocal() as worker_db:
+            engine.ingest_crowd_count(worker_db, zid, count, "yolo")
+
+    detector.start(zone_id, str(saved_path), model_path, sample_seconds, record_count, source_type="upload")
+    return {"started": zone_id, "message": "Camera worker started from uploaded video; inspect GET /api/cameras for live status."}
 
 
 @app.delete("/api/cameras/{zone_id}")
@@ -585,6 +698,39 @@ def create_event_listing(req: EventListingCreate, db: Session = Depends(get_db))
         venue_address=req.venue_address, banner_emoji=req.banner_emoji, is_featured=req.is_featured,
     )
     return {"id": event.id, "name": event.name}
+
+
+@app.get("/api/events/{event_id}/sports-details")
+def get_event_sports_details(event_id: int, db: Session = Depends(get_db)):
+    return engine.get_event_sports_details(db, event_id)
+
+
+@app.post("/api/events/{event_id}/sports-details")
+def set_event_sports_details(event_id: int, req: EventSportsDetailsRequest, db: Session = Depends(get_db)):
+    if not db.get(models.Event, event_id):
+        raise HTTPException(404, "event not found")
+    try:
+        ml_advisory.validate_sports_vocab(req.sport, req.competition, req.tournament_gender, req.stage)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return engine.upsert_event_sports_details(
+        db, event_id, req.sport, req.competition, req.tournament_gender, req.stage, req.team_home, req.team_away,
+    )
+
+
+@app.delete("/api/events/{event_id}/sports-details")
+def remove_event_sports_details(event_id: int, db: Session = Depends(get_db)):
+    if not engine.delete_event_sports_details(db, event_id):
+        raise HTTPException(404, "no sports details set for this event")
+    return {"status": "deleted"}
+
+
+@app.get("/api/events/{event_id}/ticket-demand")
+def get_event_ticket_demand(event_id: int, db: Session = Depends(get_db)):
+    event = db.get(models.Event, event_id)
+    if not event:
+        raise HTTPException(404, "event not found")
+    return engine.event_ticket_demand(db, event)
 
 
 @app.post("/api/events/{event_id}/tiers/{tier_id}/book")
@@ -795,6 +941,28 @@ def ai_advisor_endpoint(db: Session = Depends(get_db)):
 @app.get("/api/ai/attendee-advisory")
 def ai_attendee_advisory(db: Session = Depends(get_db)):
     return engine.attendee_advisory(db)
+
+
+@app.get("/api/ai/forecast/{zone_id}")
+def ai_forecast(zone_id: int, db: Session = Depends(get_db)):
+    """LSTM advisory forecast only — see ml_advisory.py's module docstring.
+    Never merged into risk_factors()/zone_risk(); the deterministic Risk
+    Engine's own numbers are untouched by this endpoint's existence."""
+    result = ml_advisory.zone_forecast(db, zone_id)
+    if result is None:
+        raise HTTPException(404, "zone not found")
+    return result
+
+
+@app.get("/api/ai/network-pressure")
+def ai_network_pressure(db: Session = Depends(get_db)):
+    """GNN advisory network view for the live event only — see
+    ml_advisory.py's module docstring. Advisory only, same guarantee as
+    ai_forecast above."""
+    live = engine.get_live_event(db)
+    if not live:
+        raise HTTPException(404, "no live event configured")
+    return ml_advisory.event_network_pressure(db, live.id)
 
 
 @app.get("/api/transport/flights")

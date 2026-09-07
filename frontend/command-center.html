@@ -231,7 +231,18 @@
         <h2 class="eyebrow">Zone Map</h2>
         <button id="map-place-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="toggleMapPlaceMode()">📍 Click Map to Add Gate</button>
       </div>
-      <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+      <div style="position:relative;">
+        <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+        <div id="zone-map-legend" style="position:absolute; bottom:8px; left:8px; z-index:1000; background:rgba(255,255,255,.92); border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:10px; line-height:1.6; color:#123B6D; box-shadow:0 1px 4px rgba(0,0,0,.12);">
+          <div style="display:flex; align-items:center; gap:5px;"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#2563EB;align-items:center;justify-content:center;font-size:9px;">🏨</span> Hotel</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#7C3AED;align-items:center;justify-content:center;font-size:9px;">🚌</span> Transport</div>
+          <div style="border-top:1px solid #E2E8F0; margin:4px 0;"></div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#22C55E;flex-shrink:0;"></span> Gate — Low</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#F59E0B;flex-shrink:0;"></span> Gate — Moderate</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#F87171;flex-shrink:0;"></span> Gate — High</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#DC2626;flex-shrink:0;"></span> Gate — Critical</div>
+        </div>
+      </div>
       <p class="text-[10.5px] text-muted mt-2 mb-3">Drag a marker to move it. Click a marker to edit or delete it.</p>
 
       <div class="border-t border-border pt-3">
@@ -394,6 +405,8 @@
       </div>
       <h4 class="eyebrow mb-2">Causal Chain</h4>
       <ol id="modal-chain" class="text-sm text-muted leading-7 list-decimal list-inside mb-4"></ol>
+
+      <div id="modal-ai-forecast" class="mb-4"></div>
 
       <div id="modal-recs" class="mb-4"></div>
 
@@ -1059,6 +1072,7 @@ async function openRiskModal(zoneId) {
   document.getElementById("modal-ack-status").textContent = zone.ack_status !== "open" ? zone.ack_status.toUpperCase() : "";
   document.getElementById("modal-ai-box").classList.add("hidden");
   document.getElementById("modal-location-note").textContent = zone.location_note || "";
+  loadAiForecast(zoneId, zone.name);
 
   const flightsBox = document.getElementById("modal-flights");
   if (zone.name === "Transport Hub") {
@@ -1150,6 +1164,48 @@ async function openRiskModal(zoneId) {
 
 function closeRiskModal() { document.getElementById("riskModal").classList.remove("show"); modalZoneId = null; }
 
+async function loadAiForecast(zoneId, zoneName) {
+  // Fire-and-forget: never blocks the modal opening, and any failure here
+  // (weights missing, insufficient history, etc.) just leaves the card
+  // empty rather than surfacing an error — advisory-only, per design.
+  const box = document.getElementById("modal-ai-forecast");
+  box.innerHTML = "";
+  try {
+    const [forecast, network] = await Promise.all([
+      api(`/api/ai/forecast/${zoneId}`), api("/api/ai/network-pressure"),
+    ]);
+    if (modalZoneId === zoneId) renderAiForecastBox(box, forecast, network, zoneName);
+  } catch (e) { /* advisory only — silently leave the card empty */ }
+}
+
+function renderAiForecastBox(el, forecast, network, zoneName) {
+  if (!forecast || !forecast.available) { el.innerHTML = ""; return; }
+  const netEntry = network && network.available ? network.zones[zoneName] : null;
+  const networkRow = netEntry ? `
+    <div class="flex items-center justify-between text-sm py-1 border-t border-border mt-1 pt-1">
+      <span class="text-muted text-[10.5px]">Network view (~1 min ahead)</span>
+      <span class="font-mono">${netEntry.network_expected_occupancy_pct}%</span>
+    </div>` : "";
+  el.innerHTML = `
+    <div class="ai-box">
+      <div class="flex items-center justify-between mb-1.5">
+        <h4 class="eyebrow m-0">✨ AI Forecast Advisory</h4>
+        <span class="text-[9px] uppercase tracking-wide font-bold text-muted border border-border rounded px-1.5 py-0.5">Advisory</span>
+      </div>
+      <div class="flex items-center justify-between text-sm py-1">
+        <span class="text-muted text-[10.5px]">+15 min</span><span class="font-mono">${forecast.occupancy_pct_15m}%</span>
+      </div>
+      <div class="flex items-center justify-between text-sm py-1">
+        <span class="text-muted text-[10.5px]">+30 min</span><span class="font-mono">${forecast.occupancy_pct_30m}%</span>
+      </div>
+      <div class="flex items-center justify-between text-sm py-1">
+        <span class="text-muted text-[10.5px]">+60 min</span><span class="font-mono">${forecast.occupancy_pct_60m}%</span>
+      </div>
+      ${networkRow}
+      <p class="text-[10px] text-muted italic m-0 mt-2">Advisory forecast — the deterministic Risk Engine above remains authoritative.</p>
+    </div>`;
+}
+
 async function explainWithAi() {
   const box = document.getElementById("modal-ai-box");
   box.classList.remove("hidden");
@@ -1178,6 +1234,26 @@ let zoneMap = null;
 let mapMarkers = {}; // zone id -> Leaflet marker
 let mapPlaceMode = false;
 
+// Names only render as always-visible labels once zoomed in this far;
+// zoomed out they're hover-only tooltips, to avoid label clutter.
+const ZONE_LABEL_ZOOM_THRESHOLD = 16;
+
+function domainMarkerIcon(bg, emoji) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:26px;height:26px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;">${emoji}</div>`,
+    iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -14],
+  });
+}
+const hotelIcon = domainMarkerIcon("#2563EB", "🏨");
+const transportIcon = domainMarkerIcon("#7C3AED", "🚌");
+
+function applyZoneTooltipMode(marker) {
+  const permanent = zoneMap.getZoom() >= ZONE_LABEL_ZOOM_THRESHOLD;
+  marker.unbindTooltip();
+  marker.bindTooltip(marker.zoneName, { permanent, direction: "top", offset: [0, -6] });
+}
+
 function initMap() {
   if (!roleCfg.tabs.includes("whatif") || zoneMap) return;
   zoneMap = L.map("zone-map", { zoomControl: true }).setView([19.033, 73.03], 14);
@@ -1187,6 +1263,9 @@ function initMap() {
   zoneMap.on("click", (e) => {
     if (!mapPlaceMode) return;
     openAddGatePopup(e.latlng);
+  });
+  zoneMap.on("zoomend", () => {
+    Object.values(mapMarkers).forEach(applyZoneTooltipMode);
   });
 }
 
@@ -1269,31 +1348,48 @@ function renderMapMarkers(zones) {
   withCoords.forEach(z => {
     seen.add(z.id);
     const color = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" }[z.level] || "#1976D2";
+    const isHotel = z.domain === "hospitality";
+    const isTransport = z.domain === "transport";
+
     if (mapMarkers[z.id]) {
-      mapMarkers[z.id].setLatLng([z.lat, z.lng]);
-      mapMarkers[z.id].setStyle({ fillColor: color });
-      mapMarkers[z.id].setPopupContent(markerPopupContent(z));
+      const marker = mapMarkers[z.id];
+      marker.setLatLng([z.lat, z.lng]);
+      if (marker.setStyle) marker.setStyle({ fillColor: color }); // venue circle markers only
+      marker.setPopupContent(markerPopupContent(z));
+      marker.zoneName = z.name;
+      applyZoneTooltipMode(marker);
     } else {
-      const marker = L.circleMarker([z.lat, z.lng], {
-        radius: 9, color: "#FFFFFF", weight: 2, fillColor: color, fillOpacity: 0.9,
-        draggable: false,
-      }).addTo(zoneMap);
-      marker.bindTooltip(z.name, { permanent: false, direction: "top" });
+      let marker;
+      if (isHotel) {
+        marker = L.marker([z.lat, z.lng], { icon: hotelIcon }).addTo(zoneMap);
+      } else if (isTransport) {
+        marker = L.marker([z.lat, z.lng], { icon: transportIcon }).addTo(zoneMap);
+      } else {
+        marker = L.circleMarker([z.lat, z.lng], {
+          radius: 9, color: "#FFFFFF", weight: 2, fillColor: color, fillOpacity: 0.9,
+          draggable: false,
+        }).addTo(zoneMap);
+      }
+      marker.zoneName = z.name;
+      applyZoneTooltipMode(marker);
       marker.bindPopup(markerPopupContent(z));
-      // Leaflet's circleMarker isn't natively draggable — attach manual drag.
-      let dragging = false;
-      marker.on("mousedown", () => { dragging = true; zoneMap.dragging.disable(); });
-      zoneMap.on("mousemove", (e) => { if (dragging) marker.setLatLng(e.latlng); });
-      zoneMap.on("mouseup", async (e) => {
-        if (!dragging) return;
-        dragging = false;
-        zoneMap.dragging.enable();
-        const ll = marker.getLatLng();
-        await api(`/api/zones/${z.id}/location`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: ll.lat, lng: ll.lng }),
+
+      if (!isHotel && !isTransport) {
+        // Leaflet's circleMarker isn't natively draggable — attach manual drag.
+        let dragging = false;
+        marker.on("mousedown", () => { dragging = true; zoneMap.dragging.disable(); });
+        zoneMap.on("mousemove", (e) => { if (dragging) marker.setLatLng(e.latlng); });
+        zoneMap.on("mouseup", async (e) => {
+          if (!dragging) return;
+          dragging = false;
+          zoneMap.dragging.enable();
+          const ll = marker.getLatLng();
+          await api(`/api/zones/${z.id}/location`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: ll.lat, lng: ll.lng }),
+          });
         });
-      });
+      }
       mapMarkers[z.id] = marker;
     }
   });

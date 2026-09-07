@@ -3,7 +3,7 @@ import json
 import math
 import random
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -199,8 +199,10 @@ def advance_tick(db):
         zone.prev_delta = zone.current_count - zone.last_count
         zone.last_count = zone.current_count
         zone.current_count = new_count
-        if delta:
-            db.add(models.CrowdSnapshot(zone_id=zone.id, count=new_count, source="simulation"))
+        # Always snapshot, even with delta==0 — an LSTM forecast needs a
+        # continuous per-tick sequence per zone, not just the ticks where a
+        # scenario happened to be ramping something.
+        db.add(models.CrowdSnapshot(zone_id=zone.id, count=new_count, source="simulation"))
         if zone.current_count > (zone.peak_count or 0):
             zone.peak_count = zone.current_count
             zone.peak_tick = state.tick
@@ -600,25 +602,38 @@ BUS_CAPACITY_EACH = 50
 def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0, from_zone="Gate 2", to_zone="Gate 3"):
     """Generalized to any (from_zone, to_zone) pair — defaults to Gate 2/Gate 3
     so the existing dashboard keeps working unchanged, but any
-    operator-added zone pair can now be previewed the same way."""
-    gate2 = db.query(models.Zone).filter(models.Zone.name == from_zone).first()
-    gate3 = db.query(models.Zone).filter(models.Zone.name == to_zone).first()
+    operator-added zone pair can now be previewed the same way.
+
+    Zones are resolved by name scoped to the LIVE event only (event_id ==
+    live.id) — a global by-name lookup would happily match a same-named zone
+    belonging to a different event (see seed_past_concert's "(Past)" suffix
+    comment for exactly this landmine). gate2's linked transport/hospitality
+    zones are optional, same as everywhere else in this module
+    (_resolve_action_context, _linked_resource_pressure): an operator-added
+    gate (POST /api/zones) never has linked_transport_zone_id/
+    linked_hospitality_zone_id set, so a custom/renamed-zone event simply
+    previews without that corridor/hotel breakdown instead of crashing."""
+    live = get_live_event(db)
+    if not live:
+        return None
+    gate2 = db.query(models.Zone).filter(models.Zone.event_id == live.id, models.Zone.name == from_zone).first()
+    gate3 = db.query(models.Zone).filter(models.Zone.event_id == live.id, models.Zone.name == to_zone).first()
     if not gate2 or not gate3:
         return None
-    corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id)
-    hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id)
+    corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id) if gate2.linked_transport_zone_id else None
+    hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id) if gate2.linked_hospitality_zone_id else None
 
     before = {
         "gate2": zone_risk(gate2, db),
         "gate3": zone_risk(gate3, db),
-        "corridor_b_pct": round(corridor_b.current_count / corridor_b.capacity * 100, 1),
-        "hotel_a_pct": round(hotel_a.current_count / hotel_a.capacity * 100, 1),
+        "corridor_b_pct": round(corridor_b.current_count / corridor_b.capacity * 100, 1) if corridor_b and corridor_b.capacity else None,
+        "hotel_a_pct": round(hotel_a.current_count / hotel_a.capacity * 100, 1) if hotel_a and hotel_a.capacity else None,
     }
 
     warnings = []
     actual_redirect = redirect_count
     if redirect_count > 0 and not open_gate3:
-        warnings.append("Redirect requires Gate 3 to be open — no visitors were actually moved.")
+        warnings.append(f"Redirect requires {gate3.name} to be open — no visitors were actually moved.")
         actual_redirect = 0
 
     new_gate3_count = gate3.current_count
@@ -626,7 +641,7 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
         room = max(gate3.capacity - gate3.current_count, 0)
         if actual_redirect > room:
             warnings.append(
-                f"Gate 3 only has room for {room} more visitors — capping redirect there "
+                f"{gate3.name} only has room for {room} more visitors — capping redirect there "
                 f"instead of pushing it over capacity."
             )
             actual_redirect = room
@@ -634,8 +649,10 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
 
     new_gate2_count = max(0, gate2.current_count - actual_redirect)
 
-    new_corridor_b_capacity = corridor_b.capacity + add_buses * BUS_CAPACITY_EACH
-    new_corridor_b_pct = round(corridor_b.current_count / new_corridor_b_capacity * 100, 1) if new_corridor_b_capacity else 0
+    new_corridor_b_pct = None
+    if corridor_b and corridor_b.capacity is not None:
+        new_corridor_b_capacity = corridor_b.capacity + add_buses * BUS_CAPACITY_EACH
+        new_corridor_b_pct = round(corridor_b.current_count / new_corridor_b_capacity * 100, 1) if new_corridor_b_capacity else 0
 
     staff_relief = min(move_staff * 1.5, 20)
 
@@ -647,7 +664,15 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
     gate2_natural_delta = gate2.current_count - gate2.last_count
     gate3_natural_delta = gate3.current_count - gate3.last_count
 
-    gate2_resource_pressure = (new_corridor_b_pct + before["hotel_a_pct"]) / 2
+    # Same average-of-linked-legs pressure _linked_resource_pressure computes
+    # for the real Risk Engine, just with the corridor leg reflecting this
+    # preview's redirected buses — and the same self-occupancy fallback for a
+    # gate2 with no linked zones at all (never a hardcoded 0/None crash).
+    gate2_pressure_legs = [pct for pct in (new_corridor_b_pct, before["hotel_a_pct"]) if pct is not None]
+    gate2_resource_pressure = (
+        sum(gate2_pressure_legs) / len(gate2_pressure_legs) if gate2_pressure_legs
+        else (new_gate2_count / gate2.capacity * 100 if gate2.capacity else 0)
+    )
     gate2_after = risk_factors(
         new_gate2_count, gate2.capacity, gate2_natural_delta, gate2.prev_delta,
         clip(gate2_resource_pressure - staff_relief, 0, 100),
@@ -696,34 +721,109 @@ def compare_plans(db, plans):
 
 # --- orchestration / action optimizer (Section 16) -------------------------
 
+# Fixed per-action-TYPE metadata (domain/resource cost/scoring weights) --
+# this doesn't depend on which zones exist in a given event, only on what
+# KIND of action this is. label/target_zones are NOT here on purpose: which
+# zone plays "the critical gate", "the quieter alternate gate", etc. depends
+# entirely on the live event's actual data, so those are resolved fresh per
+# request by _resolve_action_context()/_candidate_actions_for_context()
+# below -- never a hardcoded zone name, so this works for any event
+# regardless of how its zones are named (previously hardcoded to the
+# original seed's "Gate 2"/"Gate 3"/"Corridor B"/"Hotel A"/"Hotel B", which
+# silently produced zero-effect recommendations for any renamed event).
+#
 # domain = which operator role this action belongs to (Event Command Operator
 # always sees/approves every domain; the other three operator roles only see
 # and approve actions scoped to their own resource, per the shared
 # approve/override use case).
 CANDIDATE_ACTIONS = [
-    dict(id="redirect", label="Redirect 2,000 visitors to Gate 3", domain="venue", resource_type=None, required=0,
-         risk_reduction=40, capacity_balance=70, visitor_experience=55, time_to_impact=95, cost_efficiency=100,
-         target_zones=["Gate 2"]),
-    dict(id="open_gate3", label="Open Gate 3 additional lane", domain="venue", resource_type="staff", required=2,
-         risk_reduction=15, capacity_balance=60, visitor_experience=80, time_to_impact=85, cost_efficiency=80,
-         target_zones=["Gate 2"]),
-    dict(id="dispatch_buses", label="Dispatch 4 buses to Corridor B", domain="transport", resource_type="bus", required=4,
-         risk_reduction=25, capacity_balance=50, visitor_experience=70, time_to_impact=60, cost_efficiency=50,
-         target_zones=["Corridor B"]),
-    dict(id="move_staff", label="Move 6 staff to Gate 2/Gate 3", domain="venue", resource_type="staff", required=6,
-         risk_reduction=10, capacity_balance=40, visitor_experience=65, time_to_impact=70, cost_efficiency=60,
-         target_zones=["Gate 2", "Gate 3"]),
-    dict(id="recommend_hotel_b", label="Recommend Hotel B for new demand", domain="hospitality", resource_type=None, required=0,
-         risk_reduction=12, capacity_balance=55, visitor_experience=75, time_to_impact=90, cost_efficiency=100,
-         target_zones=["Hotel A"]),
+    dict(id="redirect", domain="venue", resource_type=None, required=0,
+         risk_reduction=40, capacity_balance=70, visitor_experience=55, time_to_impact=95, cost_efficiency=100),
+    dict(id="open_gate3", domain="venue", resource_type="staff", required=2,
+         risk_reduction=15, capacity_balance=60, visitor_experience=80, time_to_impact=85, cost_efficiency=80),
+    dict(id="dispatch_buses", domain="transport", resource_type="bus", required=4,
+         risk_reduction=25, capacity_balance=50, visitor_experience=70, time_to_impact=60, cost_efficiency=50),
+    dict(id="move_staff", domain="venue", resource_type="staff", required=6,
+         risk_reduction=10, capacity_balance=40, visitor_experience=65, time_to_impact=70, cost_efficiency=60),
+    dict(id="recommend_hotel_b", domain="hospitality", resource_type=None, required=0,
+         risk_reduction=12, capacity_balance=55, visitor_experience=75, time_to_impact=90, cost_efficiency=100),
 ]
+_ACTION_TEMPLATES_BY_ID = {a["id"]: a for a in CANDIDATE_ACTIONS}
+
+
+def _resolve_action_context(db, live):
+    """Resolves the live event's ACTUAL zones into the semantic roles the
+    action optimizer needs -- purely from existing Zone fields (type, domain,
+    capacity, current_count, linked_transport_zone_id,
+    linked_hospitality_zone_id). No schema change needed: linked_transport/
+    hospitality_zone_id already exist for exactly this purpose (a gate's
+    downstream transport/hotel), and "which gate is critical" / "which gate
+    has room" / "which hotel has room" are just live rankings, not identity.
+    A role with no matching zone in this event resolves to None, and every
+    action needing it is simply not offered (see
+    _candidate_actions_for_context) -- never a guessed/nonexistent target."""
+    gates = db.query(models.Zone).filter(
+        models.Zone.event_id == live.id, models.Zone.domain == "venue", models.Zone.type == "gate",
+    ).all()
+    hotels = db.query(models.Zone).filter(
+        models.Zone.event_id == live.id, models.Zone.domain == "hospitality",
+    ).all()
+
+    def occ_ratio(z):
+        return z.current_count / z.capacity if z.capacity else 0
+
+    critical_gate = max(gates, key=lambda z: zone_risk(z, db)["score"], default=None)
+    other_gates = [g for g in gates if not critical_gate or g.id != critical_gate.id]
+    redirect_gate = min(other_gates, key=occ_ratio, default=None)
+
+    linked_transport = (
+        db.get(models.Zone, critical_gate.linked_transport_zone_id)
+        if critical_gate and critical_gate.linked_transport_zone_id else None
+    )
+    linked_hotel = (
+        db.get(models.Zone, critical_gate.linked_hospitality_zone_id)
+        if critical_gate and critical_gate.linked_hospitality_zone_id else None
+    )
+    other_hotels = [h for h in hotels if not linked_hotel or h.id != linked_hotel.id]
+    redirect_hotel = min(other_hotels, key=occ_ratio, default=None)
+
+    return {
+        "critical_gate": critical_gate, "redirect_gate": redirect_gate,
+        "linked_transport": linked_transport, "linked_hotel": linked_hotel, "redirect_hotel": redirect_hotel,
+    }
+
+
+def _candidate_actions_for_context(ctx):
+    """Merges each fixed action template with dynamically-resolved
+    target_zones/label for THIS event's context -- an action is only
+    included if every zone role it needs actually resolved to a real zone,
+    so no recommendation ever targets a zone absent from the current event."""
+    cg, rg = ctx.get("critical_gate"), ctx.get("redirect_gate")
+    lt, lh, rh = ctx.get("linked_transport"), ctx.get("linked_hotel"), ctx.get("redirect_hotel")
+    out = []
+
+    def add(action_id, label, target_zones):
+        out.append({**_ACTION_TEMPLATES_BY_ID[action_id], "label": label, "target_zones": target_zones})
+
+    if cg and rg:
+        add("redirect", f"Redirect 2,000 visitors to {rg.name}", [cg.name])
+        add("open_gate3", f"Open an additional lane at {rg.name}", [cg.name])
+        add("move_staff", f"Move 6 staff to {cg.name}/{rg.name}", [cg.name, rg.name])
+    if cg and lt:
+        add("dispatch_buses", f"Dispatch 4 buses to {lt.name}", [lt.name])
+    if lh and rh:
+        add("recommend_hotel_b", f"Recommend {rh.name} for new demand", [lh.name])
+    return out
 
 
 def _action_urgency(db, action):
     """How hot the zone(s) this action actually affects are right now — lets
     ranking reflect live state instead of only the action's fixed properties,
-    so e.g. dispatching buses ranks higher once Corridor B is actually under
-    pressure, not just because it's generically a decent action."""
+    so e.g. dispatching buses ranks higher once its target transport zone is
+    actually under pressure, not just because it's generically a decent
+    action. Unchanged logic -- target_zones now always contains real,
+    currently-existing zone names (see _candidate_actions_for_context), so
+    this name-based lookup still works without modification."""
     live = get_live_event(db)
     zones_by_name = {z.name: z for z in db.query(models.Zone).filter(models.Zone.event_id == live.id).all()} if live else {}
     scores = [zone_risk(zones_by_name[n], db)["score"] for n in action["target_zones"] if n in zones_by_name]
@@ -731,9 +831,14 @@ def _action_urgency(db, action):
 
 
 def generate_recommendations(db):
+    live = get_live_event(db)
+    if not live:
+        return []
+    ctx = _resolve_action_context(db, live)
+    candidates = _candidate_actions_for_context(ctx)
     resources = {r.type: r for r in db.query(models.Resource).all()}
     ranked = []
-    for action in CANDIDATE_ACTIONS:
+    for action in candidates:
         if action["resource_type"]:
             res = resources.get(action["resource_type"])
             available = res.quantity_available if res else 0
@@ -923,67 +1028,80 @@ def _rebaseline(zone):
     zone.prev_delta = 0
 
 
-def _execute_action_effect(db, action):
+def _execute_action_effect(db, action, ctx):
     """Applies a candidate action's effect to the *live* simulation state —
     this is what makes 'Approve' real orchestration instead of only a
     resource-ledger deduction. Mirrors the same math run_whatif already
-    previews, just persisted instead of discarded after the request."""
-    gate2 = db.query(models.Zone).filter(models.Zone.name == "Gate 2").first()
-    gate3 = db.query(models.Zone).filter(models.Zone.name == "Gate 3").first()
-    corridor_b = db.get(models.Zone, gate2.linked_transport_zone_id) if gate2 else None
-    hotel_a = db.get(models.Zone, gate2.linked_hospitality_zone_id) if gate2 else None
-    hotel_b = db.query(models.Zone).filter(models.Zone.name == "Hotel B").first()
+    previews, just persisted instead of discarded after the request.
 
-    if action["id"] == "redirect" and gate2 and gate3:
-        room = max(gate3.capacity - gate3.current_count, 0)
-        moved = max(min(2000, gate2.current_count, room), 0)
-        gate2.current_count -= moved
-        gate3.current_count += moved
-        _rebaseline(gate2)
-        _rebaseline(gate3)
-        return f"Moved {moved} visitors from Gate 2 to Gate 3."
+    ctx: the SAME resolved-role dict _candidate_actions_for_context() used to
+    build this action's label/target_zones (passed in by approve_actions, not
+    re-resolved here) -- e.g. previously this queried `Zone.name == "Gate 2"`
+    directly (also not event-scoped, so it could in principle match a
+    same-named zone in a DIFFERENT event); now it always acts on whichever
+    real zone currently plays each role in the live event."""
+    cg, rg = ctx.get("critical_gate"), ctx.get("redirect_gate")
+    lt, lh, rh = ctx.get("linked_transport"), ctx.get("linked_hotel"), ctx.get("redirect_hotel")
 
-    if action["id"] == "open_gate3" and gate3:
-        gate3.capacity += GATE3_LANE_CAPACITY_BOOST
-        return f"Gate 3 capacity increased by {GATE3_LANE_CAPACITY_BOOST} (additional lane opened)."
+    if action["id"] == "redirect" and cg and rg:
+        room = max(rg.capacity - rg.current_count, 0)
+        moved = max(min(2000, cg.current_count, room), 0)
+        cg.current_count -= moved
+        rg.current_count += moved
+        _rebaseline(cg)
+        _rebaseline(rg)
+        return f"Moved {moved} visitors from {cg.name} to {rg.name}."
 
-    if action["id"] == "dispatch_buses" and corridor_b:
+    if action["id"] == "open_gate3" and rg:
+        rg.capacity += GATE3_LANE_CAPACITY_BOOST
+        return f"{rg.name} capacity increased by {GATE3_LANE_CAPACITY_BOOST} (additional lane opened)."
+
+    if action["id"] == "dispatch_buses" and lt:
         added = action["required"] * BUS_CAPACITY_EACH
-        corridor_b.capacity += added
-        return f"Corridor B transport capacity increased by {added} ({action['required']} buses dispatched)."
+        lt.capacity += added
+        return f"{lt.name} transport capacity increased by {added} ({action['required']} buses dispatched)."
 
     if action["id"] == "move_staff":
-        targets = [z for z in (gate2, gate3) if z]
+        targets = [z for z in (cg, rg) if z]
         for z in targets:
             z.current_count = max(0, z.current_count - STAFF_PROCESSING_RELIEF)
             _rebaseline(z)
-        return "Staff moved to Gate 2/Gate 3 — faster processing drained the queue backlog." if targets else "No target zones found."
+        return f"Staff moved to {'/'.join(z.name for z in targets)} — faster processing drained the queue backlog." if targets else "No target zones found."
 
-    if action["id"] == "recommend_hotel_b" and hotel_a and hotel_b:
-        room = max(hotel_b.capacity - hotel_b.current_count, 0)
-        moved = max(min(hotel_a.current_count, room, round(hotel_a.capacity * HOTEL_B_REDIRECT_FRACTION)), 0)
-        hotel_a.current_count -= moved
-        hotel_b.current_count += moved
-        _rebaseline(hotel_a)
-        _rebaseline(hotel_b)
-        return f"Redirected {moved} guests from Hotel A to Hotel B."
+    if action["id"] == "recommend_hotel_b" and lh and rh:
+        room = max(rh.capacity - rh.current_count, 0)
+        moved = max(min(lh.current_count, room, round(lh.capacity * HOTEL_B_REDIRECT_FRACTION)), 0)
+        lh.current_count -= moved
+        rh.current_count += moved
+        _rebaseline(lh)
+        _rebaseline(rh)
+        return f"Redirected {moved} guests from {lh.name} to {rh.name}."
 
     return "No live-state effect model for this action — resource reserved only."
 
 
 def approve_actions(db, action_ids):
+    live = get_live_event(db)
     resources = {r.type: r for r in db.query(models.Resource).all()}
     state = get_state_row(db)
+    # Re-resolved fresh right here, at approval time, rather than trusting
+    # whatever a prior generate_recommendations() call returned to the
+    # frontend — the live state (and therefore which zone plays which role)
+    # may have moved on since the recommendation was first shown.
+    ctx = _resolve_action_context(db, live) if live else {}
+    candidates_by_id = {a["id"]: a for a in _candidate_actions_for_context(ctx)} if live else {}
+
     applied = []
-    for action in CANDIDATE_ACTIONS:
-        if action["id"] not in action_ids:
-            continue
+    for aid in action_ids:
+        action = candidates_by_id.get(aid)
+        if not action:
+            continue  # this action isn't currently resolvable for the live event (e.g. no gate to redirect to) -- nothing to apply
         if action["resource_type"]:
             res = resources.get(action["resource_type"])
             if not res or res.quantity_available < action["required"]:
                 continue
             res.quantity_available -= action["required"]
-        effect_note = _execute_action_effect(db, action)
+        effect_note = _execute_action_effect(db, action, ctx)
         db.commit()
         _log(db, state.tick if state else 0, "action_executed", f"{action['label']} — {effect_note}", zone_domain=action["domain"])
         applied.append(action["id"])
@@ -1323,6 +1441,7 @@ def event_detail(db, event_id):
         "is_live": is_live,
         "gates": gates, "crowd_status": crowd_status, "transport_info": transport_info,
         "hotels": hotels, "announcements": announcements, "off_peak": off_peak,
+        "sports_details": get_event_sports_details(db, event.id),
         "tiers": [
             {
                 "id": t.id, "name": t.name, "price": t.price, "capacity": t.capacity,
@@ -1339,6 +1458,72 @@ def tier_seats(db, tier_id):
         return None
     seats = db.query(models.EventSeat).filter(models.EventSeat.tier_id == tier_id).order_by(models.EventSeat.id).all()
     return [{"id": s.id, "seat_label": s.seat_label, "status": s.status} for s in seats]
+
+
+# --- sports match metadata (Section: PS-8 IPL/mega-event scenarios) ---------
+# Optional child of Event, only present when category=="Sports" — see
+# models.EventSportsDetails. A concert/college fest/religious gathering has
+# no row here and every function below just returns None for it.
+
+def get_event_sports_details(db, event_id):
+    d = db.query(models.EventSportsDetails).filter(models.EventSportsDetails.event_id == event_id).first()
+    if not d:
+        return None
+    return {
+        "sport": d.sport, "competition": d.competition, "tournament_gender": d.tournament_gender,
+        "stage": d.stage, "team_home": d.team_home, "team_away": d.team_away,
+    }
+
+
+def upsert_event_sports_details(db, event_id, sport, competition=None, tournament_gender=None,
+                                 stage=None, team_home=None, team_away=None):
+    d = db.query(models.EventSportsDetails).filter(models.EventSportsDetails.event_id == event_id).first()
+    if not d:
+        d = models.EventSportsDetails(event_id=event_id)
+        db.add(d)
+    d.sport, d.competition, d.tournament_gender = sport, competition, tournament_gender
+    d.stage, d.team_home, d.team_away = stage, team_home, team_away
+    db.commit()
+    db.refresh(d)
+    return get_event_sports_details(db, event_id)
+
+
+def delete_event_sports_details(db, event_id):
+    d = db.query(models.EventSportsDetails).filter(models.EventSportsDetails.event_id == event_id).first()
+    if not d:
+        return False
+    db.delete(d)
+    db.commit()
+    return True
+
+
+def event_ticket_demand(db, event):
+    """Live-computed demand signal — sell_through_pct/booking_velocity/
+    demand_intensity are NEVER stored (see models.EventSportsDetails'
+    docstring); recomputed here from EventTier/VisitorProfile every call,
+    same pattern zone_risk() already uses for occupancy. Uses the identical
+    demand_intensity formula backend/scripts/generate_training_data.py used
+    to build the LSTM's training data, so a live event's feature and the
+    model's training feature mean the same thing."""
+    tiers = db.query(models.EventTier).filter(models.EventTier.event_id == event.id).all()
+    total_capacity = sum(t.capacity for t in tiers)
+    total_booked = sum(t.booked_count for t in tiers)
+    sell_through_pct = round(total_booked / total_capacity * 100, 1) if total_capacity else 0.0
+
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent_bookings = db.query(models.VisitorProfile).filter(
+        models.VisitorProfile.event_id == event.id, models.VisitorProfile.created_at >= one_hour_ago,
+    ).count()
+    # Demo-scale, illustrative: what % of 1% of total capacity booked in the
+    # last hour — not a physically-derived constant, same honest framing as
+    # engine.py's other demo-scale constants (see GATE3_LANE_CAPACITY_BOOST).
+    booking_velocity = round(min(100.0, recent_bookings / max(total_capacity * 0.01, 1) * 100), 1)
+
+    demand_intensity = round(min(100.0, max(0.0, 0.6 * sell_through_pct + 0.4 * booking_velocity)), 1)
+    return {
+        "sell_through_pct": sell_through_pct, "booking_velocity": booking_velocity,
+        "demand_intensity": demand_intensity,
+    }
 
 
 def create_event_listing(
@@ -1910,6 +2095,23 @@ def delete_zone(db, zone_id):
         gate.linked_transport_zone_id = None
     for gate in db.query(models.Zone).filter(models.Zone.linked_hospitality_zone_id == zone_id).all():
         gate.linked_hospitality_zone_id = None
+    # Every other table with a real FK into zones.id -- previously only the
+    # two self-referencing Zone columns above were cleaned up, so deleting
+    # any zone with crowd history (or, since this session, a ZoneEdge) hit
+    # the DB's foreign-key constraint (Postgres enforces it; only surfaces
+    # there, not on SQLite, which is why this went unnoticed). Required
+    # (NOT NULL) FKs are deleted outright; nullable ones are just detached,
+    # so a booking/alert/emergency-state doesn't vanish, only its dangling
+    # pointer to the removed zone.
+    db.query(models.CrowdSnapshot).filter(models.CrowdSnapshot.zone_id == zone_id).delete(synchronize_session=False)
+    db.query(models.ZoneEdge).filter(
+        (models.ZoneEdge.from_zone_id == zone_id) | (models.ZoneEdge.to_zone_id == zone_id)
+    ).delete(synchronize_session=False)
+    db.query(models.HotelInventorySnapshot).filter(models.HotelInventorySnapshot.hotel_id == zone_id).delete(synchronize_session=False)
+    db.query(models.VisitorProfile).filter(models.VisitorProfile.gate_zone_id == zone_id).update({"gate_zone_id": None}, synchronize_session=False)
+    db.query(models.VisitorProfile).filter(models.VisitorProfile.hotel_zone_id == zone_id).update({"hotel_zone_id": None}, synchronize_session=False)
+    db.query(models.Alert).filter(models.Alert.zone_id == zone_id).update({"zone_id": None}, synchronize_session=False)
+    db.query(models.SimState).filter(models.SimState.emergency_zone_id == zone_id).update({"emergency_zone_id": None}, synchronize_session=False)
     db.delete(zone)
     db.commit()
     return {"ok": True}

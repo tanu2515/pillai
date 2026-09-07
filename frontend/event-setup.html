@@ -453,52 +453,115 @@ async function removeGate(id) {
   await load();
 }
 
-// --- Live camera (phone/IP-camera → YOLO person count) ----------------------
-// Counts only — no video/frames are stored anywhere; each sampled frame is
-// discarded right after it's counted (see backend/app/detector.py). Only the
+// --- Camera Sources: Webcam / CCTV(RTSP) / Upload → YOLO person count -------
+// All three tabs hit the exact same detector.py worker + YOLO pipeline, just
+// with a different stream source (backend-machine device index, an
+// operator-provided authorized RTSP/IP-camera URL, or an uploaded file) --
+// see /api/cameras/webcam, /rtsp, /upload. Counts only — no video/frames are
+// stored anywhere; each sampled frame is discarded right after it's counted
+// (see backend/app/detector.py). Only the
 // resulting integer + timestamp is written to crowd_snapshots.
 
 let cameraStatusMap = {};
+let camTab = {}; // zone id -> active source tab: "webcam" | "rtsp" | "upload"
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+const SOURCE_LABEL = { webcam: "🎥 Webcam", rtsp: "📡 CCTV/RTSP", upload: "📁 Uploaded video", manual: "📷 Camera" };
+
 function renderCamBlock(zoneId) {
   const el = document.getElementById(`cam-block-${zoneId}`);
   if (!el) return;
-  if (document.activeElement && document.activeElement.id === `cam-url-${zoneId}`) return;
+  if (document.activeElement && document.activeElement.id?.startsWith(`cam-`) && document.activeElement.id?.endsWith(`-${zoneId}`)) return;
   const cam = cameraStatusMap[zoneId];
+
   if (cam && cam.running) {
     el.innerHTML = `
       <div class="flex items-center gap-2 flex-wrap text-[10.5px]">
-        <span class="text-ok font-bold">🎥 LIVE CAMERA</span>
+        <span class="text-ok font-bold">🟢 LIVE</span>
+        <span class="text-muted">${SOURCE_LABEL[cam.source_type] || "📷 Camera"}</span>
         <span class="font-mono">${cam.last_count != null ? cam.last_count + " people detected" : "waiting for first frame…"}</span>
         <span class="text-muted">${cam.last_updated ? new Date(cam.last_updated * 1000).toLocaleTimeString() : ""}</span>
-        <button class="btn-danger px-2 py-1 rounded text-[10px] ml-auto" onclick="stopCamera(${zoneId})">STOP CAMERA</button>
+        <button class="btn-danger px-2 py-1 rounded text-[10px] ml-auto" onclick="stopCamera(${zoneId})">STOP</button>
       </div>
       ${cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
-  } else {
-    el.innerHTML = `
-      <div class="flex items-center gap-2 flex-wrap">
-        <input type="text" class="small-input flex-1 min-w-[200px]" id="cam-url-${zoneId}"
-               placeholder="Phone/IP camera stream URL, e.g. http://192.168.1.42:8080/video" />
-        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10.5px]" onclick="startCamera(${zoneId})">📷 START CAMERA</button>
-      </div>
-      ${cam && cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
+    return;
   }
+
+  const tab = camTab[zoneId] || "webcam";
+  const tabBtn = (key, label) => `
+    <button type="button" class="px-2 py-1 rounded text-[10px] font-semibold ${tab === key ? 'btn-primary' : 'btn-ghost'}"
+            onclick="camTab[${zoneId}]='${key}'; renderCamBlock(${zoneId})">${label}</button>`;
+
+  let sourceForm = "";
+  if (tab === "webcam") {
+    sourceForm = `
+      <div class="flex items-center gap-2 flex-wrap mt-2">
+        <input type="number" class="small-input w-20" id="cam-device-${zoneId}" placeholder="0" value="0" min="0" />
+        <span class="text-[10px] text-muted">device index (backend machine's webcam, not the browser's)</span>
+        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10.5px] ml-auto" onclick="startWebcam(${zoneId})">START WEBCAM</button>
+      </div>`;
+  } else if (tab === "rtsp") {
+    sourceForm = `
+      <div class="flex items-center gap-2 flex-wrap mt-2">
+        <input type="text" class="small-input flex-1 min-w-[200px]" id="cam-rtsp-${zoneId}"
+               placeholder="Authorized stream URL, e.g. rtsp://user:pass@host:554/stream" />
+        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10.5px]" onclick="startRtsp(${zoneId})">CONNECT</button>
+      </div>`;
+  } else {
+    sourceForm = `
+      <div class="flex items-center gap-2 flex-wrap mt-2">
+        <input type="file" accept="video/*" class="small-input flex-1 min-w-[200px]" id="cam-file-${zoneId}" />
+        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[10.5px]" onclick="startUpload(${zoneId})">START FROM UPLOAD</button>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="flex items-center gap-1.5">
+      ${tabBtn("webcam", "Webcam")}${tabBtn("rtsp", "CCTV / RTSP")}${tabBtn("upload", "Upload Video")}
+    </div>
+    ${sourceForm}
+    ${cam && cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
 }
 
-async function startCamera(zoneId) {
-  const input = document.getElementById(`cam-url-${zoneId}`);
-  const url = input ? input.value.trim() : "";
-  if (!url) { showToast("Enter a camera stream URL first."); return; }
-  const res = await fetch("/api/cameras", {
+async function startWebcam(zoneId) {
+  const idx = parseInt(document.getElementById(`cam-device-${zoneId}`)?.value ?? "0") || 0;
+  const res = await fetch("/api/cameras/webcam", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ zone_id: zoneId, stream_url: url, model_path: "yolov8n.pt", sample_seconds: 1.0 }),
+    body: JSON.stringify({ zone_id: zoneId, device_index: idx, model_path: "yolov8n.pt", sample_seconds: 1.0 }),
   });
-  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't start the camera."); return; }
-  showToast("Camera worker starting…");
+  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't start the webcam."); return; }
+  showToast("Webcam worker starting…");
+  await loadCameraStatuses();
+}
+
+async function startRtsp(zoneId) {
+  const input = document.getElementById(`cam-rtsp-${zoneId}`);
+  const url = input ? input.value.trim() : "";
+  if (!url) { showToast("Enter a stream URL first."); return; }
+  const res = await fetch("/api/cameras/rtsp", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zone_id: zoneId, rtsp_url: url, model_path: "yolov8n.pt", sample_seconds: 1.0 }),
+  });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't connect to the stream."); return; }
+  showToast("Connecting to stream…");
+  await loadCameraStatuses();
+}
+
+async function startUpload(zoneId) {
+  const input = document.getElementById(`cam-file-${zoneId}`);
+  const file = input?.files?.[0];
+  if (!file) { showToast("Choose a video file first."); return; }
+  const form = new FormData();
+  form.append("zone_id", zoneId);
+  form.append("sample_seconds", "1.0");
+  form.append("model_path", "yolov8n.pt");
+  form.append("file", file);
+  const res = await fetch("/api/cameras/upload", { method: "POST", body: form });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't start from the uploaded video."); return; }
+  showToast("Processing uploaded video…");
   await loadCameraStatuses();
 }
 

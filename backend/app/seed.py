@@ -60,12 +60,51 @@ def create_zones_and_resources(db: Session, event: models.Event):
     db.add_all([gate_1, gate_2, gate_3])
     db.flush()
 
+    create_zone_edges(db, event, {
+        "Main Hall": main_hall, "VIP Zone": vip_zone, "Corridor A": corridor_a,
+        "Corridor B": corridor_b, "Transport Hub": transport_hub,
+        "Hotel A": hotel_a, "Hotel B": hotel_b,
+        "Gate 1": gate_1, "Gate 2": gate_2, "Gate 3": gate_3,
+    })
+
     resources = [
         models.Resource(type="bus", quantity_total=20, quantity_available=20),
         models.Resource(type="staff", quantity_total=40, quantity_available=40),
         models.Resource(type="medical", quantity_total=10, quantity_available=10),
     ]
     db.add_all(resources)
+    db.flush()
+
+
+# Walkable adjacency for the Panvel layout — the graph the GNN's flow-tracking
+# runs over (nodes=zones, edges=this list). Mirrors each gate's existing
+# linked_transport/hospitality zone (a crowd exiting a gate walks straight
+# onto its linked corridor/hotel) plus a few geography-driven links between
+# zones that sit close together on the map but have no functional link field
+# (e.g. the two corridors, or Transport Hub/Hotel B which are both SE of the
+# venue) — see create_zones_and_resources for the actual lat/lng layout.
+ZONE_EDGE_PAIRS = [
+    ("Main Hall", "VIP Zone"), ("Main Hall", "Gate 1"), ("Main Hall", "Gate 2"), ("Main Hall", "Gate 3"),
+    ("Gate 1", "Corridor A"), ("Gate 2", "Corridor B"), ("Gate 2", "Hotel A"), ("Gate 3", "Transport Hub"),
+    ("Corridor A", "Corridor B"), ("Corridor B", "Transport Hub"),
+    ("Transport Hub", "Hotel B"), ("Corridor A", "Hotel A"),
+]
+
+
+def create_zone_edges(db: Session, event: models.Event, zones_by_name: dict):
+    """Seed models.ZoneEdge rows for one event from ZONE_EDGE_PAIRS, deriving
+    an illustrative distance from each pair's lat/lng (same haversine helper
+    the hotel/evacuation distance features already use)."""
+    from .engine import _haversine_km
+
+    for a_name, b_name in ZONE_EDGE_PAIRS:
+        a, b = zones_by_name.get(a_name), zones_by_name.get(b_name)
+        if not a or not b:
+            continue
+        distance_m = None
+        if a.lat is not None and a.lng is not None and b.lat is not None and b.lng is not None:
+            distance_m = round(_haversine_km(a.lat, a.lng, b.lat, b.lng) * 1000, 1)
+        db.add(models.ZoneEdge(event_id=event.id, from_zone_id=a.id, to_zone_id=b.id, distance_m=distance_m))
     db.flush()
 
 

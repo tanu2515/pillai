@@ -49,6 +49,28 @@ class Event(Base):
     venue_lng = Column(Float, nullable=True)
 
 
+class EventSportsDetails(Base):
+    """Optional one-to-one child of Event — only present when category=="Sports"
+    (a concert/college fest/religious gathering simply has no row here, same
+    pattern as EventTier/HotelInventorySnapshot hanging off Event/Zone). Keeps
+    match-specific metadata (team/competition/stage) out of the generic Event
+    table so the platform stays event-type-agnostic. Demand signals
+    (sell_through_pct/booking_velocity/demand_intensity) are deliberately NOT
+    columns here — they're computed live from EventTier/VisitorProfile,
+    same "recomputed live, never duplicated" pattern zone_risk() already uses
+    (see engine.event_ticket_demand)."""
+    __tablename__ = "event_sports_details"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False, unique=True)
+    sport = Column(String, nullable=False)  # e.g. "Cricket"
+    competition = Column(String, nullable=True)  # e.g. "IPL", "ICC World Cup"
+    tournament_gender = Column(String, nullable=True)  # "Men's" | "Women's"
+    stage = Column(String, nullable=True)  # "League" | "Qualifier" | "Semi-Final" | "Final"
+    team_home = Column(String, nullable=True)
+    team_away = Column(String, nullable=True)
+
+
 class EventTier(Base):
     """A bookable price tier for an event's catalog listing (General/VIP/
     Premium etc) — independent of the live simulation's Zone model, so an
@@ -127,6 +149,22 @@ class CrowdSnapshot(Base):
     count = Column(Integer, nullable=False)
     source = Column(String, nullable=False)  # yolo | checkin | manual | simulation
     captured_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class ZoneEdge(Base):
+    """Walkway/route adjacency between two zones — the graph the GNN runs
+    message-passing over (nodes=zones, edges=this table). Separate from
+    Zone.linked_transport_zone_id/linked_hospitality_zone_id, which only
+    capture a gate's two functional links, not the full walkable layout
+    (e.g. two corridors that are physically adjacent). Undirected in
+    practice: seeded/queried as one row per pair, read both ways."""
+    __tablename__ = "zone_edges"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    from_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    to_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    distance_m = Column(Float, nullable=True)  # illustrative, derived from lat/lng at seed time
 
 
 class Resource(Base):

@@ -2,6 +2,9 @@ backend/vyavastha.db
 backend/server.log
 backend/server_run.log
 backend/.env
+backend/data/
+backend/ml/weights/
+backend/uploads/
 __pycache__/
 *.pyc
 .venv/
