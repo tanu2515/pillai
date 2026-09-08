@@ -136,7 +136,7 @@
   </section>
 
   <section class="my-6 fade-up" style="animation-delay:.3s">
-    <h2 class="eyebrow mb-3">More featured events</h2>
+    <h2 class="eyebrow mb-3">Ending soon</h2>
     <div id="rail-recommended" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
   </section>
 
@@ -259,17 +259,20 @@ async function loadExplore() {
 }
 
 async function loadHomeSections() {
-  const [upcoming, popular, near, recommended, all] = await Promise.all([
+  // "Popular" (is_featured) and "Ending soon" (soonest upcoming/live event_date)
+  // are genuinely different queries server-side now — not the same featured
+  // list shown twice. No personalization is claimed for either.
+  const [upcoming, popular, near, endingSoon, all] = await Promise.all([
     api("/api/events?section=upcoming"),
     api("/api/events?section=popular"),
     api("/api/events?section=near_you"),
-    api("/api/events?section=recommended"),
+    api("/api/events?section=ending_soon"),
     api("/api/events"),
   ]);
   renderRail("rail-upcoming", upcoming.slice(0, 8), "No upcoming events right now.");
   renderRail("rail-popular", popular, "No popular events yet.");
   renderRail("rail-near", near.filter(e => e.status !== "live"), "No events in this region yet.");
-  renderRail("rail-recommended", recommended.slice().reverse(), "No other featured events right now.");
+  renderRail("rail-recommended", endingSoon.slice(0, 8), "No other events coming up right now.");
   renderRail("rail-live", all.filter(e => e.status === "live"), "No event is live right now.");
 }
 

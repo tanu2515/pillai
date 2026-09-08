@@ -10,6 +10,7 @@ from .database import Base
 ROLES = [
     "Attendee",
     "Event Command Operator",
+    "Service Provider",
 ]
 
 # Every zone belongs to exactly one operator domain, so role-scoping is a
@@ -223,7 +224,26 @@ class UserAccount(Base):
     email = Column(String, nullable=False)
     role = Column(String, nullable=False)  # one of models.ROLES
     current_event_id = Column(Integer, nullable=True)  # Attendee: which registered event the chatbot/dashboard currently scopes to
+    managed_zone_id = Column(Integer, ForeignKey("zones.id"), nullable=True)  # Service Provider: which hotel Zone this account manages
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class HotelEventInterest(Base):
+    """A Service Provider's own opt-in decision for one nearby event —
+    independent of Zone.event_id (the hotel's OWN simulated-event linkage,
+    set by an Event Command Operator via the Event Setup Form). This table
+    lets a hotel express interest in ANY nearby event discovered by distance,
+    not only the one its Zone row happens to belong to, without touching the
+    live simulation's zone/event wiring."""
+    __tablename__ = "hotel_event_interests"
+    __table_args__ = (UniqueConstraint("hotel_id", "event_id", name="uq_hotel_event_interest"),)
+
+    id = Column(Integer, primary_key=True)
+    hotel_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    status = Column(String, nullable=False, default="opted_in")  # opted_in | declined
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Scenario(Base):
@@ -333,6 +353,42 @@ class TransitRoute(Base):
     destination = Column(String, nullable=True)
     description = Column(String, nullable=True)  # "via Vashi, Nerul, Kharghar" / NMMT route description
     base_arrival_min = Column(Integer, nullable=False, default=10)  # base minutes-out before per-pick offset is added
+
+
+class ServicePOI(Base):
+    """Attendee-facing point of interest: food, essential services, and the
+    static/reference part of the emergency directory (hospital/ambulance/
+    police/fire/first-aid/help-desk — evacuation GATES stay on Zone/
+    evacuation_routes, unchanged). Deliberately NOT modeled as a Zone: Zone
+    rows are risk-tracked (feed zone_risk(), the GNN's fixed zone-role map,
+    the command-center crowd map/alerts) and a restaurant or pharmacy has no
+    crowd-risk semantics of its own — folding it into Zone would pollute all
+    of that. This is a brand-new table: additive only, auto-created by
+    Base.metadata.create_all(), no ALTER TABLE, no effect on any existing
+    table or row."""
+    __tablename__ = "service_pois"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
+    group = Column(String, nullable=False)  # food | essential | emergency
+    category = Column(String, nullable=False)  # restaurant|cafe|food_stall|food_court, general_store|pharmacy|atm|fuel|ev_charging|water|toilets|parking|help_desk|lost_found, hospital|ambulance|police|fire_station|first_aid|emergency_help_desk
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
+    cuisine = Column(String, nullable=True)  # food only
+    price_level = Column(Integer, nullable=True)  # food only: 1 (₹) - 4 (₹₹₹₹)
+    is_vegetarian = Column(Boolean, nullable=True)
+    is_vegan = Column(Boolean, nullable=True)
+    capacity = Column(Integer, nullable=True)  # seating/capacity, where represented
+    current_count = Column(Integer, nullable=True)  # utilization, only when actually tracked (null = not tracked)
+    opens_at = Column(String, nullable=True)  # "10:00"
+    closes_at = Column(String, nullable=True)  # "23:00"
+    is_24x7 = Column(Boolean, default=False)
+    contact = Column(String, nullable=True)  # only ever set from real stored data — never fabricated
+    amenities = Column(String, nullable=True)  # comma-separated
+    source = Column(String, nullable=False, default="demo_seed")  # demo_seed | operator_entered
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class LogEntry(Base):

@@ -18,7 +18,26 @@ import { openInMaps } from "../../src/maps";
 type Tier = { id: number; name: string; price: number; capacity: number; available: number; uses_seats: boolean; gate_name?: string };
 type Gate = { name: string; occupancy_pct: number; level: string };
 type Hotel = { zone_id: number; name: string; available_pct: number; distance_km?: number; recommended: boolean };
-type Transport = { zone_name: string; current_pct: number; extra_buses_needed: number };
+type Transport = {
+  zone_name: string; current_pct: number; extra_buses_needed: number;
+  level?: string; level_label?: string; forecast_15m_pct?: number | null; source_label?: string;
+};
+type Poi = {
+  id: number; group: string; category: string; name: string; distance_km: number | null;
+  cuisine?: string | null; price_level?: number | null; is_vegetarian?: boolean | null;
+  open_now: boolean | null; is_24x7: boolean; contact?: string | null; data_label: string;
+  lat?: number | null; lng?: number | null;
+};
+type RestaurantsResp = { restaurants: Poi[]; recommended: { name: string; reason: string } | null; note: string | null };
+type ServicesResp = { services: Poi[]; recommended: { name: string; reason: string } | null; note: string | null };
+type EmergencyResp = {
+  services: Poi[]; purpose: Record<string, string>;
+  emergency: { active: boolean; zone_name?: string | null };
+  evacuation: { routes: { name: string; level: string; distance_km: number | null; is_accessible: boolean }[] } | null;
+  note: string | null;
+};
+type VenuePoiZone = { id: number; name: string; map_type: string; domain: string; lat: number | null; lng: number | null; level: string; level_label: string };
+type VenuePoisResp = { zones: VenuePoiZone[]; services: Poi[]; legend: Record<string, string> };
 type Announcement = { severity: string; message: string };
 type OffPeak = { recommendation: string; current_level?: string };
 type SportsDetails = {
@@ -76,6 +95,10 @@ export default function EventDetailScreen() {
   const [selectedTier, setSelectedTier] = useState<Tier | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [advisoryText, setAdvisoryText] = useState<string | null>(null);
+  const [food, setFood] = useState<RestaurantsResp | null>(null);
+  const [essentials, setEssentials] = useState<ServicesResp | null>(null);
+  const [emergency, setEmergency] = useState<EmergencyResp | null>(null);
+  const [venuePois, setVenuePois] = useState<VenuePoisResp | null>(null);
 
   async function load() {
     const data = await api<EventDetail>(`/api/events/${id}`);
@@ -90,6 +113,10 @@ export default function EventDetailScreen() {
     } else {
       setAdvisoryText(null);
     }
+    try { setFood(await api<RestaurantsResp>(`/api/attendee/restaurants?event_id=${id}&sort=nearest`)); } catch { setFood(null); }
+    try { setEssentials(await api<ServicesResp>(`/api/attendee/services?event_id=${id}&sort=nearest`)); } catch { setEssentials(null); }
+    try { setEmergency(await api<EmergencyResp>(`/api/attendee/emergency?event_id=${id}`)); } catch { setEmergency(null); }
+    try { setVenuePois(await api<VenuePoisResp>(`/api/attendee/venue-pois?event_id=${id}`)); } catch { setVenuePois(null); }
   }
 
   useEffect(() => {
@@ -188,13 +215,127 @@ export default function EventDetailScreen() {
         <Section title="Transport">
           {event.is_live && event.transport_info?.length ? (
             event.transport_info.map((t) => (
-              <View key={t.zone_name} style={styles.listRow}>
-                <Text style={styles.rowLabel}>{t.zone_name}</Text>
-                <Text style={[styles.rowValue, t.extra_buses_needed > 0 && { color: colors.warn }]}>{t.current_pct}% loaded</Text>
+              <View key={t.zone_name} style={{ paddingVertical: 6 }}>
+                <View style={styles.listRow}>
+                  <View style={styles.rowLeft}>
+                    {!!t.level && <View style={[styles.dot, { backgroundColor: levelColor[t.level] }]} />}
+                    <Text style={styles.rowLabel}>{t.zone_name}</Text>
+                  </View>
+                  <Text style={[styles.rowValue, t.extra_buses_needed > 0 && { color: colors.warn }]}>
+                    {t.level_label || t.level || ""} · {t.current_pct}% full
+                  </Text>
+                </View>
+                <Text style={[styles.mutedText, { marginLeft: 17 }]}>
+                  {t.forecast_15m_pct != null ? `Forecast: ${t.forecast_15m_pct}% in 15 min · ` : ""}
+                  {t.source_label || "source unknown"}
+                </Text>
               </View>
             ))
           ) : (
             <Text style={styles.mutedText}>Transport info will appear once the event goes live.</Text>
+          )}
+        </Section>
+
+        <Section title="🍽 Food & Restaurants">
+          {food?.restaurants?.length ? (
+            <>
+              {food.recommended && <Text style={styles.advisoryText}>✨ {food.recommended.reason}</Text>}
+              {food.restaurants.map((p) => (
+                <View key={p.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{p.name}</Text>
+                    <Text style={styles.mutedText}>
+                      {p.cuisine || p.category}{p.distance_km != null ? ` · ${p.distance_km} km` : ""}{p.price_level ? ` · ${"₹".repeat(p.price_level)}` : ""}
+                    </Text>
+                  </View>
+                  <Text style={[styles.rowValue, p.open_now && { color: colors.ok }]}>{p.is_24x7 ? "24×7" : p.open_now ? "Open now" : p.open_now === false ? "Closed" : ""}</Text>
+                </View>
+              ))}
+              {!!food.note && <Text style={styles.mutedText}>{food.note}</Text>}
+            </>
+          ) : (
+            <Text style={styles.mutedText}>No food/restaurant data configured for this event yet.</Text>
+          )}
+        </Section>
+
+        <Section title="🏪 Essentials">
+          {essentials?.services?.length ? (
+            <>
+              {essentials.services.map((p) => (
+                <View key={p.id} style={styles.listRow}>
+                  <Text style={styles.rowLabel}>{p.name}</Text>
+                  <Text style={styles.rowValue}>{p.distance_km != null ? `${p.distance_km} km` : ""}</Text>
+                </View>
+              ))}
+              {!!essentials.note && <Text style={styles.mutedText}>{essentials.note}</Text>}
+            </>
+          ) : (
+            <Text style={styles.mutedText}>No essential-services data configured for this event yet.</Text>
+          )}
+        </Section>
+
+        <Section title="🚑 Emergency & Safety">
+          {emergency ? (
+            <>
+              <Text style={[styles.mutedText, emergency.emergency.active && { color: colors.danger, fontWeight: "700" }]}>
+                {emergency.emergency.active
+                  ? `🚨 Emergency in progress near ${emergency.emergency.zone_name || "the venue"} — follow staff instructions.`
+                  : "✅ No emergency currently active."}
+              </Text>
+              {!!emergency.evacuation?.routes?.length && (
+                <Text style={[styles.bodyText, { marginTop: 6 }]}>
+                  Safest exit right now: {emergency.evacuation.routes[0].name} ({LEVEL_LABEL[emergency.evacuation.routes[0].level] || emergency.evacuation.routes[0].level}
+                  {emergency.evacuation.routes[0].distance_km != null ? `, ${emergency.evacuation.routes[0].distance_km} km` : ""})
+                  {emergency.evacuation.routes[0].is_accessible ? " · ♿ accessible" : ""}
+                </Text>
+              )}
+              {emergency.services.map((p) => (
+                <View key={p.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{p.name}</Text>
+                    <Text style={styles.mutedText}>{emergency.purpose[p.category] || ""}</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{p.distance_km != null ? `${p.distance_km} km` : ""}</Text>
+                </View>
+              ))}
+              {!!emergency.note && <Text style={styles.mutedText}>{emergency.note}</Text>}
+            </>
+          ) : (
+            <Text style={styles.mutedText}>Emergency info unavailable right now.</Text>
+          )}
+        </Section>
+
+        <Section title="🗺 Venue Map">
+          <Text style={[styles.mutedText, { marginBottom: 6 }]}>
+            A point-of-interest list for the venue and surroundings — not a full indoor floor-plan. Tap Navigate to open it in Maps.
+          </Text>
+          {venuePois && (venuePois.zones.length || venuePois.services.length) ? (
+            <>
+              {venuePois.zones.filter((z) => z.lat != null).map((z) => (
+                <View key={`z-${z.id}`} style={styles.listRow}>
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.dot, { backgroundColor: levelColor[z.level] }]} />
+                    <Text style={styles.rowLabel}>{venuePois.legend[z.map_type] || z.map_type}: {z.name}</Text>
+                  </View>
+                  <Pressable style={styles.mapBtn} onPress={() => openInMaps(z.lat!, z.lng!)}>
+                    <Text style={styles.mapBtnText}>🧭 Navigate</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {venuePois.services.filter((p) => p.lat != null).map((p) => (
+                <View key={`s-${p.id}`} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{p.name}</Text>
+                    <Text style={styles.mutedText}>{p.category.replace(/_/g, " ")}{p.distance_km != null ? ` · ${p.distance_km} km` : ""} · {p.data_label}</Text>
+                  </View>
+                  <Pressable style={styles.mapBtn} onPress={() => openInMaps(p.lat!, p.lng!)}>
+                    <Text style={styles.mapBtnText}>🧭 Navigate</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </>
+          ) : (
+            <Text style={styles.mutedText}>No venue map data available for this event yet.</Text>
           )}
         </Section>
 

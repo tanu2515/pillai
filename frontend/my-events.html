@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -59,6 +61,7 @@
       <a href="events.html?explore=1" class="nav-link">Explore</a>
       <a href="my-events.html" class="nav-link active">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
+      <a href="ai-architecture.html" class="nav-link">ℹ️ How AI works</a>
     </div>
     <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
   </div>
@@ -101,12 +104,32 @@
       </div>
       <div id="user-hotels" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
     </section>
-    <section class="card p-5">
+    <section class="card p-5 mb-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="eyebrow">🚌 City transport (not event-specific)</h2>
         <button class="qr-btn px-3 py-1.5 rounded-lg text-[10px]" onclick="loadUserTransport(liveEventId)">REFRESH</button>
       </div>
       <div id="user-transport" class="text-sm"></div>
+    </section>
+    <section class="card p-5 mb-5">
+      <h2 class="eyebrow mb-3">🍽 Food nearby</h2>
+      <div id="user-food" class="text-sm">Loading…</div>
+    </section>
+    <section class="card p-5 mb-5">
+      <h2 class="eyebrow mb-3">🏪 Essential services</h2>
+      <div id="user-essentials" class="text-sm">Loading…</div>
+    </section>
+    <section class="card p-5 mb-5">
+      <h2 class="eyebrow mb-3">🚑 Emergency &amp; Safety</h2>
+      <div id="user-emergency" class="text-sm">Loading…</div>
+    </section>
+    <section id="user-map-section" class="card p-5 hidden">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <h2 class="eyebrow m-0">🗺 Venue map</h2>
+        <div id="user-poi-legend" class="flex items-center gap-3 flex-wrap"></div>
+      </div>
+      <p class="text-[10.5px] text-muted mb-2">Point-of-interest map for your event's venue — not a full indoor floor-plan.</p>
+      <div id="user-poi-map" style="height:320px;border-radius:14px;"></div>
     </section>
   </section>
 
@@ -296,6 +319,11 @@ async function loadUserHotels(eventId) {
   } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Live hotel data is temporarily unavailable.</div>'; }
 }
 
+function uberDeepLink(venueName) {
+  const dropoff = venueName ? `&dropoff[formatted_address]=${encodeURIComponent(venueName)}&dropoff[nickname]=${encodeURIComponent(venueName)}` : "";
+  return `https://m.uber.com/ul/?action=setPickup&pickup=my_location${dropoff}`;
+}
+
 async function loadUserTransport(eventId) {
   const el = document.getElementById("user-transport");
   if (!el) return;
@@ -306,13 +334,154 @@ async function loadUserTransport(eventId) {
     const buses = (local.buses && local.buses.city) || [];
     const trains = (local.trains && local.trains.suburban) || [];
     const flights = (data.flights && data.flights.arrivals) || [];
+    const crowd = data.crowd || { zones: [], reasoning: null };
     let html = "";
+
+    if (crowd.zones.length) {
+      html += `<div class="mb-3 p-3 rounded-xl" style="background:#F5FAFF;border:1px solid #E7EEF7;">
+        <div class="eyebrow mb-2" style="font-size:9.5px;">📡 Live crowd %</div>
+        ${crowd.zones.map(z => `<div class="py-1 text-xs">
+            <div class="flex items-center justify-between">
+              <span>${z.zone_name}${z.zone_name === crowd.recommended ? ' <span class="text-[9px] font-bold" style="color:#20C997;">✓ RECOMMENDED</span>' : ''}</span>
+              <span class="font-mono" style="color:${LEVEL_HEX[z.level] || '#64748B'}">${z.level_label || z.level} · ${z.current_pct}%${z.forecast_15m_pct != null ? ` → ${z.forecast_15m_pct}% (+15m)` : ''}</span>
+            </div>
+            <div class="text-[9.5px] text-muted">${z.source_label || "source unknown"}</div>
+          </div>`).join("")}
+        ${crowd.reasoning ? `<div class="text-[10.5px] text-muted mt-1">${crowd.reasoning}</div>` : ""}
+      </div>`;
+    }
+
     if (buses.length) html += `<div class="mb-2"><div class="eyebrow mb-1" style="font-size:9.5px;">🚌 Buses (citywide)</div>${buses.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.route}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
     if (trains.length) html += `<div class="mb-2"><div class="eyebrow mb-1" style="font-size:9.5px;">🚆 Trains (citywide)</div>${trains.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.line}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
     if (flights.length) html += `<div><div class="eyebrow mb-1" style="font-size:9.5px;">✈️ Arrivals (citywide)</div>${flights.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.airline}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
-    html += `<div class="text-[10px] text-muted mt-2">Buses/trains/flights above are city/region-level schedules (illustrative, not live operator tracking) — not specific to this event. Only bus-dispatch predictions below are computed for this event's own transport zones.</div>`;
+    html += `<div class="text-[10px] text-muted mt-2">Buses/trains/flights above are city/region-level schedules (illustrative, not live operator tracking) — not specific to this event. Bus-dispatch predictions and crowd % above are computed for this event's own transport zones.</div>`;
+
+    const activeBooking = (bookingsData.active || []).find(b => b.event_id === eventId);
+    const venueName = activeBooking ? activeBooking.venue_name : null;
+    html += `<div class="mt-3 pt-3" style="border-top:1px solid #E7EEF7;">
+      <div class="eyebrow mb-2" style="font-size:9.5px;">🚕 Private ride</div>
+      <a href="${uberDeepLink(venueName)}" target="_blank" rel="noopener" class="qr-btn inline-block px-4 py-2 rounded-lg text-xs font-bold no-underline">Book with Uber →</a>
+      <div class="text-[10px] text-muted mt-1.5">Opens Uber with your destination pre-filled${venueName ? ` (${venueName})` : ""}. Requires the Uber app installed. <a href="rideshare-partner-feed.html" target="_blank" class="text-accent no-underline font-bold">See partner opportunities feed →</a></div>
+    </div>`;
+
     el.innerHTML = html || '<div class="text-xs text-muted">No transport feed available for this event.</div>';
   } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Transport data is temporarily unavailable.</div>'; }
+}
+
+function poiOpenBadge(p) {
+  if (p.is_24x7) return `<span class="text-ok text-[9.5px] font-bold">24×7</span>`;
+  if (p.open_now === true) return `<span class="text-ok text-[9.5px] font-bold">Open now</span>`;
+  if (p.open_now === false) return `<span class="text-muted text-[9.5px]">Closed</span>`;
+  return `<span class="text-muted text-[9.5px]">Hours unknown</span>`;
+}
+
+async function loadUserFood(eventId) {
+  const el = document.getElementById("user-food");
+  if (!el) return;
+  try {
+    const res = await api(`/api/attendee/restaurants${eventId != null ? `?event_id=${eventId}&sort=nearest` : "?sort=nearest"}`);
+    if (!res.restaurants.length) { el.innerHTML = '<div class="text-xs text-muted">No food data configured for this event yet.</div>'; return; }
+    el.innerHTML = `
+      ${res.recommended ? `<div class="text-[10.5px] text-accent font-bold mb-2">✨ ${res.recommended.reason}</div>` : ""}
+      ${res.restaurants.slice(0, 5).map(p => `
+        <div class="flex items-center justify-between py-1.5 border-b" style="border-color:#E7EEF7;">
+          <div>
+            <div class="font-bold text-sm">${p.name} <span class="text-muted font-normal text-[10.5px]">· ${p.cuisine || p.category}</span></div>
+            <div class="text-[10.5px] text-muted">${p.distance_km != null ? p.distance_km + " km" : ""}${p.price_level ? " · " + "₹".repeat(p.price_level) : ""}</div>
+          </div>
+          ${poiOpenBadge(p)}
+        </div>`).join("")}
+      ${res.note ? `<div class="text-[10px] text-muted mt-2 italic">${res.note}</div>` : ""}`;
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Food data temporarily unavailable.</div>'; }
+}
+
+async function loadUserEssentials(eventId) {
+  const el = document.getElementById("user-essentials");
+  if (!el) return;
+  try {
+    const res = await api(`/api/attendee/services${eventId != null ? `?event_id=${eventId}&sort=nearest` : "?sort=nearest"}`);
+    if (!res.services.length) { el.innerHTML = '<div class="text-xs text-muted">No essential-services data configured for this event yet.</div>'; return; }
+    el.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      ${res.services.slice(0, 10).map(p => `
+        <div class="flex items-center justify-between py-1.5">
+          <span class="text-sm">${p.name}</span>
+          <span class="text-[10.5px] text-muted font-mono">${p.distance_km != null ? p.distance_km + " km" : ""}</span>
+        </div>`).join("")}
+      </div>
+      ${res.note ? `<div class="text-[10px] text-muted mt-2 italic">${res.note}</div>` : ""}`;
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Essentials data temporarily unavailable.</div>'; }
+}
+
+async function loadUserEmergency(eventId) {
+  const el = document.getElementById("user-emergency");
+  if (!el) return;
+  try {
+    const res = await api(`/api/attendee/emergency${eventId != null ? `?event_id=${eventId}` : ""}`);
+    const banner = res.emergency && res.emergency.active
+      ? `<div class="p-2.5 rounded-lg mb-3 text-xs font-bold" style="background:#FEE2E2;color:#991B1B;">🚨 Emergency in progress near ${res.emergency.zone_name || "the venue"} — follow staff instructions.</div>`
+      : `<div class="p-2 rounded-lg mb-3 text-[10.5px]" style="background:#DFFBF1;color:#0F766E;">✅ No emergency currently active.</div>`;
+    const bestRoute = res.evacuation && res.evacuation.routes && res.evacuation.routes[0];
+    const services = (res.services || []).map(p => `
+      <div class="flex items-center justify-between py-1.5 border-b" style="border-color:#E7EEF7;">
+        <div>
+          <div class="text-sm font-bold">${p.name}</div>
+          <div class="text-[10.5px] text-muted">${res.purpose[p.category] || ""}</div>
+        </div>
+        <span class="text-[10.5px] text-muted font-mono">${p.distance_km != null ? p.distance_km + " km" : ""}</span>
+      </div>`).join("");
+    el.innerHTML = `
+      ${banner}
+      ${bestRoute ? `<div class="text-xs mb-3"><b>Safest exit right now:</b> ${bestRoute.name} (${LEVEL_LABEL[bestRoute.level] || bestRoute.level}${bestRoute.distance_km != null ? ", " + bestRoute.distance_km + " km" : ""})${bestRoute.is_accessible ? " · ♿ accessible" : ""}</div>` : ""}
+      ${services || '<div class="text-xs text-muted">No emergency-service directory configured for this event yet.</div>'}
+      ${res.note ? `<div class="text-[10px] text-muted mt-2 italic">${res.note}</div>` : ""}`;
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Emergency info temporarily unavailable.</div>'; }
+}
+
+let userPoiMap = null, userPoiLayerGroups = {};
+const USER_POI_MARKER = {
+  gate: { color: "#123B6D", icon: "🚪" }, arena: { color: "#1976D2", icon: "🏟" }, hotel: { color: "#8B5CF6", icon: "🏨" },
+  transport: { color: "#0EA5E9", icon: "🚌" },
+  food: { color: "#F59E0B", icon: "🍽" }, essential: { color: "#20C997", icon: "🏪" }, emergency: { color: "#DC2626", icon: "🚑" },
+};
+
+async function loadUserMap(eventId) {
+  const section = document.getElementById("user-map-section");
+  if (!section) return;
+  try {
+    const res = await api(`/api/attendee/venue-pois${eventId != null ? `?event_id=${eventId}` : ""}`);
+    const zoneWithCoords = res.zones.filter(z => z.lat != null);
+    const svcWithCoords = res.services.filter(p => p.lat != null);
+    if (!zoneWithCoords.length && !svcWithCoords.length) { section.classList.add("hidden"); return; }
+    section.classList.remove("hidden");
+
+    if (!userPoiMap) {
+      userPoiMap = L.map("user-poi-map", { zoomControl: true, scrollWheelZoom: false }).setView([19, 73], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(userPoiMap);
+      Object.keys(USER_POI_MARKER).forEach(g => userPoiLayerGroups[g] = L.layerGroup().addTo(userPoiMap));
+    } else {
+      Object.values(userPoiLayerGroups).forEach(lg => lg.clearLayers());
+    }
+    const center = zoneWithCoords[0] || svcWithCoords[0];
+    if (center) userPoiMap.setView([center.lat, center.lng], 15);
+
+    zoneWithCoords.forEach(z => {
+      const group = z.map_type === "hotel" ? "hotel" : z.map_type === "arena" ? "arena" : z.domain === "transport" ? "transport" : "gate";
+      const style = USER_POI_MARKER[group] || USER_POI_MARKER.gate;
+      L.circleMarker([z.lat, z.lng], { radius: 8, color: style.color, weight: 2, fillColor: LEVEL_HEX[z.level] || style.color, fillOpacity: 0.85 })
+        .addTo(userPoiLayerGroups[group])
+        .bindPopup(`<b>${style.icon} ${z.name}</b><br>${res.legend[z.map_type] || z.map_type}${z.level_label ? " · " + z.level_label : ""}`);
+    });
+    svcWithCoords.forEach(p => {
+      const style = USER_POI_MARKER[p.group] || USER_POI_MARKER.essential;
+      L.circleMarker([p.lat, p.lng], { radius: 7, color: style.color, weight: 1.5, fillColor: style.color, fillOpacity: 0.85 })
+        .addTo(userPoiLayerGroups[p.group])
+        .bindPopup(`<b>${style.icon} ${p.name}</b><br>${p.category.replace(/_/g, " ")}${p.distance_km != null ? " · " + p.distance_km + " km" : ""}<br><span style="color:#64748B;font-size:10.5px;">${p.data_label}</span>`);
+    });
+    setTimeout(() => userPoiMap.invalidateSize(), 200);
+
+    document.getElementById("user-poi-legend").innerHTML = Object.entries(USER_POI_MARKER).map(([key, style]) => `
+      <span class="flex items-center gap-1 text-[10.5px]"><span style="color:${style.color}">●</span> ${style.icon} ${key[0].toUpperCase() + key.slice(1)}</span>`).join("");
+  } catch (e) { section.classList.add("hidden"); }
 }
 
 function renderLiveInfo() {
@@ -327,6 +496,10 @@ function renderLiveInfo() {
   renderEvacuation(liveEventId);
   loadUserHotels(liveEventId);
   loadUserTransport(liveEventId);
+  loadUserFood(liveEventId);
+  loadUserEssentials(liveEventId);
+  loadUserEmergency(liveEventId);
+  loadUserMap(liveEventId);
 }
 
 function render() {

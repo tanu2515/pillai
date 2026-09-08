@@ -68,8 +68,9 @@
     <label class="eyebrow block mb-1.5">Role</label>
     <div class="selectwrap mb-5">
       <select id="role" class="w-full p-3 text-sm">
-        <option value="Attendee">Attendee</option>
-        <option value="Event Command Operator" selected>Event Command Operator</option>
+        <option value="Attendee" selected>Attendee</option>
+        <option value="Event Command Operator">Event Organiser</option>
+        <option value="Service Provider">Service Provider</option>
       </select>
     </div>
 
@@ -97,6 +98,7 @@
 const ROLE_DEST = {
   "Attendee": "events.html",
   "Event Command Operator": "command-center.html?role=command",
+  "Service Provider": "service-provider.html",
 };
 
 async function doLogin() {

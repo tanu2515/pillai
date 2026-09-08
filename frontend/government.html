@@ -139,7 +139,7 @@
     <section class="panel">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="eyebrow">City Map</h2>
-        <span class="text-[10.5px] text-muted">event venues + high/critical zones with real coordinates only</span>
+        <span class="text-[10.5px] text-muted">event venues · high/critical zones · 🚌 transport · 🏥🚑👮🚒⛑️ℹ️ emergency services — real coordinates only</span>
       </div>
       <div id="city-map"></div>
       <p class="unavail mt-2" id="map-note"></p>
@@ -295,7 +295,21 @@ async function loadRisk() {
   return risk;
 }
 
-function renderMap(events, risk) {
+// Emoji-labeled divIcons per emergency-service category -- distinguishes
+// categories visually without pulling in an external icon-sprite asset.
+// Any category not in this map (there shouldn't be one, per models.ServicePOI's
+// documented category list) falls back to a generic marker rather than
+// silently omitting the POI.
+const EMERGENCY_ICON = {
+  hospital: "🏥", ambulance: "🚑", police: "👮", fire_station: "🚒",
+  first_aid: "⛑️", emergency_help_desk: "ℹ️",
+};
+function emojiDivIcon(emoji) {
+  return L.divIcon({ html: `<div style="font-size:16px;line-height:1;transform:translate(-50%,-50%)">${emoji}</div>`, className: "", iconSize: [0, 0] });
+}
+const TRANSPORT_ICON = emojiDivIcon("🚌");
+
+function renderMap(events, risk, emergencyServices) {
   if (!cityMap) {
     cityMap = L.map("city-map").setView([19.05, 73.05], 10);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(cityMap);
@@ -313,6 +327,13 @@ function renderMap(events, risk) {
   });
   (risk?.zones || []).forEach(z => {
     if (z.lat == null || z.lng == null) return;
+    if (z.domain === "transport") {
+      L.marker([z.lat, z.lng], { icon: TRANSPORT_ICON })
+        .bindPopup(`<b>🚌 ${z.zone_name}</b><br>${z.event_name}<br>Transport zone · ${z.level} · score ${z.score}`)
+        .addTo(mapLayer);
+      placed++;
+      return;
+    }
     if (z.level !== "HIGH" && z.level !== "CRITICAL") return;
     const color = z.level === "CRITICAL" ? "#DC2626" : "#F87171";
     L.circleMarker([z.lat, z.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.9, weight: 1 })
@@ -320,9 +341,21 @@ function renderMap(events, risk) {
       .addTo(mapLayer);
     placed++;
   });
+  let emergencySkipped = 0;
+  (emergencyServices?.services || []).forEach(s => {
+    if (s.lat == null || s.lng == null) { emergencySkipped++; return; }
+    const icon = EMERGENCY_ICON[s.category] ? emojiDivIcon(EMERGENCY_ICON[s.category]) : emojiDivIcon("🚨");
+    L.marker([s.lat, s.lng], { icon })
+      .bindPopup(`<b>${EMERGENCY_ICON[s.category] || "🚨"} ${s.name}</b><br>${s.event_name}<br>${s.category.replace(/_/g, " ")} · <i>${s.data_label}</i>`)
+      .addTo(mapLayer);
+    placed++;
+  });
+  const notes = [];
+  if (skipped) notes.push(`${skipped} event(s) have no venue coordinates set`);
+  if (emergencySkipped) notes.push(`${emergencySkipped} emergency service(s) have no coordinates set`);
   document.getElementById("map-note").textContent = placed
-    ? (skipped ? `${skipped} event(s) have no venue coordinates set — omitted, not guessed.` : "")
-    : "No event or zone coordinates available yet — map has nothing to plot.";
+    ? (notes.length ? `${notes.join("; ")} — omitted, not guessed.` : "")
+    : "No event, zone, or emergency-service coordinates available yet — map has nothing to plot.";
 }
 
 function lineChart(ctx, labels, data, color, label) {
@@ -407,8 +440,9 @@ function closeImpact() { document.getElementById("impactModal").classList.remove
 
 async function refreshAll() {
   const [events, risk] = await Promise.all([loadOverview(), loadEvents(), loadRisk()]).then(([, e, r]) => [e, r]);
+  const emergencyServices = await api("/api/government/emergency-services").catch(() => ({ services: [] }));
   renderInsights(events, risk);
-  renderMap(events, risk);
+  renderMap(events, risk, emergencyServices);
   await loadTrends();
   document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
 }

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Service Provider</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config={theme:{extend:{colors:{bg:'#EAF7F4',panel:'#FFFFFF',border:'#E2E8F0',muted:'#64748B',ink:'#123B6D',accent:'#1976D2',green:'#20C997',ok:'#16A34A',warn:'#D97706',danger:'#DC2626'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
+</script>
+<style>
+body{background:radial-gradient(circle at 10% 0%,rgba(25,118,210,.08),transparent 40%),radial-gradient(circle at 90% 100%,rgba(32,201,151,.06),transparent 45%),#EAF7F4;color:#123B6D}
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
+.btn{font-weight:800;transition:.15s}.btn:hover{transform:translateY(-1px)}
+input,select{background:#fff;border:1px solid #CBD5E1;border-radius:10px;color:#123B6D}
+input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px rgba(25,118,210,.1)}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#64748B}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #E2E8F0}
+</style>
+</head>
+<body class="min-h-screen font-sans">
+<header class="border-b border-border bg-white/85 backdrop-blur sticky top-0 z-10">
+  <div class="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-2.5">
+      <img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-8 h-8 rounded-lg" />
+      <div>
+        <div class="text-[11px] uppercase tracking-[.22em] font-black text-accent">VYAVASTHA</div>
+        <div class="text-xl font-black -mt-0.5">Service Provider Portal</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="who" class="text-xs text-muted"></span>
+      <button class="text-xs font-bold text-muted hover:text-accent" onclick="logout()">SIGN OUT</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-5 py-7">
+
+  <section id="claim-panel" class="card p-6 mb-5 hidden">
+    <div class="eyebrow mb-1">Get started</div>
+    <h1 class="text-xl font-black mb-1">Claim your property</h1>
+    <p class="text-sm text-muted mb-4">Pick the property you manage. This links your account to its live room-inventory feed.</p>
+    <div class="flex flex-col sm:flex-row gap-3">
+      <select id="claim-select" class="flex-1 px-3 py-3 text-sm"></select>
+      <button class="btn bg-accent text-white rounded-xl px-5 py-3 text-sm" onclick="claimHotel()">CLAIM PROPERTY</button>
+    </div>
+    <div id="claim-message" class="text-xs mt-3 text-muted"></div>
+  </section>
+
+  <div id="dashboard" class="hidden">
+    <div class="flex items-center justify-between gap-3 mb-5 flex-wrap">
+      <div>
+        <div class="eyebrow mb-1">Property</div>
+        <h1 id="hotel-name" class="text-2xl font-black">—</h1>
+      </div>
+      <button class="text-xs font-bold text-muted hover:text-accent" onclick="showClaimPanel()">Switch property</button>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-5">
+      <section class="card p-6">
+        <div class="eyebrow mb-3">Current accommodation</div>
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Total rooms</div><div id="total" class="text-2xl font-black mt-1">—</div></div>
+          <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Occupied</div><div id="occupied" class="text-2xl font-black mt-1">—</div></div>
+          <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Available</div><div id="available" class="text-2xl font-black mt-1">—</div></div>
+        </div>
+        <div class="mt-5 flex items-center justify-between text-sm"><span class="text-muted">Occupancy</span><span id="pct" class="font-mono font-bold">—</span></div>
+        <div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-2"><div id="bar" class="h-full bg-accent rounded-full transition-all" style="width:0%"></div></div>
+        <div class="mt-6 p-4 rounded-xl border border-dashed border-border bg-slate-50">
+          <div class="eyebrow">Manual update</div>
+          <div class="mt-3 flex flex-col sm:flex-row gap-3">
+            <input id="occupied-input" type="number" min="0" class="flex-1 px-3 py-3 text-sm" placeholder="Occupied rooms" />
+            <button class="btn bg-accent text-white rounded-xl px-5 py-3 text-sm" onclick="saveAvailability()">UPDATE</button>
+          </div>
+          <div id="message" class="text-xs mt-3 text-muted"></div>
+        </div>
+      </section>
+
+      <section class="card p-6">
+        <div class="eyebrow mb-3">🧠 Predicted situation</div>
+        <div id="prediction-box" class="text-sm">Loading…</div>
+      </section>
+    </div>
+
+    <section class="card p-6 mt-5">
+      <div class="flex items-center justify-between gap-3 flex-wrap mb-1">
+        <div>
+          <div class="eyebrow mb-1">Nearby events</div>
+          <h2 class="text-lg font-black">Opt in to coordinate with an event</h2>
+        </div>
+        <button class="btn border border-border rounded-xl px-4 py-2 text-xs" onclick="loadNearbyEvents()">REFRESH</button>
+      </div>
+      <p class="text-xs text-muted mb-4">Events discovered within 30 km of your property. Opting in signals your rooms as available to that event's attendees and organiser.</p>
+      <div id="events-list" class="grid md:grid-cols-2 gap-3"></div>
+    </section>
+
+    <section class="card p-6 mt-5">
+      <div class="eyebrow mb-1">📊 Event service report</div>
+      <h2 class="text-lg font-black mb-3">How well did we serve an event?</h2>
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <select id="report-event-select" class="flex-1 px-3 py-3 text-sm"><option value="">Select an event…</option></select>
+        <button class="btn bg-accent text-white rounded-xl px-5 py-3 text-sm" onclick="loadReport()">GENERATE REPORT</button>
+      </div>
+      <div id="report-box" class="text-sm"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+let hotelId = null, allHotels = [], nearbyEvents = [];
+function getEmail(){ try{ return sessionStorage.getItem('vyavastha_email') || ''; }catch(e){ return ''; } }
+function logout(){ try{ sessionStorage.removeItem('vyavastha_email'); sessionStorage.removeItem('vyavastha_role'); }catch(e){} location.href='login.html?role=Service%20Provider'; }
+async function api(url,opts={}){ const r=await fetch(url,opts); const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.detail||'Request failed'); return d; }
+
+async function init(){
+  const email = getEmail();
+  if (!email) { location.href = 'login.html?role=Service%20Provider'; return; }
+  document.getElementById('who').textContent = email;
+  const mine = await api(`/api/partner/my-hotel?email=${encodeURIComponent(email)}`);
+  if (mine.hotel_id) {
+    hotelId = mine.hotel_id;
+    await loadDashboard();
+  } else {
+    await showClaimPanel();
+  }
+}
+
+async function showClaimPanel(){
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('claim-panel').classList.remove('hidden');
+  if (!allHotels.length) allHotels = await api('/api/partner/hotels');
+  const sel = document.getElementById('claim-select');
+  sel.innerHTML = allHotels.map(h=>`<option value="${h.id}">${h.name}</option>`).join('');
+}
+
+async function claimHotel(){
+  const id = Number(document.getElementById('claim-select').value);
+  const email = getEmail();
+  try{
+    await api('/api/partner/claim-hotel', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, hotel_id: id})});
+    hotelId = id;
+    document.getElementById('claim-panel').classList.add('hidden');
+    await loadDashboard();
+  }catch(e){ document.getElementById('claim-message').textContent = e.message; }
+}
+
+async function loadDashboard(){
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('claim-panel').classList.add('hidden');
+  await Promise.all([loadHotel(), loadPrediction(), loadNearbyEvents()]);
+}
+
+async function loadHotel(){
+  const h = await api('/api/partner/hotels/'+hotelId);
+  document.getElementById('hotel-name').textContent = h.name;
+  document.getElementById('total').textContent = h.capacity;
+  document.getElementById('occupied').textContent = h.occupied_rooms;
+  document.getElementById('available').textContent = h.available_rooms;
+  document.getElementById('pct').textContent = h.occupancy_pct+'%';
+  document.getElementById('bar').style.width = Math.min(h.occupancy_pct,100)+'%';
+  document.getElementById('occupied-input').value = h.occupied_rooms;
+}
+
+async function saveAvailability(){
+  const v = Number(document.getElementById('occupied-input').value);
+  if (!Number.isFinite(v)) return;
+  try{
+    const d = await api('/api/partner/hotels/'+hotelId+'/availability', {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({occupied_rooms:v})});
+    document.getElementById('message').textContent = `Updated. ${d.available_rooms} rooms now available.`;
+    await loadHotel();
+    await loadPrediction();
+  }catch(e){ document.getElementById('message').textContent = e.message; }
+}
+
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+
+async function loadPrediction(){
+  const box = document.getElementById('prediction-box');
+  try{
+    const p = await api('/api/partner/hotels/'+hotelId+'/prediction');
+    if (p.source === 'lstm_forecast') {
+      box.innerHTML = `<div class="pill" style="border-color:#bfe3d0;color:#16A34A;background:#f0fdf4">LSTM forecast</div>
+        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+          <div><div class="text-[10px] text-muted">+15m</div><div class="font-black">${p.occupancy_pct_15m}%</div></div>
+          <div><div class="text-[10px] text-muted">+30m</div><div class="font-black">${p.occupancy_pct_30m}%</div></div>
+          <div><div class="text-[10px] text-muted">+60m</div><div class="font-black">${p.occupancy_pct_60m}%</div></div>
+        </div>
+        <p class="text-xs text-muted mt-3">${esc(p.reasoning)}</p>`;
+    } else if (p.source === 'proximity_heuristic') {
+      box.innerHTML = `<div class="pill" style="border-color:#fde7b8;color:#D97706;background:#fffaf0">Proximity estimate</div>
+        <p class="text-xs text-muted mt-3">${esc(p.reasoning)}</p>`;
+    } else {
+      box.innerHTML = `<p class="text-xs text-muted">${esc(p.reasoning)}</p>`;
+    }
+  }catch(e){ box.innerHTML = `<p class="text-xs text-muted">Prediction unavailable: ${esc(e.message)}</p>`; }
+}
+
+async function loadNearbyEvents(){
+  const el = document.getElementById('events-list');
+  el.innerHTML = '<div class="text-xs text-muted">Loading nearby events…</div>';
+  try{
+    const data = await api('/api/partner/hotels/'+hotelId+'/nearby-events');
+    nearbyEvents = data.events;
+    el.innerHTML = nearbyEvents.length ? nearbyEvents.map(e=>{
+      const opted = e.interest_status === 'opted_in';
+      return `<div class="border border-border rounded-xl p-4">
+        <div class="flex items-center justify-between gap-2">
+          <div class="font-bold text-sm">${esc(e.name)}</div>
+          <span class="pill">${esc(e.distance_km)} km</span>
+        </div>
+        <div class="text-xs text-muted mt-1">${esc(e.venue_name||e.city||'venue TBD')} · ${esc(e.event_date||'date TBD')}${e.event_time?' '+esc(e.event_time):''}</div>
+        <div class="text-xs text-muted mt-0.5">${esc(e.category||'')} · ${e.expected_attendance||'—'} expected · <span class="uppercase font-bold">${esc(e.status)}</span></div>
+        <div class="mt-3 flex gap-2">
+          <button class="btn rounded-lg px-3 py-1.5 text-xs ${opted?'bg-green text-white':'border border-border'}" onclick="optIn(${e.event_id}, 'opted_in')">${opted?'✓ Opted in':'Opt in'}</button>
+          ${opted?`<button class="btn rounded-lg px-3 py-1.5 text-xs border border-border" onclick="optIn(${e.event_id}, 'declined')">Withdraw</button>`:''}
+        </div>
+      </div>`;
+    }).join('') : '<div class="text-xs text-muted col-span-2">No events found within 30 km of this property yet.</div>';
+    populateReportSelect();
+  }catch(e){ el.innerHTML = `<div class="text-xs text-muted">${esc(e.message)}</div>`; }
+}
+
+async function optIn(eventId, status){
+  await api('/api/partner/hotels/'+hotelId+'/opt-in', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event_id: eventId, status})});
+  await loadNearbyEvents();
+  await loadPrediction();
+}
+
+function populateReportSelect(){
+  const sel = document.getElementById('report-event-select');
+  const opted = nearbyEvents.filter(e=>e.interest_status==='opted_in');
+  sel.innerHTML = '<option value="">Select an event…</option>' + opted.map(e=>`<option value="${e.event_id}">${esc(e.name)}</option>`).join('');
+}
+
+async function loadReport(){
+  const eventId = document.getElementById('report-event-select').value;
+  const box = document.getElementById('report-box');
+  if (!eventId) { box.innerHTML = '<p class="text-xs text-muted">Pick an event first.</p>'; return; }
+  box.innerHTML = '<p class="text-xs text-muted">Generating…</p>';
+  try{
+    const r = await api(`/api/partner/hotels/${hotelId}/report/${eventId}`);
+    box.innerHTML = `
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Peak occupancy</div><div class="text-xl font-black mt-1">${r.peak_occupancy_pct}%</div></div>
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Peak rooms</div><div class="text-xl font-black mt-1">${r.peak_rooms}</div></div>
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Current occupancy</div><div class="text-xl font-black mt-1">${r.current_occupancy_pct}%</div></div>
+        <div class="bg-slate-50 border border-border rounded-xl p-4"><div class="text-xs text-muted">Rooms available now</div><div class="text-xl font-black mt-1">${r.current_available_rooms}</div></div>
+      </div>
+      <p class="text-sm font-bold mt-4">${esc(r.verdict)}</p>
+      <p class="text-[11px] text-muted mt-2">${esc(r.data_note)}</p>`;
+  }catch(e){ box.innerHTML = `<p class="text-xs text-muted">${esc(e.message)}</p>`; }
+}
+
+init();
+</script>
+</body>
+</html>

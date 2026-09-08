@@ -34,6 +34,9 @@ with db_engine.begin() as conn:
     if "venue_lat" not in event_columns:
         conn.execute(text("ALTER TABLE events ADD COLUMN venue_lat FLOAT"))
         conn.execute(text("ALTER TABLE events ADD COLUMN venue_lng FLOAT"))
+    user_account_columns = {c["name"] for c in inspect(db_engine).get_columns("user_accounts")}
+    if "managed_zone_id" not in user_account_columns:
+        conn.execute(text("ALTER TABLE user_accounts ADD COLUMN managed_zone_id INTEGER"))
 
 app = FastAPI(title="VYAVASTHA — PS-8 Mega-Event Orchestration")
 
@@ -229,6 +232,16 @@ class HotelWebhookUpdate(BaseModel):
     hotel_id: int
     occupied_rooms: int
     source: str = "hotel_pms"
+
+
+class ClaimHotelRequest(BaseModel):
+    email: str
+    hotel_id: int
+
+
+class HotelOptInRequest(BaseModel):
+    event_id: int
+    status: str = "opted_in"  # opted_in | declined
 
 
 class TransportZoneCreate(BaseModel):
@@ -1479,6 +1492,83 @@ def hotel_webhook(req: HotelWebhookUpdate, db: Session = Depends(get_db)):
     return _update_hotel_rooms(db, req.hotel_id, req.occupied_rooms, req.source)
 
 
+# --- Service Provider portal (nearby events, opt-in, prediction, report) ----
+
+@app.get("/api/partner/my-hotel")
+def partner_my_hotel(email: str, db: Session = Depends(get_db)):
+    """Which hotel Zone this Service Provider account manages, if claimed yet."""
+    account = (
+        db.query(models.UserAccount)
+        .filter(models.UserAccount.email == email.strip().lower(), models.UserAccount.role == "Service Provider")
+        .first()
+    )
+    if not account or not account.managed_zone_id:
+        return {"hotel_id": None}
+    h = db.get(models.Zone, account.managed_zone_id)
+    if not h:
+        return {"hotel_id": None}
+    return {"hotel_id": h.id, "hotel_name": h.name}
+
+
+@app.post("/api/partner/claim-hotel")
+def partner_claim_hotel(req: ClaimHotelRequest, db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+    hotel = db.get(models.Zone, req.hotel_id)
+    if not hotel or hotel.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    account = (
+        db.query(models.UserAccount)
+        .filter(models.UserAccount.email == email, models.UserAccount.role == "Service Provider")
+        .first()
+    )
+    if not account:
+        account = models.UserAccount(email=email, role="Service Provider")
+        db.add(account)
+    account.managed_zone_id = hotel.id
+    db.commit()
+    return {"hotel_id": hotel.id, "hotel_name": hotel.name}
+
+
+@app.get("/api/partner/hotels/{hotel_id}/nearby-events")
+def partner_nearby_events(hotel_id: int, db: Session = Depends(get_db)):
+    hotel = db.get(models.Zone, hotel_id)
+    if not hotel or hotel.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    return {"hotel_id": hotel_id, "events": engine.nearby_events_for_hotel(db, hotel)}
+
+
+@app.post("/api/partner/hotels/{hotel_id}/opt-in")
+def partner_hotel_opt_in(hotel_id: int, req: HotelOptInRequest, db: Session = Depends(get_db)):
+    hotel = db.get(models.Zone, hotel_id)
+    if not hotel or hotel.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    if not db.get(models.Event, req.event_id):
+        raise HTTPException(404, "event not found")
+    result = engine.set_hotel_event_interest(db, hotel_id, req.event_id, req.status)
+    if result is None:
+        raise HTTPException(400, "status must be opted_in or declined")
+    return result
+
+
+@app.get("/api/partner/hotels/{hotel_id}/prediction")
+def partner_hotel_prediction(hotel_id: int, db: Session = Depends(get_db)):
+    hotel = db.get(models.Zone, hotel_id)
+    if not hotel or hotel.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    return engine.hotel_situation_prediction(db, hotel)
+
+
+@app.get("/api/partner/hotels/{hotel_id}/report/{event_id}")
+def partner_hotel_report(hotel_id: int, event_id: int, db: Session = Depends(get_db)):
+    hotel = db.get(models.Zone, hotel_id)
+    if not hotel or hotel.type != "hotel":
+        raise HTTPException(404, "hotel not found")
+    event = db.get(models.Event, event_id)
+    if not event:
+        raise HTTPException(404, "event not found")
+    return engine.hotel_event_report(db, hotel, event)
+
+
 @app.get("/api/attendee/hotels")
 def attendee_hotels(event_id: int | None = None, db: Session = Depends(get_db)):
     """Live connected hotel inventory for the attendee side, scoped to one
@@ -1506,7 +1596,7 @@ def attendee_hotels(event_id: int | None = None, db: Session = Depends(get_db)):
             "occupied_rooms": occupied, "capacity": h.capacity,
             "occupancy_pct": round((occupied / h.capacity) * 100, 1) if h.capacity else 0,
             "distance_km": round(distance, 1) if distance is not None else None,
-            "price_tier": h.price_tier, "live": True, "source": source,
+            "price_tier": h.price_tier, "live": updated_at is not None, "source": source,
             "last_updated": updated_at,
         })
     out.sort(key=lambda x: (x["available_rooms"] <= 0, x["distance_km"] is None, x["distance_km"] or 999))
@@ -1529,10 +1619,41 @@ def attendee_transport(event_id: int | None = None, db: Session = Depends(get_db
     local = engine.local_transit_feed(db, event=event)
     flights = engine.transport_hub_arrivals(db, event=event)
     demand = engine.transport_demand_prediction(db, event_id=event_id)
+    crowd = engine.transport_crowd_advisory(db, event)
     return {
-        "local": local, "flights": flights, "demand": demand,
+        "local": local, "flights": flights, "demand": demand, "crowd": crowd,
         "local_scope": "city/region-level — not specific to any one event",
     }
+
+
+# --- Attendee POI directory: food / essentials / emergency / venue map ------
+# event_id falls back to the currently-live event when omitted, same
+# convention as /api/attendee/hotels and /api/attendee/transport above.
+
+@app.get("/api/attendee/restaurants")
+def attendee_restaurants(
+    event_id: int | None = None, cuisine: str | None = None, max_price: int | None = None,
+    open_now: bool = False, sort: str | None = None, db: Session = Depends(get_db),
+):
+    return engine.list_restaurants(db, event_id=event_id, cuisine=cuisine, max_price=max_price, open_now=open_now, sort=sort)
+
+
+@app.get("/api/attendee/services")
+def attendee_services(
+    event_id: int | None = None, category: str | None = None, open_now: bool = False,
+    sort: str | None = None, db: Session = Depends(get_db),
+):
+    return engine.list_essential_services(db, event_id=event_id, category=category, open_now=open_now, sort=sort)
+
+
+@app.get("/api/attendee/emergency")
+def attendee_emergency(event_id: int | None = None, db: Session = Depends(get_db)):
+    return engine.attendee_emergency_directory(db, event_id=event_id)
+
+
+@app.get("/api/attendee/venue-pois")
+def attendee_venue_pois(event_id: int | None = None, db: Session = Depends(get_db)):
+    return engine.venue_pois(db, event_id=event_id)
 
 
 # --- transport demand prediction (Section 14) -------------------------------
@@ -1540,6 +1661,13 @@ def attendee_transport(event_id: int | None = None, db: Session = Depends(get_db
 @app.get("/api/transport/demand-prediction")
 def transport_demand_prediction(db: Session = Depends(get_db)):
     return engine.transport_demand_prediction(db)
+
+
+@app.get("/api/rideshare/opportunities")
+def rideshare_opportunities(db: Session = Depends(get_db)):
+    """Concept feed for a rideshare partner's own driver-supply tooling — see
+    engine.rideshare_partner_opportunities's docstring for the honest framing."""
+    return engine.rideshare_partner_opportunities(db)
 
 
 # --- dynamic staff allocation, generalized (Section 13) ---------------------
@@ -1608,6 +1736,11 @@ def government_risk(db: Session = Depends(get_db)):
 @app.get("/api/government/trends")
 def government_trends(db: Session = Depends(get_db)):
     return engine.government_trends(db)
+
+
+@app.get("/api/government/emergency-services")
+def government_emergency_services(db: Session = Depends(get_db)):
+    return engine.government_emergency_services(db)
 
 
 # --- multi-event attendee registration (Sections 4-5) -----------------------

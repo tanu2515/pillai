@@ -1135,6 +1135,26 @@ def escalations(db):
     ]
 
 
+def _zone_occupancy_trend(db, zone):
+    """RISING/FALLING/STABLE from the same current_count/last_count delta
+    zone_risk() already reads for arrival_surge -- no new formula, just a
+    plain-English label on an existing number. Needs at least 2 real
+    CrowdSnapshot readings for this zone or there's nothing to compare
+    against, so it honestly returns 'N/A' rather than reading noise into a
+    single reading."""
+    if not zone.capacity:
+        return "N/A"
+    history_count = db.query(models.CrowdSnapshot).filter(models.CrowdSnapshot.zone_id == zone.id).count()
+    if history_count < 2:
+        return "N/A"
+    delta_pct = (zone.current_count - zone.last_count) / zone.capacity * 100
+    if delta_pct > 1:
+        return "RISING"
+    if delta_pct < -1:
+        return "FALLING"
+    return "STABLE"
+
+
 def risk_register(db):
     """Rule-based operational risk register — deliberately separate from the
     5-factor zone_risk score used everywhere else: an operator reading this
@@ -1142,7 +1162,15 @@ def risk_register(db):
     blended score. Only surfaces zones at MEDIUM occupancy (60%) or above, so
     quiet zones don't clutter the list; each row carries a concrete
     recommended_action pulled from the same recommendation/prediction
-    functions already used elsewhere, not a duplicated scoring path."""
+    functions already used elsewhere, not a duplicated scoring path.
+
+    Each row also carries `trend` (see _zone_occupancy_trend above -- reuses
+    the existing current_count/last_count delta, never a new score). Forecast
+    (+15/+30/+60m) is deliberately NOT computed here: it's the LSTM advisory
+    path (ml_advisory.zone_forecast via GET /api/ai/forecast/{zone_id}), kept
+    out of engine.py so this module never gains an ML dependency; the frontend
+    fetches it per row directly, same pattern as the AI Forecast Advisory
+    panel."""
     live = get_live_event(db)
     if not live:
         return []
@@ -1166,6 +1194,7 @@ def risk_register(db):
                 "severity": "MEDIUM" if level == "MODERATE" else level,
                 "current_label": f"{pct}% density", "current_pct": pct, "threshold_label": "Threshold: 80%",
                 "status": "ACTIVE", "recommended_action": rec["label"] if rec else "Monitor",
+                "trend": _zone_occupancy_trend(db, z),
             })
         elif z.domain == "hospitality":
             level = _occupancy_level(pct)
@@ -1177,6 +1206,7 @@ def risk_register(db):
                 "current_label": f"{pct}% occupancy", "current_pct": pct, "threshold_label": "Threshold: 90%",
                 "status": "ACTIVE",
                 "recommended_action": "Consider an alternate hotel" if pct > 90 else "Monitor",
+                "trend": _zone_occupancy_trend(db, z),
             })
         elif z.domain == "transport":
             if pct <= 85:
@@ -1189,6 +1219,7 @@ def risk_register(db):
                 "current_label": f"{pct}% utilization", "current_pct": pct, "threshold_label": "Threshold: 85%",
                 "status": "ACTIVE",
                 "recommended_action": pred["recommendation"] if pred else "Monitor",
+                "trend": _zone_occupancy_trend(db, z),
             })
 
     emergency = emergency_status(db)
@@ -1198,6 +1229,7 @@ def risk_register(db):
             "severity": "CRITICAL", "current_label": emergency["message"] or "Active emergency", "current_pct": None,
             "threshold_label": "—", "status": "ACTIVE",
             "recommended_action": "Follow emergency protocol, dispatch security.",
+            "trend": "N/A",
         })
 
     severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
@@ -1386,10 +1418,47 @@ def _event_summary(db, e, tiers=None):
     }
 
 
+def rideshare_partner_opportunities(db):
+    """Illustrative 'what a rideshare partner's driver-supply system would
+    see' feed — upcoming/live events near which to pre-position drivers, plus
+    (for the currently live event only) real transport-zone crowd % as a
+    demand-now signal. This is a concept surface: no public Uber API exists
+    for a third party to inject content into their consumer app, so this is
+    what KAIRO would push to a partner's OWN supply-positioning tooling via
+    an API integration, not something rendered inside Uber's real app."""
+    events = (
+        db.query(models.Event)
+        .filter(models.Event.status.in_(["upcoming", "live"]), models.Event.venue_lat.isnot(None))
+        .order_by(models.Event.event_date.is_(None), models.Event.event_date)
+        .all()
+    )
+    live = get_live_event(db)
+    out = []
+    for e in events:
+        demand_hint = None
+        if live and live.id == e.id:
+            crowd = transport_crowd_advisory(db, e)
+            if crowd.get("zones"):
+                worst = max(crowd["zones"], key=lambda z: z["current_pct"])
+                demand_hint = f"{worst['zone_name']} at {worst['current_pct']}% — high pickup demand likely near this event right now."
+        out.append({
+            "event_id": e.id, "name": e.name, "status": e.status, "category": e.category,
+            "event_date": e.event_date, "event_time": e.event_time,
+            "venue_name": e.venue_name, "city": e.city, "lat": e.venue_lat, "lng": e.venue_lng,
+            "expected_attendance": e.expected_attendance,
+            "demand_hint": demand_hint,
+        })
+    return out
+
+
 def list_events(db, search=None, category=None, section=None):
-    """section: None (all) | "popular" (featured) | "recommended" (featured,
-    different slice) | "near_you" (same region as whichever event is live —
-    a stand-in for real geolocation) | "upcoming" (status=upcoming, soonest first)."""
+    """section: None (all) | "popular" (featured) | "ending_soon" (upcoming/
+    live, soonest event_date first — genuinely different data from "popular",
+    not the same featured list reversed; no personalization is claimed) |
+    "near_you" (same region as whichever event is live — a stand-in for real
+    geolocation) | "upcoming" (status=upcoming, soonest first).
+    "recommended" is kept as an alias of "ending_soon" for callers still on
+    the old name."""
     # 'paused' events are an Event Command Operator's own inactive events
     # (see _deactivate_current_live_event) — internal back-office state, never
     # part of the public catalog an attendee browses.
@@ -1405,11 +1474,13 @@ def list_events(db, search=None, category=None, section=None):
             q = q.filter(models.Event.region == live.region)
     elif section == "upcoming":
         q = q.filter(models.Event.status == "upcoming").order_by(models.Event.event_date.is_(None), models.Event.event_date)
-    elif section in ("popular", "recommended"):
+    elif section == "popular":
         q = q.filter(models.Event.is_featured.is_(True))
+    elif section in ("ending_soon", "recommended"):
+        q = q.filter(models.Event.status.in_(["upcoming", "live"]))
 
     events = q.all()
-    if section not in ("upcoming",):
+    if section != "upcoming":
         events.sort(key=lambda e: (e.event_date is None, e.event_date or ""))
     return [_event_summary(db, e) for e in events]
 
@@ -1774,6 +1845,143 @@ def hotel_recommendations(db):
     return out
 
 
+# --- Service Provider portal: nearby events, opt-in, prediction, report -----
+# A Service Provider (e.g. a hotel) manages ONE Zone (UserAccount.managed_zone_id)
+# independently of which single event that Zone's own event_id happens to
+# point at (the Event Setup Form's linkage, used by the live simulation) —
+# these functions let that same physical property discover and opt into ANY
+# nearby event by distance, via HotelEventInterest, without touching the
+# simulation's zone/event wiring.
+
+HOTEL_INTEREST_RADIUS_KM = 30.0
+
+
+def nearby_events_for_hotel(db, hotel, radius_km=HOTEL_INTEREST_RADIUS_KM):
+    if hotel.lat is None or hotel.lng is None:
+        return []
+    events = (
+        db.query(models.Event)
+        .filter(models.Event.status.in_(["upcoming", "live"]), models.Event.venue_lat.isnot(None), models.Event.venue_lng.isnot(None))
+        .all()
+    )
+    interests = {
+        i.event_id: i.status
+        for i in db.query(models.HotelEventInterest).filter(models.HotelEventInterest.hotel_id == hotel.id).all()
+    }
+    out = []
+    for e in events:
+        distance_km = _haversine_km(hotel.lat, hotel.lng, e.venue_lat, e.venue_lng)
+        if distance_km is None or distance_km > radius_km:
+            continue
+        out.append({
+            "event_id": e.id, "name": e.name, "category": e.category, "status": e.status,
+            "event_date": e.event_date, "event_time": e.event_time,
+            "venue_name": e.venue_name, "city": e.city,
+            "expected_attendance": e.expected_attendance,
+            "distance_km": round(distance_km, 1),
+            "interest_status": interests.get(e.id, "none"),
+        })
+    out.sort(key=lambda x: (x["distance_km"], x["event_date"] or ""))
+    return out
+
+
+def set_hotel_event_interest(db, hotel_id, event_id, status):
+    if status not in ("opted_in", "declined"):
+        return None
+    row = (
+        db.query(models.HotelEventInterest)
+        .filter(models.HotelEventInterest.hotel_id == hotel_id, models.HotelEventInterest.event_id == event_id)
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row:
+        row.status = status
+        row.updated_at = now
+    else:
+        row = models.HotelEventInterest(hotel_id=hotel_id, event_id=event_id, status=status, created_at=now, updated_at=now)
+        db.add(row)
+    db.commit()
+    return {"hotel_id": hotel_id, "event_id": event_id, "status": status}
+
+
+def hotel_situation_prediction(db, hotel):
+    """'What will the situation be' for this property. Prefers the real
+    LSTM advisory forecast (ml_advisory.zone_forecast) when this hotel Zone
+    belongs to a live event with enough CrowdSnapshot/occupancy history;
+    otherwise falls back to an explicitly-labeled proximity heuristic off
+    HotelEventInterest — never presenting the heuristic as a model output."""
+    from . import ml_advisory
+
+    if hotel.event_id is not None:
+        forecast = ml_advisory.zone_forecast(db, hotel.id)
+        if forecast and forecast.get("available"):
+            occ_15 = forecast["occupancy_pct_15m"]
+            occ_60 = forecast["occupancy_pct_60m"]
+            trend = "rising" if occ_60 > occ_15 + 2 else ("falling" if occ_60 < occ_15 - 2 else "steady")
+            return {
+                "source": "lstm_forecast",
+                "occupancy_pct_15m": occ_15, "occupancy_pct_30m": forecast["occupancy_pct_30m"], "occupancy_pct_60m": occ_60,
+                "trend": trend,
+                "reasoning": (
+                    f"LSTM forecast trained on this property's own occupancy history (camera/check-in/manual counts, "
+                    f"whichever feeds this zone) projects occupancy {trend} from {occ_15}% (+15m) to {occ_60}% (+60m)."
+                ),
+            }
+    interests = nearby_events_for_hotel(db, hotel)
+    opted = [i for i in interests if i["interest_status"] == "opted_in" and i["status"] in ("upcoming", "live")]
+    if not opted:
+        return {
+            "source": "none",
+            "reasoning": "No live occupancy model available for this property yet (needs an active event feed), and no opted-in nearby event to estimate demand from.",
+        }
+    nearest = min(opted, key=lambda x: x["distance_km"])
+    return {
+        "source": "proximity_heuristic",
+        "nearest_event": nearest["name"], "distance_km": nearest["distance_km"],
+        "expected_attendance": nearest["expected_attendance"],
+        "reasoning": (
+            f"No live occupancy feed for this property yet — estimate based on proximity only: "
+            f"'{nearest['name']}' ({nearest['expected_attendance'] or 'unknown'} expected attendance) is "
+            f"{nearest['distance_km']} km away and you've opted in, so expect elevated booking demand around "
+            f"{nearest['event_date'] or 'its event date'}."
+        ),
+    }
+
+
+def hotel_event_report(db, hotel, event):
+    """Post-event service scorecard for one hotel/event pair, built only from
+    telemetry KAIRO actually has (Zone.peak_count/peak_tick, the latest
+    HotelInventorySnapshot) — not a guest-satisfaction survey, and labeled as
+    such."""
+    occupied, available, updated_at, source = _hotel_snapshot_for_report(db, hotel)
+    peak_pct = round((hotel.peak_count or 0) / hotel.capacity * 100, 1) if hotel.capacity else 0
+    current_pct = round(occupied / hotel.capacity * 100, 1) if hotel.capacity else 0
+    if peak_pct >= 95:
+        verdict = "Reached full/near-full capacity during this event — likely turned away overflow demand."
+    elif peak_pct >= 70:
+        verdict = "Handled sustained demand well, with limited headroom at peak."
+    elif peak_pct >= 30:
+        verdict = "Comfortable capacity margin maintained throughout — room to accept overflow bookings from nearby properties."
+    else:
+        verdict = "Low utilization for this event — consider a promoted rate or wider partner listing next time."
+    return {
+        "hotel_id": hotel.id, "hotel_name": hotel.name, "event_id": event.id, "event_name": event.name,
+        "capacity_rooms": hotel.capacity,
+        "peak_occupancy_pct": peak_pct, "peak_rooms": hotel.peak_count or 0,
+        "current_occupancy_pct": current_pct, "current_occupied_rooms": occupied, "current_available_rooms": available,
+        "last_updated": updated_at, "update_source": source,
+        "verdict": verdict,
+        "data_note": "Computed from this property's own KAIRO-tracked room counts (peak + latest partner-portal/webhook update) — not a guest survey.",
+    }
+
+
+def _hotel_snapshot_for_report(db, hotel):
+    snap = db.query(models.HotelInventorySnapshot).filter_by(hotel_id=hotel.id).first()
+    occupied = snap.occupied_rooms if snap else hotel.current_count
+    available = snap.available_rooms if snap else max(hotel.capacity - hotel.current_count, 0)
+    return occupied, available, (snap.updated_at.isoformat() if snap else None), (snap.source if snap else "seed/demo")
+
+
 # --- transport demand prediction (Section 14) --------------------------------
 # Compares each transport zone's live arrival rate against its remaining
 # capacity to flag likely shortfall before it happens, same "predict before
@@ -1783,7 +1991,12 @@ def transport_demand_prediction(db, event_id=None):
     """event_id lets a caller scope this to one specific event (e.g. an
     attendee's own booked event) instead of always the currently-live one —
     falls back to get_live_event(db) when omitted, so existing callers
-    (operator dashboard, attendee_plan below) are unaffected."""
+    (operator dashboard, attendee_plan below) are unaffected. `level`/
+    `level_label`/`source_label` are attendee-friendly additions (fixes
+    Event Detail showing a raw %loaded number with no interpretation) — the
+    existing arrival-rate/bus-shortfall fields are untouched."""
+    from . import ml_advisory
+
     event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
     if not event:
         return []
@@ -1798,9 +2011,15 @@ def transport_demand_prediction(db, event_id=None):
         projected_15min = z.current_count + delta * 15
         shortfall = max(0, projected_15min - z.capacity)
         extra_buses_needed = math.ceil(shortfall / BUS_CAPACITY_EACH) if shortfall > 0 else 0
+        current_pct = round(z.current_count / z.capacity * 100, 1) if z.capacity else 0
+        level = "CRITICAL" if current_pct >= 100 else "HIGH" if current_pct >= 85 else "MODERATE" if current_pct >= 60 else "LOW"
+        forecast = ml_advisory.zone_forecast(db, z.id)
+        source, source_label = _zone_crowd_source(db, z.id)
         out.append({
             "zone_id": z.id, "zone_name": z.name,
-            "current_pct": round(z.current_count / z.capacity * 100, 1) if z.capacity else 0,
+            "current_pct": current_pct, "level": level, "level_label": LEVEL_LABEL[level],
+            "forecast_15m_pct": forecast.get("occupancy_pct_15m") if forecast and forecast.get("available") else None,
+            "source": source, "source_label": source_label,
             "arrival_rate_per_tick": delta,
             "minutes_to_full": minutes_to_full,
             "projected_15min_pct": round(projected_15min / z.capacity * 100, 1) if z.capacity else 0,
@@ -1814,6 +2033,334 @@ def transport_demand_prediction(db, event_id=None):
         })
     out.sort(key=lambda x: x["extra_buses_needed"], reverse=True)
     return out
+
+
+LEVEL_LABEL = {"LOW": "Quiet", "MODERATE": "Moderate", "HIGH": "Busy", "CRITICAL": "Very busy"}
+
+# Honest wording for wherever a zone's count actually came from — never say
+# CCTV/YOLO unless the zone's most recent CrowdSnapshot really was YOLO-sourced.
+CROWD_SOURCE_LABEL = {
+    "yolo": "CCTV/YOLO", "checkin": "Check-in based", "manual": "Manual (operator-entered)",
+    "simulation": "Simulated (demo)",
+}
+
+
+def _zone_crowd_source(db, zone_id):
+    snap = (
+        db.query(models.CrowdSnapshot)
+        .filter(models.CrowdSnapshot.zone_id == zone_id)
+        .order_by(models.CrowdSnapshot.captured_at.desc())
+        .first()
+    )
+    if not snap:
+        return None, "Not yet observed"
+    return snap.source, CROWD_SOURCE_LABEL.get(snap.source, snap.source)
+
+
+def transport_crowd_advisory(db, event):
+    """Attendee-facing 'how crowded is transport right now, and what should I
+    take' — current_pct comes straight from each transport Zone's live count
+    (CCTV/YOLO-fed when a camera is attached to that zone, else check-in/
+    manual/simulated — same Zone.current_count the Risk Engine itself reads,
+    see detector.py), with an LSTM +15m forecast layered on top when this
+    zone has enough history (ml_advisory.zone_forecast). Picks whichever
+    transport zone is least crowded as the recommended one, with reasoning
+    that names the actual numbers behind the pick. `source`/`source_label`
+    report the REAL origin of that zone's latest count (never assumed to be
+    CCTV) — see CROWD_SOURCE_LABEL."""
+    from . import ml_advisory
+
+    if not event:
+        return {"zones": [], "recommended": None, "reasoning": "No event context available."}
+    zones = db.query(models.Zone).filter(models.Zone.domain == "transport", models.Zone.event_id == event.id).all()
+    out = []
+    for z in zones:
+        current_pct = round(z.current_count / z.capacity * 100, 1) if z.capacity else 0
+        level = "CRITICAL" if current_pct >= 100 else "HIGH" if current_pct >= 85 else "MODERATE" if current_pct >= 60 else "LOW"
+        forecast = ml_advisory.zone_forecast(db, z.id)
+        source, source_label = _zone_crowd_source(db, z.id)
+        entry = {
+            "zone_id": z.id, "zone_name": z.name, "current_pct": current_pct,
+            "level": level, "level_label": LEVEL_LABEL[level],
+            "forecast_15m_pct": forecast.get("occupancy_pct_15m") if forecast and forecast.get("available") else None,
+            "source": source, "source_label": source_label,
+        }
+        out.append(entry)
+    if not out:
+        return {"zones": [], "recommended": None, "reasoning": "No transport zones configured for this event."}
+    best = min(out, key=lambda x: x["current_pct"])
+    worst = max(out, key=lambda x: x["current_pct"])
+    reasoning = (
+        f"Recommended because {best['zone_name']} currently has the lowest crowd among available event transport "
+        f"hubs ({best['level_label']}, {best['current_pct']}% of capacity based on live counts)"
+    )
+    if best["forecast_15m_pct"] is not None:
+        reasoning += f", LSTM forecasts {best['forecast_15m_pct']}% in the next 15 minutes"
+    if worst["zone_id"] != best["zone_id"]:
+        reasoning += f" — avoid {worst['zone_name']} ({worst['level_label']}, {worst['current_pct']}%) if you have a choice of route."
+    else:
+        reasoning += "."
+    return {"zones": out, "recommended": best["zone_name"], "recommended_zone_id": best["zone_id"], "reasoning": reasoning}
+
+
+# --- Attendee POI directory: food / essentials / emergency ------------------
+# ServicePOI rows are deliberately not Zone rows (see models.ServicePOI's
+# docstring) — this powers /api/attendee/restaurants, /api/attendee/services,
+# /api/attendee/emergency and the venue-POI map layer, all scoped to one
+# event's real venue coordinates (never invented). Any event with zero POIs
+# gets a minimal, clearly-labeled demo set seeded on first read — see
+# _ensure_service_pois_seeded — never fabricated per-request.
+
+FOOD_CATEGORIES = ["restaurant", "cafe", "food_stall", "food_court"]
+ESSENTIAL_CATEGORIES = [
+    "general_store", "pharmacy", "atm", "fuel", "ev_charging", "water",
+    "toilets", "parking", "help_desk", "lost_found",
+]
+EMERGENCY_CATEGORIES = ["hospital", "ambulance", "police", "fire_station", "first_aid", "emergency_help_desk"]
+
+EMERGENCY_PURPOSE = {
+    "hospital": "Nearest hospital for medical emergencies.",
+    "ambulance": "On-site ambulance / emergency medical transport.",
+    "police": "Police assistance for security concerns.",
+    "fire_station": "Fire and rescue response.",
+    "first_aid": "On-site first aid station for minor injuries.",
+    "emergency_help_desk": "General emergency coordination point at the venue.",
+}
+
+# name, category, extra fields — clearly-labeled demo/reference data, not a
+# real restaurant/shop/hospital partnership. Coordinates are small offsets
+# from the event's own real venue point, never invented independently of it.
+_DEMO_FOOD = [
+    {"name": "Main Concourse Food Court", "category": "food_court", "cuisine": "Multi-cuisine", "price_level": 2, "is_vegetarian": True, "is_vegan": False, "capacity": 300, "opens_at": "10:00", "closes_at": "23:00"},
+    {"name": "South Indian Express", "category": "food_stall", "cuisine": "South Indian", "price_level": 1, "is_vegetarian": True, "is_vegan": False, "capacity": 40, "opens_at": "09:00", "closes_at": "22:00"},
+    {"name": "North Indian Corner", "category": "restaurant", "cuisine": "North Indian", "price_level": 2, "is_vegetarian": False, "is_vegan": False, "capacity": 80, "opens_at": "11:00", "closes_at": "23:30"},
+    {"name": "Cafe Corner", "category": "cafe", "cuisine": "Cafe/Beverages", "price_level": 2, "is_vegetarian": True, "is_vegan": True, "capacity": 50, "opens_at": "08:00", "closes_at": "22:00"},
+    {"name": "Quick Bites Stall", "category": "food_stall", "cuisine": "Snacks", "price_level": 1, "is_vegetarian": True, "is_vegan": False, "capacity": 30, "opens_at": "09:00", "closes_at": "23:00"},
+]
+_DEMO_ESSENTIAL = [
+    {"name": "General Store", "category": "general_store", "opens_at": "08:00", "closes_at": "22:00"},
+    {"name": "Event Pharmacy Desk", "category": "pharmacy", "opens_at": "09:00", "closes_at": "22:00"},
+    {"name": "ATM Point", "category": "atm", "is_24x7": True},
+    {"name": "Fuel Station (nearest)", "category": "fuel", "is_24x7": True},
+    {"name": "EV Charging Bay", "category": "ev_charging", "is_24x7": True},
+    {"name": "Drinking Water Point", "category": "water", "is_24x7": True},
+    {"name": "Public Toilets", "category": "toilets", "is_24x7": True},
+    {"name": "Visitor Parking", "category": "parking", "is_24x7": True},
+    {"name": "Venue Help Desk", "category": "help_desk", "opens_at": "09:00", "closes_at": "23:00"},
+    {"name": "Lost & Found Desk", "category": "lost_found", "opens_at": "09:00", "closes_at": "23:00"},
+]
+_DEMO_EMERGENCY = [
+    {"name": "Nearest Hospital (reference)", "category": "hospital", "is_24x7": True},
+    {"name": "On-site Ambulance Point", "category": "ambulance", "is_24x7": True},
+    {"name": "Police Assistance Point", "category": "police", "is_24x7": True},
+    {"name": "Fire & Rescue Point (reference)", "category": "fire_station", "is_24x7": True},
+    {"name": "First Aid Station", "category": "first_aid", "is_24x7": True},
+    {"name": "Emergency Help Desk", "category": "emergency_help_desk", "is_24x7": True},
+]
+
+
+def _poi_venue_point(db, event):
+    venue = db.query(models.Zone).filter(models.Zone.type == "arena", models.Zone.event_id == event.id).first()
+    if venue and venue.lat is not None:
+        return venue.lat, venue.lng
+    return event.venue_lat, event.venue_lng
+
+
+def _poi_offset(event_id, idx, base_lat, base_lng, radius_deg=0.0025):
+    """Deterministic small offset (~100-300m) from the event's real venue
+    point — reproducible per (event, index), never a randomly-invented
+    standalone coordinate."""
+    if base_lat is None or base_lng is None:
+        return None, None
+    rnd = random.Random(f"poi-{event_id}-{idx}")
+    angle = rnd.uniform(0, 2 * math.pi)
+    dist = rnd.uniform(0.4, 1.0) * radius_deg
+    return base_lat + dist * math.cos(angle), base_lng + dist * math.sin(angle)
+
+
+def _ensure_service_pois_seeded(db, event):
+    """Idempotent: seeds a minimal demo POI set for this event only if it has
+    none yet (covers events created before this feature existed, and any
+    newly-activated event) — never re-seeds or duplicates on repeat calls."""
+    existing = db.query(models.ServicePOI.id).filter(models.ServicePOI.event_id == event.id).first()
+    if existing:
+        return
+    base_lat, base_lng = _poi_venue_point(db, event)
+    idx = 0
+    rows = []
+    for group, templates in (("food", _DEMO_FOOD), ("essential", _DEMO_ESSENTIAL), ("emergency", _DEMO_EMERGENCY)):
+        for t in templates:
+            idx += 1
+            lat, lng = _poi_offset(event.id, idx, base_lat, base_lng)
+            rows.append(models.ServicePOI(
+                event_id=event.id, group=group, lat=lat, lng=lng, source="demo_seed", **t,
+            ))
+    db.add_all(rows)
+    db.commit()
+
+
+def _poi_open_now(poi):
+    if poi.is_24x7:
+        return True
+    if not poi.opens_at or not poi.closes_at:
+        return None  # unknown — never guessed
+    now_hm = datetime.now().strftime("%H:%M")
+    return poi.opens_at <= now_hm <= poi.closes_at
+
+
+def _poi_out(poi, venue_lat, venue_lng):
+    distance_km = _haversine_km(venue_lat, venue_lng, poi.lat, poi.lng)
+    occupancy_pct = round(poi.current_count / poi.capacity * 100, 1) if poi.capacity and poi.current_count is not None else None
+    return {
+        "id": poi.id, "group": poi.group, "category": poi.category, "name": poi.name,
+        "description": poi.description,
+        "lat": poi.lat, "lng": poi.lng,
+        "distance_km": round(distance_km, 2) if distance_km is not None else None,
+        "cuisine": poi.cuisine, "price_level": poi.price_level,
+        "is_vegetarian": poi.is_vegetarian, "is_vegan": poi.is_vegan,
+        "capacity": poi.capacity, "current_count": poi.current_count, "occupancy_pct": occupancy_pct,
+        "opens_at": poi.opens_at, "closes_at": poi.closes_at, "is_24x7": poi.is_24x7,
+        "open_now": _poi_open_now(poi),
+        "contact": poi.contact, "amenities": poi.amenities.split(",") if poi.amenities else [],
+        "source": poi.source,
+        "data_label": "Demo/reference data" if poi.source == "demo_seed" else "Operator-entered",
+    }
+
+
+def _poi_recommendation(rows, kind):
+    if not rows:
+        return None
+    with_distance = [r for r in rows if r["distance_km"] is not None]
+    nearest = min(with_distance, key=lambda r: r["distance_km"]) if with_distance else None
+    with_occupancy = [r for r in rows if r["occupancy_pct"] is not None]
+    less_crowded = min(with_occupancy, key=lambda r: r["occupancy_pct"]) if with_occupancy else None
+    open_now = [r for r in rows if r["open_now"]]
+    pick = less_crowded or nearest or (open_now[0] if open_now else rows[0])
+    parts = []
+    if pick.get("distance_km") is not None:
+        parts.append(f"{pick['distance_km']} km away")
+    if pick.get("occupancy_pct") is not None:
+        parts.append(f"{pick['occupancy_pct']}% utilization")
+    if pick.get("open_now"):
+        parts.append("open now")
+    reason = f"{pick['name']} — " + (", ".join(parts) if parts else f"closest match for {kind}")
+    return {"id": pick["id"], "name": pick["name"], "reason": reason}
+
+
+def _sort_pois(rows, sort):
+    if sort == "nearest":
+        rows.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 1e9))
+    elif sort == "less_crowded":
+        rows.sort(key=lambda r: (r["occupancy_pct"] is None, r["occupancy_pct"] if r["occupancy_pct"] is not None else 1e9))
+    elif sort == "open_now":
+        rows.sort(key=lambda r: (not r["open_now"], r["distance_km"] if r["distance_km"] is not None else 1e9))
+    else:
+        rows.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 1e9))
+    return rows
+
+
+def list_restaurants(db, event_id=None, cuisine=None, max_price=None, open_now=None, sort=None):
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    if not event:
+        return {"event_id": None, "restaurants": [], "recommended": None, "note": "No event context available."}
+    _ensure_service_pois_seeded(db, event)
+    venue_lat, venue_lng = _poi_venue_point(db, event)
+    q = db.query(models.ServicePOI).filter(models.ServicePOI.event_id == event.id, models.ServicePOI.group == "food")
+    rows = [_poi_out(p, venue_lat, venue_lng) for p in q.all()]
+    if cuisine:
+        rows = [r for r in rows if r["cuisine"] and cuisine.lower() in r["cuisine"].lower()]
+    if max_price is not None:
+        rows = [r for r in rows if r["price_level"] is None or r["price_level"] <= max_price]
+    if open_now:
+        rows = [r for r in rows if r["open_now"] is not False]
+    rows = _sort_pois(rows, sort)
+    is_demo = all(r["source"] == "demo_seed" for r in rows) if rows else True
+    return {
+        "event_id": event.id, "restaurants": rows,
+        "recommended": _poi_recommendation(rows, "restaurants"),
+        "note": "Demo/reference data for this build — not a live restaurant partner feed." if is_demo else None,
+    }
+
+
+def list_essential_services(db, event_id=None, category=None, open_now=None, sort=None):
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    if not event:
+        return {"event_id": None, "services": [], "recommended": None, "note": "No event context available."}
+    _ensure_service_pois_seeded(db, event)
+    venue_lat, venue_lng = _poi_venue_point(db, event)
+    q = db.query(models.ServicePOI).filter(models.ServicePOI.event_id == event.id, models.ServicePOI.group == "essential")
+    if category:
+        q = q.filter(models.ServicePOI.category == category)
+    rows = [_poi_out(p, venue_lat, venue_lng) for p in q.all()]
+    if open_now:
+        rows = [r for r in rows if r["open_now"] is not False]
+    rows = _sort_pois(rows, sort)
+    is_demo = all(r["source"] == "demo_seed" for r in rows) if rows else True
+    return {
+        "event_id": event.id, "services": rows,
+        "recommended": _poi_recommendation(rows, "essential services"),
+        "note": "Demo/reference data for this build — not connected to live availability feeds." if is_demo else None,
+    }
+
+
+def attendee_emergency_directory(db, event_id=None):
+    """Extends (does not replace) the existing emergency-mode/evacuation/
+    accessibility system: combines the operator-declared emergency_status(),
+    the existing gate-based evacuation_routes(), and the new static emergency
+    services directory (hospital/ambulance/police/fire/first-aid/help-desk)."""
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    if not event:
+        return {
+            "event_id": None, "services": [], "purpose": EMERGENCY_PURPOSE,
+            "evacuation": None, "emergency": {"active": False},
+            "note": "No event context available.",
+        }
+    _ensure_service_pois_seeded(db, event)
+    venue_lat, venue_lng = _poi_venue_point(db, event)
+    q = db.query(models.ServicePOI).filter(models.ServicePOI.event_id == event.id, models.ServicePOI.group == "emergency")
+    rows = _sort_pois([_poi_out(p, venue_lat, venue_lng) for p in q.all()], "nearest")
+    status = emergency_status(db)
+    routes = evacuation_routes(db, accessible_only=False, lat=venue_lat, lng=venue_lng, event_id=event.id)
+    is_demo = all(r["source"] == "demo_seed" for r in rows) if rows else True
+    return {
+        "event_id": event.id,
+        "services": rows,
+        "purpose": EMERGENCY_PURPOSE,
+        "emergency": status,
+        "evacuation": routes,
+        "note": "Demo/reference data for this build — services shown without invented contact numbers unless one is actually stored." if is_demo else None,
+    }
+
+
+def venue_pois(db, event_id=None):
+    """Backing for the attendee venue-POI map layer: real Zone rows (gates,
+    arena, hotels, transport hubs — with their live risk level, same data the
+    operator map already shows) plus the new food/essential/emergency
+    ServicePOI rows, all for one event's real coordinates. Extends the
+    existing map's data source; does not replace or recompute risk."""
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    if not event:
+        return {"event_id": None, "zones": [], "services": [], "note": "No event context available."}
+    _ensure_service_pois_seeded(db, event)
+    venue_lat, venue_lng = _poi_venue_point(db, event)
+    zones = db.query(models.Zone).filter(models.Zone.event_id == event.id, models.Zone.lat.isnot(None)).all()
+    zone_out = []
+    for z in zones:
+        r = zone_risk(z, db)
+        zone_out.append({
+            "id": z.id, "name": z.name, "map_type": z.type, "domain": z.domain,
+            "lat": z.lat, "lng": z.lng, "level": r["level"], "level_label": LEVEL_LABEL[r["level"]],
+            "is_accessible": z.is_accessible,
+        })
+    services = db.query(models.ServicePOI).filter(models.ServicePOI.event_id == event.id, models.ServicePOI.lat.isnot(None)).all()
+    service_out = [_poi_out(p, venue_lat, venue_lng) for p in services]
+    return {
+        "event_id": event.id, "zones": zone_out, "services": service_out,
+        "legend": {
+            "gate": "Gate", "arena": "Venue/Arena", "hotel": "Hotel",
+            "food": "Food & Restaurants", "essential": "Essentials", "emergency": "Emergency",
+        },
+    }
 
 
 # --- dynamic staff allocation (Section 13), generalized ---------------------
@@ -2278,6 +2825,31 @@ def government_risk(db):
             })
     counts = {lvl: sum(1 for r in rows if r["level"] == lvl) for lvl in ("LOW", "MODERATE", "HIGH", "CRITICAL")}
     return {"counts": counts, "zones": sorted(rows, key=lambda r: r["score"], reverse=True)}
+
+
+def government_emergency_services(db):
+    """City-wide hospital/ambulance/police/fire/first-aid/help-desk directory
+    for the map's emergency layer -- reuses the exact same ServicePOI rows
+    and _poi_out() shape the attendee emergency directory already reads
+    (models.ServicePOI, group=='emergency'), just aggregated across every
+    LIVE event instead of one. No coordinate is invented here: _poi_out
+    already returns lat/lng as None when unset, and each row's data_label
+    ('Demo/reference data' vs 'Operator-entered') is carried through
+    unchanged so the map can be honest about provenance."""
+    live_events = db.query(models.Event).filter(models.Event.status == "live").all()
+    rows = []
+    for event in live_events:
+        _ensure_service_pois_seeded(db, event)
+        venue_lat, venue_lng = _poi_venue_point(db, event)
+        pois = db.query(models.ServicePOI).filter(
+            models.ServicePOI.event_id == event.id, models.ServicePOI.group == "emergency",
+        ).all()
+        for p in pois:
+            out = _poi_out(p, venue_lat, venue_lng)
+            out["event_id"] = event.id
+            out["event_name"] = event.name
+            rows.append(out)
+    return {"services": rows}
 
 
 def government_trends(db):

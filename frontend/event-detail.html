@@ -89,6 +89,7 @@
       <a href="events.html?explore=1" class="nav-link">Explore</a>
       <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
+      <a href="ai-architecture.html" class="nav-link">ℹ️ How AI works</a>
     </div>
     <a href="events.html" class="text-accent text-sm font-bold">← Back</a>
   </div>
@@ -154,6 +155,31 @@
       <section id="ev-announcements-section" class="card p-6 mt-6 hidden fade-up" style="animation-delay:.25s">
         <h3 class="eyebrow mb-2">Announcements</h3>
         <div id="ev-announcements" class="text-sm"></div>
+      </section>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
+        <section class="card p-6 fade-up" style="animation-delay:.27s">
+          <h3 class="eyebrow mb-2">🍽 Food &amp; Restaurants</h3>
+          <div id="ev-food" class="text-sm">Loading…</div>
+        </section>
+        <section class="card p-6 fade-up" style="animation-delay:.27s">
+          <h3 class="eyebrow mb-2">🏪 Essentials</h3>
+          <div id="ev-essentials" class="text-sm">Loading…</div>
+        </section>
+      </div>
+
+      <section class="card p-6 mt-6 fade-up" style="animation-delay:.3s">
+        <h3 class="eyebrow mb-2">🚑 Emergency &amp; Safety</h3>
+        <div id="ev-emergency" class="text-sm">Loading…</div>
+      </section>
+
+      <section id="ev-poi-map-section" class="card p-6 mt-6 hidden fade-up" style="animation-delay:.32s">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <h3 class="eyebrow m-0">🗺 Venue Map</h3>
+          <div id="poi-legend" class="flex items-center gap-3 flex-wrap"></div>
+        </div>
+        <p class="text-[10.5px] text-muted mb-2">A point-of-interest map of the venue and surroundings — not a full indoor floor-plan/navigation system.</p>
+        <div id="poi-map" style="height:360px;border-radius:14px;"></div>
       </section>
     </div>
 
@@ -242,10 +268,145 @@ function renderTransport() {
     return;
   }
   el.innerHTML = eventData.transport_info.map(t => `
-    <div class="flex items-center justify-between py-1.5">
-      <span>${t.zone_name}</span>
-      <span class="text-xs font-mono ${t.extra_buses_needed > 0 ? "text-warn" : "text-muted"}">${t.current_pct}% loaded</span>
+    <div class="py-1.5">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="level-dot" style="background:${LEVEL_HEX[t.level] || "#64748B"}"></span>${t.zone_name}</span>
+        <span class="text-xs font-mono ${t.extra_buses_needed > 0 ? "text-warn" : "text-muted"}">${t.level_label || t.level} · ${t.current_pct}% full</span>
+      </div>
+      <div class="text-[10.5px] text-muted mt-0.5 pl-[17px]">
+        ${t.forecast_15m_pct != null ? `Forecast: ${t.forecast_15m_pct}% in 15 min · ` : ""}${t.source_label || "source unknown"}
+      </div>
     </div>`).join("") || `<p class="text-muted text-xs">No transport zones configured.</p>`;
+}
+
+// --- Food / Essentials / Emergency / Venue Map (extends the existing page) --
+
+function poiOpenBadge(p) {
+  if (p.is_24x7) return `<span class="text-ok text-[9.5px] font-bold">24×7</span>`;
+  if (p.open_now === true) return `<span class="text-ok text-[9.5px] font-bold">Open now</span>`;
+  if (p.open_now === false) return `<span class="text-muted text-[9.5px]">Closed</span>`;
+  return `<span class="text-muted text-[9.5px]">Hours unknown</span>`;
+}
+
+async function renderFood() {
+  const el = document.getElementById("ev-food");
+  try {
+    const res = await api(`/api/attendee/restaurants?event_id=${eventId}&sort=nearest`);
+    if (!res.restaurants.length) { el.innerHTML = `<p class="text-muted text-xs">No food/restaurant data configured for this event yet.</p>`; return; }
+    const rec = res.recommended;
+    el.innerHTML = `
+      ${rec ? `<p class="text-[10.5px] text-accent font-bold mb-2">✨ ${rec.reason}</p>` : ""}
+      ${res.restaurants.map(p => `
+        <div class="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+          <div>
+            <div class="text-sm font-bold">${p.name} <span class="text-muted font-normal text-[10.5px]">· ${p.cuisine || p.category}</span></div>
+            <div class="text-[10.5px] text-muted">${p.distance_km != null ? p.distance_km + " km" : "distance n/a"}${p.price_level ? " · " + "₹".repeat(p.price_level) : ""}${p.is_vegetarian ? " · Veg options" : ""}</div>
+          </div>
+          ${poiOpenBadge(p)}
+        </div>`).join("")}
+      ${res.note ? `<p class="text-[10px] text-muted mt-2 italic">${res.note}</p>` : ""}`;
+  } catch (e) { el.innerHTML = `<p class="text-muted text-xs">Food data unavailable right now.</p>`; }
+}
+
+async function renderEssentials() {
+  const el = document.getElementById("ev-essentials");
+  try {
+    const res = await api(`/api/attendee/services?event_id=${eventId}&sort=nearest`);
+    if (!res.services.length) { el.innerHTML = `<p class="text-muted text-xs">No essential-services data configured for this event yet.</p>`; return; }
+    el.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      ${res.services.map(p => `
+        <div class="flex items-center justify-between py-1.5">
+          <span class="text-sm">${p.name}</span>
+          <span class="text-[10.5px] text-muted font-mono">${p.distance_km != null ? p.distance_km + " km" : ""}</span>
+        </div>`).join("")}
+      </div>
+      ${res.note ? `<p class="text-[10px] text-muted mt-2 italic">${res.note}</p>` : ""}`;
+  } catch (e) { el.innerHTML = `<p class="text-muted text-xs">Essentials data unavailable right now.</p>`; }
+}
+
+async function renderEmergencySection() {
+  const el = document.getElementById("ev-emergency");
+  try {
+    const res = await api(`/api/attendee/emergency?event_id=${eventId}`);
+    const activeBanner = res.emergency && res.emergency.active
+      ? `<div class="p-2.5 rounded-lg mb-3 text-xs font-bold" style="background:#FEE2E2;color:#991B1B;">🚨 Emergency in progress near ${res.emergency.zone_name || "the venue"} — follow staff instructions.</div>`
+      : `<div class="p-2 rounded-lg mb-3 text-[10.5px]" style="background:#DFFBF1;color:#0F766E;">✅ No emergency currently active.</div>`;
+    const services = res.services.map(p => `
+      <div class="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+        <div>
+          <div class="text-sm font-bold">${p.name}</div>
+          <div class="text-[10.5px] text-muted">${res.purpose[p.category] || ""}</div>
+        </div>
+        <span class="text-[10.5px] text-muted font-mono text-right">${p.distance_km != null ? p.distance_km + " km" : ""}${p.contact ? "<br>" + p.contact : ""}</span>
+      </div>`).join("");
+    const bestRoute = res.evacuation && res.evacuation.routes && res.evacuation.routes[0];
+    el.innerHTML = `
+      ${activeBanner}
+      ${bestRoute ? `<div class="text-xs mb-3"><b>Safest exit right now:</b> ${bestRoute.name} (${LEVEL_LABEL[bestRoute.level] || bestRoute.level}${bestRoute.distance_km != null ? ", " + bestRoute.distance_km + " km" : ""})${bestRoute.is_accessible ? " · ♿ accessible" : ""}</div>` : ""}
+      ${services || `<p class="text-muted text-xs">No emergency-service directory configured for this event yet.</p>`}
+      ${res.note ? `<p class="text-[10px] text-muted mt-2 italic">${res.note}</p>` : ""}`;
+  } catch (e) { el.innerHTML = `<p class="text-muted text-xs">Emergency info unavailable right now.</p>`; }
+}
+
+let poiMap = null;
+const POI_MARKER = {
+  gate: { color: "#123B6D", icon: "🚪" }, arena: { color: "#1976D2", icon: "🏟" }, hotel: { color: "#8B5CF6", icon: "🏨" },
+  transport: { color: "#0EA5E9", icon: "🚌" },
+  food: { color: "#F59E0B", icon: "🍽" }, essential: { color: "#20C997", icon: "🏪" }, emergency: { color: "#DC2626", icon: "🚑" },
+};
+let poiLayerGroups = {};
+let poiActiveGroups = new Set(Object.keys(POI_MARKER));
+
+async function renderPoiMap() {
+  const section = document.getElementById("ev-poi-map-section");
+  try {
+    const res = await api(`/api/attendee/venue-pois?event_id=${eventId}`);
+    const zoneWithCoords = res.zones.filter(z => z.lat != null);
+    const svcWithCoords = res.services.filter(p => p.lat != null);
+    if (!zoneWithCoords.length && !svcWithCoords.length) { section.classList.add("hidden"); return; }
+    section.classList.remove("hidden");
+
+    if (!poiMap) {
+      poiMap = L.map("poi-map", { zoomControl: true, scrollWheelZoom: false }).setView([19, 73], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(poiMap);
+      Object.keys(POI_MARKER).forEach(g => poiLayerGroups[g] = L.layerGroup().addTo(poiMap));
+    } else {
+      Object.values(poiLayerGroups).forEach(lg => lg.clearLayers());
+    }
+
+    const center = (zoneWithCoords[0] || svcWithCoords[0]);
+    if (center) poiMap.setView([center.lat, center.lng], 15);
+
+    zoneWithCoords.forEach(z => {
+      const domainGroup = z.map_type === "hotel" ? "hotel" : z.map_type === "arena" ? "arena" : z.domain === "transport" ? "transport" : "gate";
+      const style = POI_MARKER[domainGroup] || POI_MARKER.gate;
+      L.circleMarker([z.lat, z.lng], { radius: 8, color: style.color, weight: 2, fillColor: LEVEL_HEX[z.level] || style.color, fillOpacity: 0.85 })
+        .addTo(poiLayerGroups[domainGroup])
+        .bindPopup(`<b>${style.icon} ${z.name}</b><br>${res.legend[z.map_type] || z.map_type}${z.level_label ? " · " + z.level_label : ""}${z.is_accessible ? " · ♿ accessible" : ""}`);
+    });
+    svcWithCoords.forEach(p => {
+      const style = POI_MARKER[p.group] || POI_MARKER.essential;
+      L.circleMarker([p.lat, p.lng], { radius: 7, color: style.color, weight: 1.5, fillColor: style.color, fillOpacity: 0.85 })
+        .addTo(poiLayerGroups[p.group])
+        .bindPopup(`<b>${style.icon} ${p.name}</b><br>${p.category.replace(/_/g, " ")}${p.distance_km != null ? " · " + p.distance_km + " km" : ""}<br><span style="color:#64748B;font-size:10.5px;">${p.data_label}</span>`);
+    });
+    setTimeout(() => poiMap.invalidateSize(), 200);
+
+    const legendEl = document.getElementById("poi-legend");
+    legendEl.innerHTML = Object.entries(POI_MARKER).map(([key, style]) => `
+      <label class="flex items-center gap-1.5 text-[11px] cursor-pointer select-none">
+        <input type="checkbox" checked onchange="togglePoiLayer('${key}', this.checked)" />
+        <span style="color:${style.color}">●</span> ${style.icon} ${key[0].toUpperCase() + key.slice(1)}
+      </label>`).join("");
+  } catch (e) { section.classList.add("hidden"); }
+}
+
+function togglePoiLayer(group, on) {
+  const lg = poiLayerGroups[group];
+  if (!lg || !poiMap) return;
+  if (on) { poiActiveGroups.add(group); poiMap.addLayer(lg); }
+  else { poiActiveGroups.delete(group); poiMap.removeLayer(lg); }
 }
 
 function renderHotels() {
@@ -370,6 +531,10 @@ async function loadEvent() {
   renderOffPeak();
   renderAnnouncements();
   renderMap();
+  renderFood();
+  renderEssentials();
+  renderEmergencySection();
+  renderPoiMap();
 }
 
 // --- Booking sheet -----------------------------------------------------

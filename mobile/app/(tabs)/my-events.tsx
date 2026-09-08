@@ -48,7 +48,25 @@ type EvacRoute = { id: number; name: string; distance_km: number | null; is_acce
 type Evacuation = { emergency_active: boolean; emergency_zone: string | null; routes: EvacRoute[] };
 type Hotel = { id: number; name: string; available_rooms: number; distance_km: number | null; last_updated: string | null };
 type TransportItem = { route?: string; line?: string; airline?: string; description?: string; destination?: string; origin?: string; arrives_in_min: number };
-type TransportData = { local?: { buses?: { city?: TransportItem[] }; trains?: { suburban?: TransportItem[] } }; flights?: { arrivals?: TransportItem[] } };
+type CrowdZone = { zone_id: number; zone_name: string; current_pct: number; level: string; level_label?: string; forecast_15m_pct?: number | null; source_label?: string };
+type CrowdData = { zones: CrowdZone[]; recommended: string | null; reasoning: string | null };
+type TransportData = { local?: { buses?: { city?: TransportItem[] }; trains?: { suburban?: TransportItem[] } }; flights?: { arrivals?: TransportItem[] }; crowd?: CrowdData };
+
+type Poi = {
+  id: number; group: string; category: string; name: string; distance_km: number | null;
+  cuisine?: string | null; price_level?: number | null; open_now: boolean | null; is_24x7: boolean; data_label: string;
+  lat?: number | null; lng?: number | null;
+};
+type RestaurantsResp = { restaurants: Poi[]; recommended: { name: string; reason: string } | null; note: string | null };
+type ServicesResp = { services: Poi[]; recommended: { name: string; reason: string } | null; note: string | null };
+type EmergencyResp = {
+  services: Poi[]; purpose: Record<string, string>;
+  emergency: { active: boolean; zone_name?: string | null };
+  evacuation: { routes: { name: string; level: string; distance_km: number | null; is_accessible: boolean }[] } | null;
+  note: string | null;
+};
+type VenuePoiZone = { id: number; name: string; map_type: string; domain: string; lat: number | null; lng: number | null; level: string };
+type VenuePoisResp = { zones: VenuePoiZone[]; services: Poi[]; legend: Record<string, string> };
 
 export default function MyEvents() {
   const [email, setEmailState] = useState("");
@@ -65,6 +83,10 @@ export default function MyEvents() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [transport, setTransport] = useState<TransportData>({});
   const [liveCrowdText, setLiveCrowdText] = useState<string | null>(null);
+  const [food, setFood] = useState<RestaurantsResp | null>(null);
+  const [essentials, setEssentials] = useState<ServicesResp | null>(null);
+  const [emergencyDir, setEmergencyDir] = useState<EmergencyResp | null>(null);
+  const [venuePois, setVenuePois] = useState<VenuePoisResp | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem("vyavastha_pref_accessible").then((v) => {
@@ -81,16 +103,24 @@ export default function MyEvents() {
   const loadLiveInfo = useCallback(async (accessible: boolean, eventId: number | null) => {
     try {
       const eventQuery = eventId != null ? `event_id=${eventId}` : "";
-      const [evacData, hotelData, transportData, advisory] = await Promise.all([
+      const [evacData, hotelData, transportData, advisory, foodData, essentialsData, emergencyData, venuePoiData] = await Promise.all([
         api<Evacuation>(`/api/evacuation-routes?accessible_only=${accessible}${eventQuery ? `&${eventQuery}` : ""}`),
         api<{ hotels: Hotel[] }>(`/api/attendee/hotels${eventQuery ? `?${eventQuery}` : ""}`),
         api<TransportData>(`/api/attendee/transport${eventQuery ? `?${eventQuery}` : ""}`),
         api<{ text: string | null }>("/api/ai/attendee-advisory"),
+        api<RestaurantsResp>(`/api/attendee/restaurants${eventQuery ? `?${eventQuery}&sort=nearest` : "?sort=nearest"}`),
+        api<ServicesResp>(`/api/attendee/services${eventQuery ? `?${eventQuery}&sort=nearest` : "?sort=nearest"}`),
+        api<EmergencyResp>(`/api/attendee/emergency${eventQuery ? `?${eventQuery}` : ""}`),
+        api<VenuePoisResp>(`/api/attendee/venue-pois${eventQuery ? `?${eventQuery}` : ""}`),
       ]);
       setEvac(evacData);
       setHotels(hotelData.hotels || []);
       setTransport(transportData);
       setLiveCrowdText(advisory.text);
+      setFood(foodData);
+      setEssentials(essentialsData);
+      setEmergencyDir(emergencyData);
+      setVenuePois(venuePoiData);
     } catch {
       // best-effort — leave previous values in place
     }
@@ -237,6 +267,24 @@ export default function MyEvents() {
                     </Text>
                   )) : <Text style={styles.smallMeta}>No connected hotel inventory yet.</Text>}
 
+                  {!!transport.crowd?.zones?.length && (
+                    <>
+                      <Text style={[styles.notifTitle, { marginTop: spacing.md }]}>📡 Live crowd %</Text>
+                      {transport.crowd.zones.map((z) => (
+                        <View key={z.zone_id} style={{ marginTop: 4 }}>
+                          <View style={styles.rowBetween}>
+                            <Text style={styles.smallMeta}>{z.zone_name}{z.zone_name === transport.crowd?.recommended ? " ✓" : ""}</Text>
+                            <Text style={[styles.smallMeta, { color: levelColor[z.level] }]}>
+                              {z.level_label || z.level} · {z.current_pct}%{z.forecast_15m_pct != null ? ` → ${z.forecast_15m_pct}% (+15m)` : ""}
+                            </Text>
+                          </View>
+                          <Text style={styles.smallMeta}>{z.source_label || "source unknown"}</Text>
+                        </View>
+                      ))}
+                      {!!transport.crowd.reasoning && <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>{transport.crowd.reasoning}</Text>}
+                    </>
+                  )}
+
                   <Text style={[styles.notifTitle, { marginTop: spacing.md }]}>🚌 City transport (not event-specific)</Text>
                   {(transport.local?.buses?.city || []).slice(0, 2).map((x, i) => (
                     <Text key={`bus-${i}`} style={styles.smallMeta}>🚌 {x.route}: {x.arrives_in_min} min</Text>
@@ -250,6 +298,93 @@ export default function MyEvents() {
                   <Text style={[styles.smallMeta, { marginTop: 4, fontStyle: "italic" }]}>Buses/trains/flights above are city/region-level schedules (illustrative, not live operator tracking) — not specific to this event.</Text>
                 </View>
               )}
+
+              {anyLiveActive && (
+                <View style={styles.liveInfoBox}>
+                  <Text style={styles.notifTitle}>🍽 Food nearby</Text>
+                  {food?.restaurants?.length ? (
+                    <>
+                      {food.recommended && <Text style={[styles.smallMeta, { color: colors.accent }]}>✨ {food.recommended.reason}</Text>}
+                      {food.restaurants.slice(0, 5).map((p) => (
+                        <View key={p.id} style={styles.rowBetween}>
+                          <Text style={styles.smallMeta}>{p.name} · {p.cuisine || p.category}{p.distance_km != null ? ` · ${p.distance_km} km` : ""}</Text>
+                          <Text style={[styles.smallMeta, p.open_now && { color: colors.ok }]}>{p.is_24x7 ? "24×7" : p.open_now ? "Open now" : ""}</Text>
+                        </View>
+                      ))}
+                      {!!food.note && <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>{food.note}</Text>}
+                    </>
+                  ) : (
+                    <Text style={styles.smallMeta}>No food data configured for this event yet.</Text>
+                  )}
+                </View>
+              )}
+
+              {anyLiveActive && (
+                <View style={styles.liveInfoBox}>
+                  <Text style={styles.notifTitle}>🏪 Essential services</Text>
+                  {essentials?.services?.length ? (
+                    <>
+                      {essentials.services.slice(0, 8).map((p) => (
+                        <View key={p.id} style={styles.rowBetween}>
+                          <Text style={styles.smallMeta}>{p.name}</Text>
+                          <Text style={styles.smallMeta}>{p.distance_km != null ? `${p.distance_km} km` : ""}</Text>
+                        </View>
+                      ))}
+                      {!!essentials.note && <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>{essentials.note}</Text>}
+                    </>
+                  ) : (
+                    <Text style={styles.smallMeta}>No essential-services data configured for this event yet.</Text>
+                  )}
+                </View>
+              )}
+
+              {anyLiveActive && (
+                <View style={styles.liveInfoBox}>
+                  <Text style={styles.notifTitle}>🚑 Emergency &amp; Safety</Text>
+                  {emergencyDir ? (
+                    <>
+                      <Text style={[styles.smallMeta, emergencyDir.emergency.active && { color: colors.danger, fontWeight: "700" }]}>
+                        {emergencyDir.emergency.active
+                          ? `🚨 Emergency near ${emergencyDir.emergency.zone_name || "the venue"} — follow staff instructions.`
+                          : "✅ No emergency currently active."}
+                      </Text>
+                      {emergencyDir.services.slice(0, 6).map((p) => (
+                        <View key={p.id} style={styles.rowBetween}>
+                          <Text style={styles.smallMeta}>{p.name}</Text>
+                          <Text style={styles.smallMeta}>{p.distance_km != null ? `${p.distance_km} km` : ""}</Text>
+                        </View>
+                      ))}
+                      {!!emergencyDir.note && <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>{emergencyDir.note}</Text>}
+                    </>
+                  ) : (
+                    <Text style={styles.smallMeta}>Emergency info unavailable right now.</Text>
+                  )}
+                </View>
+              )}
+
+              {anyLiveActive && venuePois && (venuePois.zones.length || venuePois.services.length) && (
+                <View style={styles.liveInfoBox}>
+                  <Text style={styles.notifTitle}>🗺 Venue map</Text>
+                  <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>Point-of-interest list — not a full indoor floor-plan. Tap Navigate to open it in Maps.</Text>
+                  {venuePois.zones.filter((z) => z.lat != null).slice(0, 6).map((z) => (
+                    <View key={`z-${z.id}`} style={styles.rowBetween}>
+                      <Text style={styles.smallMeta}>{venuePois.legend[z.map_type] || z.map_type}: {z.name}</Text>
+                      <Pressable onPress={() => openInMaps(z.lat!, z.lng!)}>
+                        <Text style={styles.navLink}>🧭 Navigate</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  {venuePois.services.filter((p) => p.lat != null).slice(0, 10).map((p) => (
+                    <View key={`s-${p.id}`} style={styles.rowBetween}>
+                      <Text style={styles.smallMeta}>{p.name} · {p.category.replace(/_/g, " ")}{p.distance_km != null ? ` · ${p.distance_km} km` : ""}</Text>
+                      <Pressable onPress={() => openInMaps(p.lat!, p.lng!)}>
+                        <Text style={styles.navLink}>🧭 Navigate</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {!!notifs.length && (
                 <View style={styles.notifBox}>
                   <View style={styles.rowBetween}>

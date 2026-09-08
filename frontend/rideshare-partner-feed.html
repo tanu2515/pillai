@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Rideshare Partner Feed</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config={theme:{extend:{colors:{bg:'#EAF7F4',panel:'#FFFFFF',border:'#E2E8F0',muted:'#64748B',ink:'#123B6D',accent:'#1976D2',green:'#20C997',danger:'#DC2626'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
+</script>
+<style>
+body{background:radial-gradient(circle at 10% 0%,rgba(25,118,210,.08),transparent 40%),#EAF7F4;color:#123B6D}
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#64748B}
+</style>
+</head>
+<body class="min-h-screen font-sans">
+<header class="border-b border-border bg-white/85 backdrop-blur sticky top-0 z-10">
+  <div class="max-w-4xl mx-auto px-5 py-4">
+    <div class="text-[11px] uppercase tracking-[.22em] font-black text-accent">VYAVASTHA</div>
+    <div class="text-xl font-black -mt-0.5">Rideshare Partner Feed</div>
+  </div>
+</header>
+<main class="max-w-4xl mx-auto px-5 py-7">
+  <div class="card p-5 mb-5" style="background:#fffaf0;border-color:#fde7b8;">
+    <p class="text-sm">📌 <b>Concept demo, not a live Uber integration.</b> Uber (and other consumer rideshare apps) don't publish a public API that lets a third party inject content into their rider-facing app. What KAIRO <i>can</i> do — and what this page simulates — is expose upcoming/high-demand events to a rideshare partner's own driver-supply/positioning system via an API, so their dispatch logic (not their consumer UI) knows where demand is about to spike. Clicking "Book with Uber" elsewhere in VYAVASTHA does use a real Uber deep link.</p>
+  </div>
+  <h1 class="text-lg font-black mb-3">Upcoming pickup-demand opportunities</h1>
+  <div id="list" class="grid gap-3"></div>
+</main>
+<script>
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+async function load(){
+  const el = document.getElementById('list');
+  try{
+    const res = await fetch('/api/rideshare/opportunities');
+    const data = await res.json();
+    el.innerHTML = data.length ? data.map(e => `
+      <div class="card p-4">
+        <div class="flex items-center justify-between gap-2">
+          <div class="font-bold">${esc(e.name)}</div>
+          <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full border ${e.status==='live'?'border-green text-green':'border-border text-muted'}">${esc(e.status)}</span>
+        </div>
+        <div class="text-xs text-muted mt-1">${esc(e.venue_name||e.city||'')} · ${esc(e.event_date||'date TBD')} · ${e.expected_attendance||'—'} expected</div>
+        ${e.demand_hint ? `<div class="text-xs mt-2 font-bold text-accent">⚡ ${esc(e.demand_hint)}</div>` : ''}
+      </div>`).join('') : '<div class="text-sm text-muted">No upcoming events with mapped venue coordinates yet.</div>';
+  }catch(e){ el.innerHTML = '<div class="text-sm text-muted">Feed unavailable.</div>'; }
+}
+load();
+</script>
+</body>
+</html>
