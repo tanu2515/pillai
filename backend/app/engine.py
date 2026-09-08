@@ -1411,7 +1411,8 @@ def _event_summary(db, e, tiers=None):
         "id": e.id, "name": e.name, "description": e.description, "event_date": e.event_date,
         "event_time": e.event_time, "category": e.category, "city": e.city, "venue_name": e.venue_name,
         "banner_emoji": e.banner_emoji or "🎉", "is_featured": e.is_featured,
-        "region": e.region, "status": e.status,
+        "region": e.region, "status": e.status, "owner_email": e.owner_email,
+        "expected_attendance": e.expected_attendance, "safe_capacity": e.safe_capacity,
         "min_price": min(prices) if prices else None, "max_price": max(prices) if prices else None,
         "total_available": total_available,
         "registration_status": "Sold Out" if tiers and total_available <= 0 else "Registration Open",
@@ -1482,6 +1483,27 @@ def list_events(db, search=None, category=None, section=None):
     events = q.all()
     if section != "upcoming":
         events.sort(key=lambda e: (e.event_date is None, e.event_date or ""))
+    return [_event_summary(db, e) for e in events]
+
+
+def list_events_owned_by(db, owner_email):
+    """Every event (any status — upcoming/live/paused/completed) whose
+    owner_email matches this Event Command Operator, for the organizer's own
+    "My Events" dashboard. Deliberately server-side scoped (unlike the public
+    catalog's list_events(), which returns everything) so an organizer never
+    sees another organizer's events as manageable — the ownership check the
+    Create Event wizard depends on. Same trust model as the rest of this
+    demo's auth (owner_email is caller-supplied, not session-verified), kept
+    behind a single query so swapping in real auth later only touches here."""
+    owner_email = (owner_email or "").strip().lower()
+    if not owner_email:
+        return []
+    events = (
+        db.query(models.Event)
+        .filter(models.Event.owner_email == owner_email)
+        .order_by(models.Event.id.desc())
+        .all()
+    )
     return [_event_summary(db, e) for e in events]
 
 
@@ -1613,16 +1635,27 @@ def event_ticket_demand(db, event):
 def create_event_listing(
     db, name, description, event_date, region, expected_attendance, safe_capacity, tiers,
     event_time=None, category=None, city=None, venue_name=None, venue_address=None,
-    banner_emoji=None, is_featured=False,
+    banner_emoji=None, is_featured=False, venue_lat=None, venue_lng=None, owner_email=None,
 ):
     """Adds a new browsable/bookable event to the catalog — status defaults
     to 'upcoming', so it never interferes with whichever event is live.
-    tiers: [{"name", "price", "capacity", "gate_name"}, ...]"""
+    tiers: [{"name", "price", "capacity", "gate_name"}, ...]. owner_email is
+    optional attribution only (e.g. the organizer's "Create New Event" UI) —
+    unlike create_event(), this never touches the live-event slot, its zones,
+    Resources or LogEntries.
+
+    Returns None (creates nothing) if an event with this name already exists
+    (case-insensitive, any status) — enforced here, inside the same call that
+    does the insert, rather than as a separate pre-check the caller could
+    skip or race against. Never renames/deletes/touches the existing one."""
+    if db.query(models.Event).filter(models.Event.name.ilike(name.strip())).first():
+        return None
     event = models.Event(
         name=name, description=description, event_date=event_date, event_time=event_time,
         category=category, city=city, venue_name=venue_name, venue_address=venue_address,
         banner_emoji=banner_emoji, is_featured=is_featured, region=region,
         expected_attendance=expected_attendance, safe_capacity=safe_capacity, status="upcoming",
+        venue_lat=venue_lat, venue_lng=venue_lng, owner_email=owner_email,
     )
     db.add(event)
     db.flush()

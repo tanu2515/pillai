@@ -1,0 +1,277 @@
+- generic [active] [ref=f24e1]:
+  - navigation [ref=f24e2]:
+    - generic [ref=f24e3]:
+      - link "VYAVASTHA VYAVASTHA" [ref=f24e4] [cursor=pointer]:
+        - /url: events.html
+        - img "VYAVASTHA" [ref=f24e5]
+        - generic [ref=f24e6]: VYAVASTHA
+      - generic [ref=f24e7]:
+        - link "Home" [ref=f24e8] [cursor=pointer]:
+          - /url: events.html
+        - link "Explore" [ref=f24e9] [cursor=pointer]:
+          - /url: events.html?explore=1
+        - link "My Event" [ref=f24e10] [cursor=pointer]:
+          - /url: my-events.html
+        - link "Alerts" [ref=f24e11] [cursor=pointer]:
+          - /url: notifications.html
+        - link "ℹ️ How AI works" [ref=f24e12] [cursor=pointer]:
+          - /url: ai-architecture.html
+      - link "👤" [ref=f24e13] [cursor=pointer]:
+        - /url: profile.html
+  - banner [ref=f24e14]:
+    - heading "My Event" [level=1] [ref=f24e15]
+    - paragraph [ref=f24e16]: Everything about your bookings, in one place.
+  - generic [ref=f24e17]:
+    - generic [ref=f24e18]:
+      - generic [ref=f24e19] [cursor=pointer]: Upcoming
+      - generic [ref=f24e20] [cursor=pointer]: Active
+      - generic [ref=f24e21] [cursor=pointer]: Past
+    - generic [ref=f24e24]:
+      - generic [ref=f24e25]: Suraj Complex IPL
+      - generic [ref=f24e27]: Date TBA
+      - generic [ref=f24e28]:
+        - generic [ref=f24e29]: General
+        - generic [ref=f24e30]: Front Gate 1
+      - button "VIEW QR CODE — 11d6f894" [ref=f24e31] [cursor=pointer]
+      - generic [ref=f24e32]:
+        - generic [ref=f24e33]: 📍 Your Gate
+        - generic [ref=f24e34]:
+          - generic [ref=f24e35]: Front Gate 1 · Quiet
+          - link "🧭 Navigate" [ref=f24e36] [cursor=pointer]:
+            - /url: https://www.google.com/maps/dir/?api=1&destination=19.02314,73.091126
+      - generic [ref=f24e37]:
+        - generic [ref=f24e38]: 🧭 Your Journey
+        - generic [ref=f24e39]: 🕒 Front Gate 1 is currently a good time to arrive (NORMAL, 32.0%).
+    - generic [ref=f24e40]:
+      - generic [ref=f24e41]: 🔴 Live Crowd
+      - paragraph [ref=f24e42]: All gates are moving smoothly right now.
+    - generic [ref=f24e43]:
+      - generic [ref=f24e44]:
+        - heading "🗺️ Inside the venue — accessibility & emergency exits" [level=2] [ref=f24e45]
+        - generic [ref=f24e46]:
+          - checkbox "I need a wheelchair-accessible exit" [ref=f24e47]
+          - text: I need a wheelchair-accessible exit
+      - generic [ref=f24e48]:
+        - generic [ref=f24e49]:
+          - heading "🏨 More hotels near the venue" [level=2] [ref=f24e50]
+          - button "REFRESH" [ref=f24e51] [cursor=pointer]
+        - generic [ref=f24e52]:
+          - generic [ref=f24e53]:
+            - generic [ref=f24e54]:
+              - generic [ref=f24e55]: 🏨 Landmark Hotel
+              - generic [ref=f24e56]: DEMO
+            - generic [ref=f24e57]: 80 rooms free · 2.8 km from venue
+          - generic [ref=f24e58]:
+            - generic [ref=f24e59]:
+              - generic [ref=f24e60]: 🏨 Hotel Three Star
+              - generic [ref=f24e61]: DEMO
+            - generic [ref=f24e62]: 20 rooms free · 2.9 km from venue
+      - generic [ref=f24e63]:
+        - generic [ref=f24e64]:
+          - heading "🚌 City transport (not event-specific)" [level=2] [ref=f24e65]
+          - button "REFRESH" [ref=f24e66] [cursor=pointer]
+        - generic [ref=f24e67]:
+          - generic [ref=f24e68]:
+            - generic [ref=f24e69]: 📡 Live crowd %
+            - generic [ref=f24e70]:
+              - generic [ref=f24e71]:
+                - generic [ref=f24e72]: Local Bus Hub ✓ RECOMMENDED
+                - generic [ref=f24e73]: Moderate · 62% → 149.7% (+15m)
+              - generic [ref=f24e74]: Simulated (demo)
+            - generic [ref=f24e75]:
+              - generic [ref=f24e76]:
+                - generic [ref=f24e77]: Metro Station Point
+                - generic [ref=f24e78]: Moderate · 80% → 153.4% (+15m)
+              - generic [ref=f24e79]: Simulated (demo)
+            - generic [ref=f24e80]: Recommended because Local Bus Hub currently has the lowest crowd among available event transport hubs (Moderate, 62.0% of capacity based on live counts), LSTM forecasts 149.7% in the next 15 minutes — avoid Metro Station Point (Moderate, 80.0%) if you have a choice of route.
+          - generic [ref=f24e81]:
+            - generic [ref=f24e82]: 🚌 Buses (citywide)
+            - generic [ref=f24e83]:
+              - generic [ref=f24e84]: Vashi–Belapur
+              - generic [ref=f24e85]: 3 min
+            - generic [ref=f24e86]:
+              - generic [ref=f24e87]: "24"
+              - generic [ref=f24e88]: 8 min
+            - generic [ref=f24e89]:
+              - generic [ref=f24e90]: "59"
+              - generic [ref=f24e91]: 13 min
+          - generic [ref=f24e92]:
+            - generic [ref=f24e93]: 🚆 Trains (citywide)
+            - generic [ref=f24e94]:
+              - generic [ref=f24e95]: Harbour Line
+              - generic [ref=f24e96]: 4 min
+            - generic [ref=f24e97]:
+              - generic [ref=f24e98]: Harbour Line
+              - generic [ref=f24e99]: 10 min
+            - generic [ref=f24e100]:
+              - generic [ref=f24e101]: Trans-Harbour Line
+              - generic [ref=f24e102]: 16 min
+          - generic [ref=f24e103]:
+            - generic [ref=f24e104]: ✈️ Arrivals (citywide)
+            - generic [ref=f24e105]:
+              - generic [ref=f24e106]: IndiGo
+              - generic [ref=f24e107]: 8 min
+            - generic [ref=f24e108]:
+              - generic [ref=f24e109]: Air India Express
+              - generic [ref=f24e110]: 20 min
+            - generic [ref=f24e111]:
+              - generic [ref=f24e112]: IndiGo
+              - generic [ref=f24e113]: 32 min
+          - generic [ref=f24e114]: Buses/trains/flights above are city/region-level schedules (illustrative, not live operator tracking) — not specific to this event. Bus-dispatch predictions and crowd % above are computed for this event's own transport zones.
+          - generic [ref=f24e115]:
+            - generic [ref=f24e116]: 🚕 Private ride
+            - link "Book with Uber →" [ref=f24e117] [cursor=pointer]:
+              - /url: https://m.uber.com/ul/?action=setPickup&pickup=my_location
+            - generic [ref=f24e118]:
+              - text: Opens Uber with your destination pre-filled. Requires the Uber app installed.
+              - link "See partner opportunities feed →" [ref=f24e119] [cursor=pointer]:
+                - /url: rideshare-partner-feed.html
+      - generic [ref=f24e120]:
+        - heading "🍽 Food nearby" [level=2] [ref=f24e121]
+        - generic [ref=f24e122]:
+          - generic [ref=f24e123]: ✨ Cafe Corner — 0.13 km away
+          - generic [ref=f24e124]:
+            - generic [ref=f24e125]:
+              - generic [ref=f24e126]: Cafe Corner · Cafe/Beverages
+              - generic [ref=f24e127]: 0.13 km · ₹₹
+            - generic [ref=f24e128]: Closed
+          - generic [ref=f24e129]:
+            - generic [ref=f24e130]:
+              - generic [ref=f24e131]: North Indian Corner · North Indian
+              - generic [ref=f24e132]: 0.14 km · ₹₹
+            - generic [ref=f24e133]: Closed
+          - generic [ref=f24e134]:
+            - generic [ref=f24e135]:
+              - generic [ref=f24e136]: South Indian Express · South Indian
+              - generic [ref=f24e137]: 0.19 km · ₹
+            - generic [ref=f24e138]: Closed
+          - generic [ref=f24e139]:
+            - generic [ref=f24e140]:
+              - generic [ref=f24e141]: Quick Bites Stall · Snacks
+              - generic [ref=f24e142]: 0.21 km · ₹
+            - generic [ref=f24e143]: Closed
+          - generic [ref=f24e144]:
+            - generic [ref=f24e145]:
+              - generic [ref=f24e146]: Main Concourse Food Court · Multi-cuisine
+              - generic [ref=f24e147]: 0.24 km · ₹₹
+            - generic [ref=f24e148]: Closed
+          - generic [ref=f24e149]: Demo/reference data for this build — not a live restaurant partner feed.
+      - generic [ref=f24e150]:
+        - heading "🏪 Essential services" [level=2] [ref=f24e151]
+        - generic [ref=f24e152]:
+          - generic [ref=f24e153]:
+            - generic [ref=f24e154]:
+              - generic [ref=f24e155]: EV Charging Bay
+              - generic [ref=f24e156]: 0.11 km
+            - generic [ref=f24e157]:
+              - generic [ref=f24e158]: Public Toilets
+              - generic [ref=f24e159]: 0.12 km
+            - generic [ref=f24e160]:
+              - generic [ref=f24e161]: Event Pharmacy Desk
+              - generic [ref=f24e162]: 0.2 km
+            - generic [ref=f24e163]:
+              - generic [ref=f24e164]: Visitor Parking
+              - generic [ref=f24e165]: 0.2 km
+            - generic [ref=f24e166]:
+              - generic [ref=f24e167]: ATM Point
+              - generic [ref=f24e168]: 0.22 km
+            - generic [ref=f24e169]:
+              - generic [ref=f24e170]: Venue Help Desk
+              - generic [ref=f24e171]: 0.23 km
+            - generic [ref=f24e172]:
+              - generic [ref=f24e173]: Drinking Water Point
+              - generic [ref=f24e174]: 0.24 km
+            - generic [ref=f24e175]:
+              - generic [ref=f24e176]: Fuel Station (nearest)
+              - generic [ref=f24e177]: 0.25 km
+            - generic [ref=f24e178]:
+              - generic [ref=f24e179]: General Store
+              - generic [ref=f24e180]: 0.27 km
+            - generic [ref=f24e181]:
+              - generic [ref=f24e182]: Lost & Found Desk
+              - generic [ref=f24e183]: 0.27 km
+          - generic [ref=f24e184]: Demo/reference data for this build — not connected to live availability feeds.
+      - generic [ref=f24e185]:
+        - heading "🚑 Emergency & Safety" [level=2] [ref=f24e186]
+        - generic [ref=f24e187]:
+          - generic [ref=f24e188]: ✅ No emergency currently active.
+          - generic [ref=f24e189]: "Safest exit right now: Front Gate 2 (Quiet, 0.02 km)"
+          - generic [ref=f24e190]:
+            - generic [ref=f24e191]:
+              - generic [ref=f24e192]: First Aid Station
+              - generic [ref=f24e193]: On-site first aid station for minor injuries.
+            - generic [ref=f24e194]: 0.13 km
+          - generic [ref=f24e195]:
+            - generic [ref=f24e196]:
+              - generic [ref=f24e197]: Nearest Hospital (reference)
+              - generic [ref=f24e198]: Nearest hospital for medical emergencies.
+            - generic [ref=f24e199]: 0.14 km
+          - generic [ref=f24e200]:
+            - generic [ref=f24e201]:
+              - generic [ref=f24e202]: On-site Ambulance Point
+              - generic [ref=f24e203]: On-site ambulance / emergency medical transport.
+            - generic [ref=f24e204]: 0.15 km
+          - generic [ref=f24e205]:
+            - generic [ref=f24e206]:
+              - generic [ref=f24e207]: Fire & Rescue Point (reference)
+              - generic [ref=f24e208]: Fire and rescue response.
+            - generic [ref=f24e209]: 0.16 km
+          - generic [ref=f24e210]:
+            - generic [ref=f24e211]:
+              - generic [ref=f24e212]: Emergency Help Desk
+              - generic [ref=f24e213]: General emergency coordination point at the venue.
+            - generic [ref=f24e214]: 0.16 km
+          - generic [ref=f24e215]:
+            - generic [ref=f24e216]:
+              - generic [ref=f24e217]: Police Assistance Point
+              - generic [ref=f24e218]: Police assistance for security concerns.
+            - generic [ref=f24e219]: 0.19 km
+          - generic [ref=f24e220]: Demo/reference data for this build — services shown without invented contact numbers unless one is actually stored.
+      - generic [ref=f24e221]:
+        - generic [ref=f24e222]:
+          - heading "🗺 Venue map" [level=2] [ref=f24e223]
+          - generic [ref=f24e224]:
+            - generic [ref=f24e225]:
+              - generic [ref=f24e226]: ●
+              - text: 🚪 Gate
+            - generic [ref=f24e227]:
+              - generic [ref=f24e228]: ●
+              - text: 🏟 Arena
+            - generic [ref=f24e229]:
+              - generic [ref=f24e230]: ●
+              - text: 🏨 Hotel
+            - generic [ref=f24e231]:
+              - generic [ref=f24e232]: ●
+              - text: 🚌 Transport
+            - generic [ref=f24e233]:
+              - generic [ref=f24e234]: ●
+              - text: 🍽 Food
+            - generic [ref=f24e235]:
+              - generic [ref=f24e236]: ●
+              - text: 🏪 Essential
+            - generic [ref=f24e237]:
+              - generic [ref=f24e238]: ●
+              - text: 🚑 Emergency
+        - paragraph [ref=f24e239]: Point-of-interest map for your event's venue — not a full indoor floor-plan.
+        - generic [ref=f24e240]:
+          - generic:
+            - generic:
+              - img:
+                - generic:
+                  - generic [ref=f24e241] [cursor=pointer]
+                  - generic [ref=f24e242] [cursor=pointer]
+                  - generic [ref=f24e243] [cursor=pointer]
+                  - generic [ref=f24e244] [cursor=pointer]
+                  - generic [ref=f24e245] [cursor=pointer]
+          - generic:
+            - generic [ref=f24e246]:
+              - button "Zoom in" [ref=f24e247] [cursor=pointer]: +
+              - button "Zoom out" [ref=f24e248] [cursor=pointer]: −
+            - generic [ref=f24e249]:
+              - link "Leaflet" [ref=f24e250] [cursor=pointer]:
+                - /url: https://leafletjs.com
+              - text: "| © OpenStreetMap"
+    - generic [ref=f24e256]:
+      - generic [ref=f24e257]: 🔔 6 unread alerts for attendees
+      - link "View all in Alerts →" [ref=f24e258] [cursor=pointer]:
+        - /url: notifications.html

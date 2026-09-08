@@ -1,0 +1,51 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e3]:
+    - generic [ref=f6e4]:
+      - link [ref=f6e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=f6e6]
+      - heading "MY EVENTS EVENT COMMAND OPERATOR" [level=1] [ref=f6e7]:
+        - generic [ref=f6e8]: MY EVENTS
+        - generic [ref=f6e9]: EVENT COMMAND OPERATOR
+    - generic [ref=f6e10]:
+      - link "Live Event Setup →" [ref=f6e11] [cursor=pointer]:
+        - /url: event-setup.html
+      - link "Switch role →" [ref=f6e12] [cursor=pointer]:
+        - /url: /login.html
+  - main [ref=f6e13]:
+    - generic [ref=f6e14]:
+      - generic [ref=f6e15]:
+        - paragraph [ref=f6e17]: Signed in as organizer.demo@vyavastha.app — showing only events you created.
+        - link "+ CREATE NEW EVENT" [ref=f6e18] [cursor=pointer]:
+          - /url: create-event.html
+      - generic [ref=f6e19]:
+        - generic [ref=f6e20]: 🔴 Live (0)
+        - paragraph [ref=f6e23]: No live event right now.
+        - generic [ref=f6e24]: 🗓 Upcoming (1)
+        - link "🏏 Vyavastha Mega Cricket Championship UPCOMING Sports Date 2026-11-14 · 19:30 Venue Suraj Complex City Mumbai Expected attendance 42,000 Capacity 45,300 Owner organizer.demo@vyavastha.app View Event →" [ref=f6e28] [cursor=pointer]:
+          - /url: event-detail.html?id=16
+          - generic [ref=f6e29]:
+            - generic [ref=f6e30]: 🏏 Vyavastha Mega Cricket Championship
+            - generic [ref=f6e31]: UPCOMING
+          - generic [ref=f6e32]: Sports
+          - generic [ref=f6e33]:
+            - generic [ref=f6e34]: Date
+            - generic [ref=f6e35]: 2026-11-14 · 19:30
+          - generic [ref=f6e36]:
+            - generic [ref=f6e37]: Venue
+            - generic [ref=f6e38]: Suraj Complex
+          - generic [ref=f6e39]:
+            - generic [ref=f6e40]: City
+            - generic [ref=f6e41]: Mumbai
+          - generic [ref=f6e42]:
+            - generic [ref=f6e43]: Expected attendance
+            - generic [ref=f6e44]: 42,000
+          - generic [ref=f6e45]:
+            - generic [ref=f6e46]: Capacity
+            - generic [ref=f6e47]: 45,300
+          - generic [ref=f6e48]:
+            - generic [ref=f6e49]: Owner
+            - generic [ref=f6e50]: organizer.demo@vyavastha.app
+          - generic [ref=f6e51]: View Event →
+        - generic [ref=f6e52]: ✅ Completed (0)
+        - paragraph [ref=f6e55]: No completed events yet.

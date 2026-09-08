@@ -307,6 +307,11 @@ class EventListingCreate(BaseModel):
     expected_attendance: int
     safe_capacity: int
     tiers: list[TierSpec]
+    venue_lat: float | None = None
+    venue_lng: float | None = None
+    owner_email: str | None = None  # Event Command Operator who created it — lets the
+    # organizer's "Create New Event" wizard list events it created, without
+    # touching engine.create_event()/the live-event slot at all.
 
 
 class EventSportsDetailsRequest(BaseModel):
@@ -316,6 +321,9 @@ class EventSportsDetailsRequest(BaseModel):
     stage: str | None = None
     team_home: str | None = None
     team_away: str | None = None
+    owner_email: str | None = None  # checked against Event.owner_email below —
+    # not a real auth boundary (same demo-auth trust as the rest of this app),
+    # but keeps this write ownership-scoped rather than open to any caller.
 
 
 class BookTierRequest(BaseModel):
@@ -686,6 +694,19 @@ def list_events(search: str | None = None, category: str | None = None, section:
     return engine.list_events(db, search=search, category=category, section=section)
 
 
+@app.get("/api/events/mine")
+def my_created_events(email: str, db: Session = Depends(get_db)):
+    """The organizer's own 'My Events' dashboard — every event (any status)
+    this email owns, server-side scoped so one organizer never sees another's
+    events as manageable. Same demo-auth trust level as /api/admin/my-events
+    (email is caller-supplied, not session-verified) — kept as its own
+    endpoint so real auth can replace the trust boundary here later without
+    touching the public catalog. Registered BEFORE /api/events/{event_id}
+    below — Starlette matches routes in registration order, and "mine" would
+    otherwise be swallowed by that path param and fail int-parsing."""
+    return engine.list_events_owned_by(db, email)
+
+
 @app.get("/api/events/{event_id}")
 def get_event_detail(event_id: int, db: Session = Depends(get_db)):
     result = engine.event_detail(db, event_id)
@@ -704,13 +725,19 @@ def get_tier_seats(event_id: int, tier_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/events")
 def create_event_listing(req: EventListingCreate, db: Session = Depends(get_db)):
+    if not req.name.strip():
+        raise HTTPException(400, "name is required")
     event = engine.create_event_listing(
         db, req.name, req.description, req.event_date, req.region,
         req.expected_attendance, req.safe_capacity, [t.model_dump() for t in req.tiers],
         event_time=req.event_time, category=req.category, city=req.city, venue_name=req.venue_name,
         venue_address=req.venue_address, banner_emoji=req.banner_emoji, is_featured=req.is_featured,
+        venue_lat=req.venue_lat, venue_lng=req.venue_lng,
+        owner_email=req.owner_email.strip().lower() if req.owner_email else None,
     )
-    return {"id": event.id, "name": event.name}
+    if event is None:
+        raise HTTPException(409, f'An event named "{req.name.strip()}" already exists. Choose a different name.')
+    return {"id": event.id, "name": event.name, "status": event.status}
 
 
 @app.get("/api/events/{event_id}/sports-details")
@@ -720,8 +747,18 @@ def get_event_sports_details(event_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/events/{event_id}/sports-details")
 def set_event_sports_details(event_id: int, req: EventSportsDetailsRequest, db: Session = Depends(get_db)):
-    if not db.get(models.Event, event_id):
+    event = db.get(models.Event, event_id)
+    if not event:
         raise HTTPException(404, "event not found")
+    # Ownership check: only this event's own organizer may edit its sports/
+    # competition record — one event, one primary organizer (see
+    # engine.list_events_owned_by's docstring for the trust model this
+    # follows). An event with no owner_email set (e.g. Event 13, created
+    # before this field existed) simply can't be edited through this route.
+    owner = (event.owner_email or "").strip().lower()
+    caller = (req.owner_email or "").strip().lower()
+    if not owner or owner != caller:
+        raise HTTPException(403, "not the organizer for this event")
     try:
         ml_advisory.validate_sports_vocab(req.sport, req.competition, req.tournament_gender, req.stage)
     except ValueError as exc:

@@ -1,0 +1,73 @@
+- generic [ref=f4e1]:
+  - generic [ref=f4e3]:
+    - generic [ref=f4e4]:
+      - link [ref=f4e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=f4e6]
+      - heading "CREATE NEW EVENT EVENT COMMAND OPERATOR" [level=1] [ref=f4e7]:
+        - generic [ref=f4e8]: CREATE NEW EVENT
+        - generic [ref=f4e9]: EVENT COMMAND OPERATOR
+    - generic [ref=f4e10]:
+      - link "← My Events" [ref=f4e11] [cursor=pointer]:
+        - /url: my-events-organizer.html
+      - link "Live Event Setup →" [ref=f4e12] [cursor=pointer]:
+        - /url: event-setup.html
+      - link "Switch role →" [ref=f4e13] [cursor=pointer]:
+        - /url: /login.html
+  - main [ref=f4e14]:
+    - generic [ref=f4e15]:
+      - generic [ref=f4e16]:
+        - generic [ref=f4e17]: ● CURRENT LIVE EVENT
+        - generic [ref=f4e18]: Suraj Complex IPL
+        - generic [ref=f4e19]: stays exactly as it is — unaffected by anything on this page
+      - generic [ref=f4e20]: + CREATING · UPCOMING
+    - generic [ref=f4e21]:
+      - paragraph [ref=f4e23]: CREATE → CONFIGURE → REVIEW → PUBLISH. This creates an independent, upcoming catalog event — it never touches whichever event is currently live, its zones, resources, or incident log. Launching an event as the live operational event is a separate step, not part of this wizard (see the Review step for why).
+      - generic [ref=f4e24]:
+        - generic [ref=f4e26]:
+          - generic [ref=f4e161] [cursor=pointer]:
+            - generic [ref=f4e162]: ✓
+            - generic [ref=f4e163]: 📋 Event Details
+          - generic [ref=f4e165] [cursor=pointer]:
+            - generic [ref=f4e166]: ✓
+            - generic [ref=f4e167]: 🏏 Sport & Competition
+          - generic [ref=f4e169] [cursor=pointer]:
+            - generic [ref=f4e170]: ✓
+            - generic [ref=f4e171]: 🗓 Date & Time
+          - generic [ref=f4e173] [cursor=pointer]:
+            - generic [ref=f4e174]: "4"
+            - generic [ref=f4e175]: 📍 Venue & Location
+          - generic [ref=f4e177] [cursor=pointer]:
+            - generic [ref=f4e178]: "5"
+            - generic [ref=f4e179]: 👥 Capacity
+          - generic [ref=f4e181] [cursor=pointer]:
+            - generic [ref=f4e182]: "6"
+            - generic [ref=f4e183]: 🎟 Ticket Tiers
+          - generic [ref=f4e185] [cursor=pointer]:
+            - generic [ref=f4e186]: "7"
+            - generic [ref=f4e187]: ✅ Review & Publish
+        - generic [ref=f4e55]:
+          - generic [ref=f4e56]:
+            - heading "📍 Venue & City" [level=3] [ref=f4e189]
+            - paragraph [ref=f4e190]: Venue name/address, city, and a map point — the same location picker Event Setup uses.
+            - generic [ref=f4e191]:
+              - generic [ref=f4e192]:
+                - generic [ref=f4e193]: Venue name
+                - textbox [ref=f4e194]: Suraj Complex
+              - generic [ref=f4e195]:
+                - generic [ref=f4e196]: City
+                - textbox [ref=f4e197]: Mumbai
+            - generic [ref=f4e199]:
+              - generic [ref=f4e200]: Venue address
+              - textbox [ref=f4e201]: Suraj Complex, Mumbai, Maharashtra
+            - generic [ref=f4e202]:
+              - generic [ref=f4e203]:
+                - generic [ref=f4e204]: State / Region
+                - button "Select a region ▾" [ref=f4e205] [cursor=pointer]:
+                  - text: Select a region
+                  - generic [ref=f4e206]: ▾
+              - button "📍 Pick venue on map" [ref=f4e207] [cursor=pointer]
+            - generic [ref=f4e208]: No point selected yet.
+          - generic [ref=f4e72]:
+            - button "← BACK" [ref=f4e160] [cursor=pointer]
+            - button "CONTINUE →" [active] [ref=f4e73] [cursor=pointer]

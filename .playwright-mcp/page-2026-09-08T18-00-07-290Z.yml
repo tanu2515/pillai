@@ -1,0 +1,44 @@
+- generic [active] [ref=f19e1]:
+  - navigation [ref=f19e2]:
+    - generic [ref=f19e3]:
+      - generic [ref=f19e4]:
+        - img "VYAVASTHA" [ref=f19e5]
+        - generic [ref=f19e6]: VYAVASTHA
+      - generic [ref=f19e7]:
+        - link "Home" [ref=f19e8] [cursor=pointer]:
+          - /url: events.html
+        - link "Explore" [ref=f19e9] [cursor=pointer]:
+          - /url: events.html?explore=1
+        - link "My Event" [ref=f19e10] [cursor=pointer]:
+          - /url: my-events.html
+        - link "Alerts" [ref=f19e11] [cursor=pointer]:
+          - /url: notifications.html
+      - link "👤" [ref=f19e12] [cursor=pointer]:
+        - /url: profile.html
+  - banner [ref=f19e13]:
+    - heading "Discover events near you" [level=1] [ref=f19e14]
+    - paragraph [ref=f19e15]: Find, register, and stay safe — from the moment you book to the moment you leave.
+  - generic [ref=f19e17]:
+    - generic: 🔍
+    - textbox "Search events, venues, cities..." [ref=f19e18]
+  - generic [ref=f19e20]:
+    - generic [ref=f19e21] [cursor=pointer]: All
+    - generic [ref=f19e22] [cursor=pointer]: College Event
+    - generic [ref=f19e23] [cursor=pointer]: Concert
+    - generic [ref=f19e24] [cursor=pointer]: Conference
+    - generic [ref=f19e25] [cursor=pointer]: Sports
+    - generic [ref=f19e26] [cursor=pointer]: Festival
+    - generic [ref=f19e27] [cursor=pointer]: Workshop
+  - generic [ref=f19e28]:
+    - generic [ref=f19e30]:
+      - heading "Upcoming events" [level=2] [ref=f19e31]
+      - link "See all →" [ref=f19e32] [cursor=pointer]:
+        - /url: events.html?explore=1
+    - heading "Popular events" [level=2] [ref=f19e34]
+    - heading "In this region" [level=2] [ref=f19e36]
+    - heading "Ending soon" [level=2] [ref=f19e38]
+    - generic [ref=f19e40]:
+      - heading "Live now" [level=2] [ref=f19e41]
+      - link "My Event →" [ref=f19e42] [cursor=pointer]:
+        - /url: my-events.html
+  - button "💬" [ref=f19e43] [cursor=pointer]

@@ -1,0 +1,156 @@
+- generic [active] [ref=f7e1]:
+  - generic [ref=f7e2]:
+    - complementary [ref=f7e3]:
+      - generic [ref=f7e4]:
+        - link [ref=f7e5] [cursor=pointer]:
+          - /url: /
+          - img "VYAVASTHA" [ref=f7e6]
+        - generic [ref=f7e7]: vyavastha
+      - generic [ref=f7e8]: MEGA-EVENT ORCHESTRATION
+      - navigation [ref=f7e9]:
+        - button "◉ Command Centre" [ref=f7e10] [cursor=pointer]
+        - button "◇ What-If Simulator" [ref=f7e11] [cursor=pointer]
+        - button "✓ Suggested Actions" [ref=f7e12] [cursor=pointer]
+        - button "⚠ Alerts" [ref=f7e13] [cursor=pointer]
+        - button "⌂ Hotels" [ref=f7e14] [cursor=pointer]
+        - button "⇄ Transport" [ref=f7e15] [cursor=pointer]
+        - button "▥ Analytics" [ref=f7e16] [cursor=pointer]
+        - button "☰ Incident Timeline" [ref=f7e17] [cursor=pointer]
+      - generic [ref=f7e18]: "Operator ModeEvent: Suraj Complex IPL"
+    - generic [ref=f7e19]:
+      - generic [ref=f7e21]:
+        - generic [ref=f7e23]:
+          - heading "VYAVASTHA — Suraj Complex IPL EVENT COMMAND OPERATOR" [level=1] [ref=f7e24]:
+            - generic [ref=f7e25]: VYAVASTHA — Suraj Complex IPL
+            - generic [ref=f7e26]: EVENT COMMAND OPERATOR
+          - paragraph [ref=f7e27]:
+            - generic [ref=f7e29]: 15:37 — crowd rush in progress
+        - generic [ref=f7e30]:
+          - generic [ref=f7e31]:
+            - button "Session Release ▾" [ref=f7e33] [cursor=pointer]:
+              - text: Session Release
+              - generic [ref=f7e34]: ▾
+            - button "Trigger Scenario" [ref=f7e35] [cursor=pointer]
+            - button "Skip Forward 1 Minute" [ref=f7e36] [cursor=pointer]
+            - button "Start Over" [ref=f7e37] [cursor=pointer]
+          - button "🚨 Emergency" [ref=f7e38] [cursor=pointer]
+          - link "Back Office →" [ref=f7e39] [cursor=pointer]:
+            - /url: /admin.html
+          - link "Open guest view →" [ref=f7e40] [cursor=pointer]:
+            - /url: /attendee.html
+          - link "Switch role →" [ref=f7e41] [cursor=pointer]:
+            - /url: /login.html
+      - main [ref=f7e42]:
+        - generic [ref=f7e43]:
+          - generic [ref=f7e44]:
+            - generic "Composite of every domain's live risk — see Event Health Score below for the breakdown" [ref=f7e45]:
+              - generic [ref=f7e46]: Event Health
+              - generic [ref=f7e47]: —
+            - generic "Sum of current_count across venue-domain zones, right now" [ref=f7e48]:
+              - generic [ref=f7e49]: Current Footfall
+              - generic [ref=f7e50]: —
+            - generic "Zones at HIGH or CRITICAL on the deterministic Risk Engine's composite score" [ref=f7e51]:
+              - generic [ref=f7e52]: High/Critical Zones
+              - generic [ref=f7e53]: —
+            - generic "Open + acknowledged alerts, this event" [ref=f7e54]:
+              - generic [ref=f7e55]: Open Alerts
+              - generic [ref=f7e56]: —
+            - generic "Average occupancy of transport-domain zones (bus/corridor/hub) for this event" [ref=f7e57]:
+              - generic [ref=f7e58]: Transport Pressure
+              - generic [ref=f7e59]: —
+          - generic [ref=f7e61]:
+            - heading "Event Health Score" [level=2] [ref=f7e62]
+            - generic [ref=f7e63]: composite of every domain's live risk · click for breakdown
+          - generic [ref=f7e65]:
+            - heading "Risk Register ⓘ" [level=2] [ref=f7e66]
+            - generic [ref=f7e67]:
+              - generic [ref=f7e68]: occupancy vs. threshold · trend + AI forecast · updates every 4 sec · click a risk for detail
+              - button "✨ AI Advisor" [ref=f7e69] [cursor=pointer]
+          - generic [ref=f7e71]:
+            - heading "Camera → Risk → Action ⓘ" [level=2] [ref=f7e72]
+            - generic [ref=f7e73]: live pipeline per zone · updates every 4 sec
+          - generic [ref=f7e75]:
+            - heading "Venue Flow Map" [level=2] [ref=f7e76]
+            - generic [ref=f7e77]:
+              - generic [ref=f7e78]:
+                - generic [ref=f7e80] [cursor=pointer]:
+                  - generic [ref=f7e81]:
+                    - generic [ref=f7e82]: Back Gate 2
+                    - generic "WARNING" [ref=f7e83]: 🟡
+                  - generic [ref=f7e84]: 100 / 100
+                  - generic [ref=f7e87]:
+                    - generic [ref=f7e88]: 100%
+                    - generic [ref=f7e89]: WARNING
+                - generic [ref=f7e91] [cursor=pointer]:
+                  - generic [ref=f7e92]:
+                    - generic [ref=f7e93]: Front Gate 2
+                    - generic "NORMAL" [ref=f7e94]: 🟢
+                  - generic [ref=f7e95]: 100 / 250
+                  - generic [ref=f7e98]:
+                    - generic [ref=f7e99]: 40%
+                    - generic [ref=f7e100]: NORMAL
+                - generic [ref=f7e102] [cursor=pointer]:
+                  - generic [ref=f7e103]:
+                    - generic [ref=f7e104]: Front Gate 1
+                    - generic "NORMAL" [ref=f7e105]: 🟢
+                  - generic [ref=f7e106]: 48 / 150
+                  - generic [ref=f7e109]:
+                    - generic [ref=f7e110]: 32%
+                    - generic [ref=f7e111]: NORMAL
+                - generic [ref=f7e113] [cursor=pointer]:
+                  - generic [ref=f7e114]:
+                    - generic [ref=f7e115]: Back Gate 1
+                    - generic "NORMAL" [ref=f7e116]: 🟢
+                  - generic [ref=f7e117]: 0 / 100
+                  - generic [ref=f7e119]:
+                    - generic [ref=f7e120]: 0%
+                    - generic [ref=f7e121]: NORMAL
+              - generic [ref=f7e122]:
+                - generic [ref=f7e123] [cursor=pointer]:
+                  - generic [ref=f7e124]:
+                    - generic [ref=f7e125]: Metro Station Point
+                    - generic "WARNING" [ref=f7e126]: 🟡
+                  - generic [ref=f7e127]: 176 / 220
+                  - generic [ref=f7e130]:
+                    - generic [ref=f7e131]: 80%
+                    - generic [ref=f7e132]: WARNING
+                - generic [ref=f7e133] [cursor=pointer]:
+                  - generic [ref=f7e134]:
+                    - generic [ref=f7e135]: Local Bus Hub
+                    - generic "WARNING" [ref=f7e136]: 🟡
+                  - generic [ref=f7e137]: 186 / 300
+                  - generic [ref=f7e140]:
+                    - generic [ref=f7e141]: 62%
+                    - generic [ref=f7e142]: WARNING
+                - generic [ref=f7e143] [cursor=pointer]:
+                  - generic [ref=f7e144]:
+                    - generic [ref=f7e145]: Landmark Hotel
+                    - generic "NORMAL" [ref=f7e146]: 🟢
+                  - generic [ref=f7e147]: 120 / 200
+                  - generic [ref=f7e150]:
+                    - generic [ref=f7e151]: 60%
+                    - generic [ref=f7e152]: NORMAL
+                - generic [ref=f7e153] [cursor=pointer]:
+                  - generic [ref=f7e154]:
+                    - generic [ref=f7e155]: Hotel Three Star
+                    - generic "NORMAL" [ref=f7e156]: 🟢
+                  - generic [ref=f7e157]: 0 / 20
+                  - generic [ref=f7e159]:
+                    - generic [ref=f7e160]: 0%
+                    - generic [ref=f7e161]: NORMAL
+                - generic [ref=f7e162] [cursor=pointer]:
+                  - generic [ref=f7e163]:
+                    - generic [ref=f7e164]: Main Hall
+                    - generic "NORMAL" [ref=f7e165]: 🟢
+                  - generic [ref=f7e166]: 0 / 600
+                  - generic [ref=f7e168]:
+                    - generic [ref=f7e169]: 0%
+                    - generic [ref=f7e170]: NORMAL
+          - generic [ref=f7e171]:
+            - generic [ref=f7e173]:
+              - heading "✨ AI Forecast Advisory" [level=2] [ref=f7e174]
+              - button "How Vyavastha AI works →" [ref=f7e175] [cursor=pointer]
+            - generic [ref=f7e177]:
+              - heading "Priority Actions" [level=2] [ref=f7e178]
+              - generic [ref=f7e179]: operator approval required
+  - button "💬" [ref=f7e180] [cursor=pointer]

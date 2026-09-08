@@ -1,0 +1,328 @@
+- generic [active] [ref=f17e1]:
+  - generic [ref=f17e3]:
+    - generic [ref=f17e4]:
+      - link [ref=f17e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=f17e6]
+      - generic [ref=f17e7]:
+        - heading "VYAVASTHA — Government / City Intelligence" [level=1] [ref=f17e8]
+        - paragraph [ref=f17e9]: City-wide mega-event intelligence — how events affect the city, not how to run one
+    - generic [ref=f17e10]:
+      - generic [ref=f17e11]: "Last updated: 23:26:36"
+      - link "Exit →" [ref=f17e13] [cursor=pointer]:
+        - /url: /
+  - main [ref=f17e14]:
+    - generic [ref=f17e15]:
+      - generic [ref=f17e370]:
+        - generic [ref=f17e371]: Active Events
+        - generic [ref=f17e372]: "1"
+        - generic [ref=f17e373]: 8 upcoming · 1 completed
+      - generic [ref=f17e374]:
+        - generic [ref=f17e375]: Total Attendance
+        - generic [ref=f17e376]: "19"
+        - generic [ref=f17e377]: all events, all time
+      - generic [ref=f17e378]:
+        - generic [ref=f17e379]: Live Crowd
+        - generic [ref=f17e380]: "248"
+        - generic [ref=f17e381]: current venue occupancy
+      - generic [ref=f17e382]:
+        - generic [ref=f17e383]: High/Critical Zones
+        - generic [ref=f17e384]: "0"
+        - generic [ref=f17e385]: across live events
+      - generic [ref=f17e386]:
+        - generic [ref=f17e387]: Hotel Demand
+        - generic [ref=f17e388]: 20%
+        - generic [ref=f17e389]: 3 hotels · 1720 rooms
+      - generic [ref=f17e390]:
+        - generic [ref=f17e391]: Transport Resources
+        - generic [ref=f17e392]: 20/20 bus, 10/10 medical, 20/20 staff
+        - generic [ref=f17e393]: 31 reference routes
+      - generic [ref=f17e394]:
+        - generic [ref=f17e395]: Open Incidents
+        - generic [ref=f17e396]: "0"
+        - generic [ref=f17e397]: across all events
+    - generic [ref=f17e187]:
+      - generic [ref=f17e398]:
+        - generic [ref=f17e399]: Highest-Risk Event
+        - generic [ref=f17e400]: Suraj Complex IPL
+        - generic [ref=f17e401]: 0 high/critical zones
+      - generic [ref=f17e402]:
+        - generic [ref=f17e403]: Most Pressured Zone
+        - generic [ref=f17e404]: Back Gate 1
+        - generic [ref=f17e405]: Suraj Complex IPL · score 50 · MODERATE
+      - generic [ref=f17e406]:
+        - generic [ref=f17e407]: Open Incidents
+        - generic [ref=f17e408]: "5"
+        - generic [ref=f17e409]: sum across all events
+      - generic [ref=f17e410]:
+        - generic [ref=f17e411]: Hotel Pressure
+        - generic [ref=f17e412]: Suraj Complex IPL
+        - generic [ref=f17e413]: 30% occupancy
+    - generic [ref=f17e44]:
+      - generic [ref=f17e45]:
+        - generic [ref=f17e46]:
+          - heading "City Event Overview" [level=2] [ref=f17e47]
+          - generic [ref=f17e48]: click a row for impact detail
+        - table [ref=f17e50]:
+          - rowgroup [ref=f17e51]:
+            - row [ref=f17e52]:
+              - columnheader "Event" [ref=f17e53]
+              - columnheader "Status" [ref=f17e54]
+              - columnheader "Attendance" [ref=f17e55]
+              - columnheader "Live Crowd" [ref=f17e56]
+              - columnheader "Risk" [ref=f17e57]
+              - columnheader "Hotel" [ref=f17e58]
+              - columnheader "Transport" [ref=f17e59]
+              - columnheader "Incidents" [ref=f17e60]
+          - rowgroup [ref=f17e204]:
+            - row [ref=f17e414] [cursor=pointer]:
+              - cell "Tata IPL" [ref=f17e415]
+              - cell "upcoming" [ref=f17e416]
+              - cell "0" [ref=f17e417]
+              - cell "—" [ref=f17e418]
+              - cell "n/a" [ref=f17e419]
+              - cell "n/a" [ref=f17e420]
+              - cell "n/a" [ref=f17e421]
+              - cell "0" [ref=f17e422]
+            - row [ref=f17e423] [cursor=pointer]:
+              - cell "Vyavastha Mega Cricket Championship" [ref=f17e424]
+              - cell "upcoming" [ref=f17e425]
+              - cell "0" [ref=f17e426]
+              - cell "—" [ref=f17e427]
+              - cell "n/a" [ref=f17e428]
+              - cell "n/a" [ref=f17e429]
+              - cell "n/a" [ref=f17e430]
+              - cell "0" [ref=f17e431]
+            - row [ref=f17e432] [cursor=pointer]:
+              - cell "Test Sports Event" [ref=f17e433]
+              - cell "upcoming" [ref=f17e434]
+              - cell "0" [ref=f17e435]
+              - cell "—" [ref=f17e436]
+              - cell "n/a" [ref=f17e437]
+              - cell "n/a" [ref=f17e438]
+              - cell "n/a" [ref=f17e439]
+              - cell "0" [ref=f17e440]
+            - row [ref=f17e441] [cursor=pointer]:
+              - cell "IPL Test Match" [ref=f17e442]
+              - cell "upcoming" [ref=f17e443]
+              - cell "1" [ref=f17e444]
+              - cell "—" [ref=f17e445]
+              - cell "n/a" [ref=f17e446]
+              - cell "n/a" [ref=f17e447]
+              - cell "n/a" [ref=f17e448]
+              - cell "0" [ref=f17e449]
+            - row [ref=f17e450] [cursor=pointer]:
+              - cell "Suraj Complex IPL LIVE" [ref=f17e451]:
+                - text: Suraj Complex IPL
+                - generic "LIVE" [ref=f17e452]
+              - cell "live" [ref=f17e453]
+              - cell "5" [ref=f17e454]
+              - cell "248" [ref=f17e455]
+              - cell "6 LOW 3 MODERATE" [ref=f17e456]
+              - cell "30%" [ref=f17e457]
+              - cell "71%" [ref=f17e458]
+              - cell "3" [ref=f17e459]
+            - row [ref=f17e460] [cursor=pointer]:
+              - cell "Mumbai Monsoon Music Night" [ref=f17e461]
+              - cell "completed" [ref=f17e462]
+              - cell "11" [ref=f17e463]
+              - cell "—" [ref=f17e464]
+              - cell "n/a" [ref=f17e465]
+              - cell "0%" [ref=f17e466]
+              - cell "0%" [ref=f17e467]
+              - cell "2" [ref=f17e468]
+            - row [ref=f17e469] [cursor=pointer]:
+              - cell "Goa Beach Festival" [ref=f17e470]
+              - cell "upcoming" [ref=f17e471]
+              - cell "0" [ref=f17e472]
+              - cell "—" [ref=f17e473]
+              - cell "n/a" [ref=f17e474]
+              - cell "n/a" [ref=f17e475]
+              - cell "n/a" [ref=f17e476]
+              - cell "0" [ref=f17e477]
+            - row [ref=f17e478] [cursor=pointer]:
+              - cell "Mumbai Freshers Party 2026" [ref=f17e479]
+              - cell "upcoming" [ref=f17e480]
+              - cell "1" [ref=f17e481]
+              - cell "—" [ref=f17e482]
+              - cell "n/a" [ref=f17e483]
+              - cell "n/a" [ref=f17e484]
+              - cell "n/a" [ref=f17e485]
+              - cell "0" [ref=f17e486]
+            - row [ref=f17e487] [cursor=pointer]:
+              - cell "Bengaluru Tech Conclave" [ref=f17e488]
+              - cell "upcoming" [ref=f17e489]
+              - cell "0" [ref=f17e490]
+              - cell "—" [ref=f17e491]
+              - cell "n/a" [ref=f17e492]
+              - cell "n/a" [ref=f17e493]
+              - cell "n/a" [ref=f17e494]
+              - cell "0" [ref=f17e495]
+            - row [ref=f17e496] [cursor=pointer]:
+              - cell "Chennai Music Fest" [ref=f17e497]
+              - cell "upcoming" [ref=f17e498]
+              - cell "0" [ref=f17e499]
+              - cell "—" [ref=f17e500]
+              - cell "n/a" [ref=f17e501]
+              - cell "n/a" [ref=f17e502]
+              - cell "n/a" [ref=f17e503]
+              - cell "0" [ref=f17e504]
+      - generic [ref=f17e61]:
+        - generic [ref=f17e62]:
+          - heading "City Risk" [level=2] [ref=f17e63]
+          - generic [ref=f17e64]: from the same Risk Engine as the Command Centre
+        - generic [ref=f17e65]:
+          - generic [ref=f17e506]:
+            - generic [ref=f17e507]: "0"
+            - generic [ref=f17e508]: CRITICAL
+          - generic [ref=f17e510]:
+            - generic [ref=f17e511]: "0"
+            - generic [ref=f17e512]: HIGH
+          - generic [ref=f17e514]:
+            - generic [ref=f17e515]: "3"
+            - generic [ref=f17e516]: MODERATE
+          - generic [ref=f17e518]:
+            - generic [ref=f17e519]: "6"
+            - generic [ref=f17e520]: LOW
+        - table [ref=f17e83]:
+          - rowgroup [ref=f17e84]:
+            - row [ref=f17e85]:
+              - columnheader "Event" [ref=f17e86]
+              - columnheader "Zone" [ref=f17e87]
+              - columnheader "Score" [ref=f17e88]
+              - columnheader "Level" [ref=f17e89]
+          - rowgroup [ref=f17e90]:
+            - row [ref=f17e521]:
+              - cell "Suraj Complex IPL" [ref=f17e522]
+              - cell "Back Gate 1" [ref=f17e523]
+              - cell "50" [ref=f17e524]
+              - cell "MODERATE" [ref=f17e525]
+            - row [ref=f17e526]:
+              - cell "Suraj Complex IPL" [ref=f17e527]
+              - cell "Metro Station Point" [ref=f17e528]
+              - cell "40" [ref=f17e529]
+              - cell "MODERATE" [ref=f17e530]
+            - row [ref=f17e531]:
+              - cell "Suraj Complex IPL" [ref=f17e532]
+              - cell "Local Bus Hub" [ref=f17e533]
+              - cell "31" [ref=f17e534]
+              - cell "MODERATE" [ref=f17e535]
+            - row [ref=f17e536]:
+              - cell "Suraj Complex IPL" [ref=f17e537]
+              - cell "Landmark Hotel" [ref=f17e538]
+              - cell "30" [ref=f17e539]
+              - cell "LOW" [ref=f17e540]
+            - row [ref=f17e541]:
+              - cell "Suraj Complex IPL" [ref=f17e542]
+              - cell "Front Gate 2" [ref=f17e543]
+              - cell "20" [ref=f17e544]
+              - cell "LOW" [ref=f17e545]
+            - row [ref=f17e546]:
+              - cell "Suraj Complex IPL" [ref=f17e547]
+              - cell "Front Gate 1" [ref=f17e548]
+              - cell "16" [ref=f17e549]
+              - cell "LOW" [ref=f17e550]
+            - row [ref=f17e551]:
+              - cell "Suraj Complex IPL" [ref=f17e552]
+              - cell "Hotel Three Star" [ref=f17e553]
+              - cell "0" [ref=f17e554]
+              - cell "LOW" [ref=f17e555]
+            - row [ref=f17e556]:
+              - cell "Suraj Complex IPL" [ref=f17e557]
+              - cell "Main Hall" [ref=f17e558]
+              - cell "0" [ref=f17e559]
+              - cell "LOW" [ref=f17e560]
+            - row [ref=f17e561]:
+              - cell "Suraj Complex IPL" [ref=f17e562]
+              - cell "Back Gate 2" [ref=f17e563]
+              - cell "0" [ref=f17e564]
+              - cell "LOW" [ref=f17e565]
+    - generic [ref=f17e136]:
+      - generic [ref=f17e137]:
+        - generic [ref=f17e138]:
+          - heading "City Map" [level=2] [ref=f17e139]
+          - generic [ref=f17e140]: event venues · high/critical zones · 🚌 transport · 🏥🚑👮🚒⛑️ℹ️ emergency services — real coordinates only
+        - generic [ref=f17e141]:
+          - generic:
+            - generic:
+              - img:
+                - generic:
+                  - generic [ref=f17e566] [cursor=pointer]
+                  - generic [ref=f17e567] [cursor=pointer]
+                  - generic [ref=f17e568] [cursor=pointer]
+            - generic:
+              - button "🚌"
+              - button "🚌"
+              - button "🏥"
+              - button "🚑"
+              - button "👮"
+              - button "🚒"
+              - button "⛑️"
+              - button "ℹ️"
+          - generic:
+            - generic [ref=f17e360]:
+              - button "Zoom in" [ref=f17e361] [cursor=pointer]: +
+              - button "Zoom out" [ref=f17e362] [cursor=pointer]: −
+            - generic [ref=f17e363]:
+              - link "Leaflet" [ref=f17e364] [cursor=pointer]:
+                - /url: https://leafletjs.com
+              - text: "| © OpenStreetMap contributors"
+        - paragraph [ref=f17e369]: 7 event(s) have no venue coordinates set — omitted, not guessed.
+      - generic [ref=f17e142]:
+        - generic [ref=f17e143]:
+          - heading "City Trends" [level=2] [ref=f17e144]
+          - generic [ref=f17e145]: real historical data only
+        - generic [ref=f17e146]: Crowd (live event) — total count per minute
+        - generic [ref=f17e150]:
+          - generic [ref=f17e151]: Bookings by day
+          - generic [ref=f17e155]: Alerts by day
+  - generic [ref=f17e570]:
+    - generic [ref=f17e571]:
+      - heading "Impact — Suraj Complex IPL" [level=3] [ref=f17e572]
+      - button "✕" [ref=f17e573] [cursor=pointer]
+    - generic [ref=f17e574]:
+      - generic [ref=f17e575]:
+        - generic [ref=f17e576]: Crowd
+        - generic [ref=f17e577]:
+          - generic [ref=f17e578]:
+            - generic [ref=f17e579]: Attendance
+            - generic [ref=f17e580]: "5"
+          - generic [ref=f17e581]:
+            - generic [ref=f17e582]: Checked In
+            - generic [ref=f17e583]: "0"
+          - generic [ref=f17e584]:
+            - generic [ref=f17e585]: Peak Occupancy
+            - generic [ref=f17e586]: 100%
+          - generic [ref=f17e587]:
+            - generic [ref=f17e588]: High-Risk Zones
+            - generic [ref=f17e589]: none
+      - paragraph [ref=f17e590]: 200 recent crowd readings tracked.
+      - generic [ref=f17e591]:
+        - generic [ref=f17e592]: Hospitality
+        - generic [ref=f17e593]:
+          - generic [ref=f17e594]:
+            - generic [ref=f17e595]: Hotels
+            - generic [ref=f17e596]: "2"
+          - generic [ref=f17e597]:
+            - generic [ref=f17e598]: Avg Occupancy
+            - generic [ref=f17e599]: 30%
+      - generic [ref=f17e600]: "Hotel Three Star: 0% · Landmark Hotel: 60%"
+      - generic [ref=f17e601]:
+        - generic [ref=f17e602]: Transport
+        - generic [ref=f17e603]:
+          - generic [ref=f17e604]:
+            - generic [ref=f17e605]: Zones
+            - generic [ref=f17e606]: "2"
+          - generic [ref=f17e607]:
+            - generic [ref=f17e608]: Avg Utilization
+            - generic [ref=f17e609]: 71%
+      - generic [ref=f17e610]:
+        - generic [ref=f17e611]: Emergency
+        - generic [ref=f17e613]:
+          - generic [ref=f17e614]: Open/Total Alerts
+          - generic [ref=f17e615]: 0/3
+      - paragraph [ref=f17e616]: no separate emergency-resource inventory exists beyond the shared bus/staff/medical Resource pool
+      - generic [ref=f17e617]:
+        - generic [ref=f17e618]: Business / Services
+        - paragraph [ref=f17e619]: unavailable — no restaurant/shop/service-provider table exists in the current schema
+      - generic [ref=f17e620]: "Event health score: 81.3"

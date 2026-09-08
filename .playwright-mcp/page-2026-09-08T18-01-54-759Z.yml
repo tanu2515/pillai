@@ -1,0 +1,21 @@
+- generic [active] [ref=f23e1]:
+  - navigation [ref=f23e2]:
+    - generic [ref=f23e3]:
+      - link "VYAVASTHA VYAVASTHA" [ref=f23e4] [cursor=pointer]:
+        - /url: events.html
+        - img "VYAVASTHA" [ref=f23e5]
+        - generic [ref=f23e6]: VYAVASTHA
+      - generic [ref=f23e7]:
+        - link "Home" [ref=f23e8] [cursor=pointer]:
+          - /url: events.html
+        - link "Explore" [ref=f23e9] [cursor=pointer]:
+          - /url: events.html?explore=1
+        - link "My Event" [ref=f23e10] [cursor=pointer]:
+          - /url: my-events.html
+        - link "Alerts" [ref=f23e11] [cursor=pointer]:
+          - /url: notifications.html
+        - link "ℹ️ How AI works" [ref=f23e12] [cursor=pointer]:
+          - /url: ai-architecture.html
+      - link "← Back" [ref=f23e13] [cursor=pointer]:
+        - /url: events.html
+  - generic [ref=f23e14]: Loading event…

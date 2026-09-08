@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Create New Event</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
+          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
+          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
+          high: "#F87171", danger: "#DC2626",
+        },
+        fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
+      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
+  }
+  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
+  input[type=text], input[type=number], input[type=email], input[type=date], input[type=time], textarea, select{
+    background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px;
+  }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color:#1976D2; }
+  select option{ background:#FFFFFF; color:#123B6D; }
+  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; filter:none; }
+  .btn-secondary{ background:#F1F5F9; color:#123B6D; font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:#E2E8F0; }
+  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; }
+  .dropdown{ position:relative; }
+  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:#1976D2; }
+  .dropdown-caret{ color:#64748B; font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
+  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid #E2E8F0; padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:#123B6D; border-radius:0; }
+  input.dropdown-search:focus{ outline:none; border-color:#1976D2; }
+  .dropdown-panel > div{ max-height:200px; overflow-y:auto; }
+  .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
+  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
+  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
+
+  .step-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 10px; border-radius:10px; cursor:pointer; transition:.15s; }
+  .step-row:hover{ background:#F1F5F9; }
+  .step-row.active{ background:rgba(25,118,210,.08); }
+  .step-num{ width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex:none; background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0; }
+  .step-row.active .step-num{ background:#1976D2; color:#fff; border-color:#1976D2; }
+  .step-row.done .step-num{ background:#20C997; color:#fff; border-color:#20C997; }
+  .step-label{ font-size:12.5px; font-weight:700; color:#123B6D; line-height:1.3; }
+  .step-row.active .step-label{ color:#1976D2; }
+  .step-sub{ font-size:10px; color:#94A3B8; margin-top:1px; }
+
+  .locked-panel{ text-align:center; padding:34px 20px; }
+  .locked-icon{ font-size:30px; opacity:.55; }
+
+  .phase-pill{ font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:20px; padding:3px 10px; }
+  .status-pill-inline{ font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#94A3B8; background:#F1F5F9; border:1px solid #E2E8F0; border-radius:20px; padding:2px 8px; display:inline-block; }
+  .toast{ position:fixed; bottom:20px; right:20px; background:#123B6D; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
+  .toast.show{ display:block; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+  .fade-up{ animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
+</style>
+</head>
+<body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
+
+<div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
+  <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 flex-wrap">
+    <div class="flex items-center gap-3">
+      <a href="/"><img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-8 h-8 rounded-lg" /></a>
+      <h1 class="text-sm font-extrabold m-0 tracking-[0.1em] uppercase flex items-center gap-2">
+        <span>CREATE NEW EVENT</span>
+        <span class="text-[9.5px] font-mono tracking-[.08em] normal-case bg-accent/10 border border-accent/30 text-accent rounded-full px-2 py-0.5">EVENT COMMAND OPERATOR</span>
+      </h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="my-events-organizer.html" class="text-xs text-accent hover:underline font-bold">← My Events</a>
+      <a href="event-setup.html" class="text-xs text-accent hover:underline font-bold">Live Event Setup →</a>
+      <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+    </div>
+  </div>
+</div>
+
+<main class="p-4 sm:p-6 max-w-6xl mx-auto">
+
+  <!-- Live-event distinction banner -->
+  <div class="row-card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap fade-up">
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="phase-pill" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);color:#16A34A;">● CURRENT LIVE EVENT</span>
+      <span class="text-sm font-bold" id="live-event-name">Loading…</span>
+      <span class="text-muted text-xs">stays exactly as it is — unaffected by anything on this page</span>
+    </div>
+    <span class="phase-pill" style="background:rgba(25,118,210,.08);border:1px solid rgba(25,118,210,.3);color:#1976D2;">+ CREATING · UPCOMING</span>
+  </div>
+
+  <!-- ================= WIZARD ================= -->
+  <div id="wizard-view" class="fade-up">
+    <div class="row-card p-4 mb-4">
+      <p class="text-xs text-muted leading-relaxed m-0">
+        <b class="text-ink">CREATE → CONFIGURE → REVIEW → PUBLISH.</b>
+        This creates an independent, <b>upcoming</b> catalog event — it never touches whichever event is currently live,
+        its zones, resources, or incident log. Launching an event as the live operational event is a separate step,
+        not part of this wizard (see the Review step for why).
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
+      <!-- Stepper -->
+      <div class="row-card p-2.5 h-fit lg:sticky lg:top-20">
+        <div id="stepper-list"></div>
+      </div>
+
+      <!-- Step content -->
+      <div class="row-card p-5 sm:p-6 min-h-[420px]">
+        <div id="step-content"></div>
+        <div class="flex items-center justify-between mt-6 pt-4 border-t" style="border-color:#E2E8F0;">
+          <button class="btn-secondary px-4 py-2 rounded-lg text-xs" id="btn-back" onclick="stepBack()">← BACK</button>
+          <button class="btn-primary px-5 py-2 rounded-lg text-xs" id="btn-next" onclick="stepNext()">CONTINUE →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SUCCESS ================= -->
+  <div id="success-view" class="hidden fade-up">
+    <div class="row-card p-8 text-center mb-4">
+      <div class="text-4xl mb-2">✅</div>
+      <h2 class="text-xl font-extrabold m-0 mb-1">Event created successfully</h2>
+      <p class="text-muted text-sm m-0 mb-3">
+        <span id="success-name" class="font-bold text-ink"></span> — Event ID <span id="success-id" class="font-mono"></span>
+      </p>
+      <span class="phase-pill" style="background:rgba(25,118,210,.08);border:1px solid rgba(25,118,210,.3);color:#1976D2;">STATUS: UPCOMING</span>
+      <p class="text-muted text-[11px] mt-4 max-w-lg mx-auto">
+        This event is now in the public catalog as upcoming. It is <b>not</b> the live operational event —
+        <span id="success-live-name" class="font-bold"></span> continues to run Command Centre exactly as before.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      <a id="success-view-link" href="#" target="_blank" class="row-card p-4 hover:border-accent transition no-underline text-ink" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">👁 View Event</div>
+        <div class="text-muted text-[11px]">Opens the real attendee-facing event page for this listing.</div>
+      </a>
+      <a id="success-tiers-link" href="#" target="_blank" class="row-card p-4 hover:border-accent transition no-underline text-ink" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">🎟 Manage Ticket Tiers</div>
+        <div class="text-muted text-[11px]">Opens the tiers you just created. Editing tiers after creation isn't wired up yet — view-only for now.</div>
+      </a>
+      <div class="row-card p-4" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">🏏 Edit Sport &amp; Competition</div>
+        <div class="text-muted text-[11px] mb-2">This one is genuinely live — updates the match record directly.</div>
+        <button class="btn-secondary px-3 py-1.5 rounded-lg text-[11px]" onclick="openSportsEditor()">EDIT DETAILS</button>
+      </div>
+      <div class="row-card p-4 opacity-60" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">📍 Configure Venue</div>
+        <div class="text-muted text-[11px]">Not available yet — there's no backend endpoint to edit a catalog event's venue after creation.</div>
+      </div>
+      <div class="row-card p-4 opacity-60" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">📈 Configure Crowd Monitoring</div>
+        <span class="status-pill-inline">Available after event activation</span>
+        <div class="text-muted text-[11px] mt-1">Operational configuration — not implemented in this build. See the Review step's note.</div>
+      </div>
+      <div class="row-card p-4 opacity-60" style="border-width:1px;">
+        <div class="font-bold text-sm mb-1">🎥 Configure Cameras</div>
+        <span class="status-pill-inline">Available after event activation</span>
+        <div class="text-muted text-[11px] mt-1">Operational configuration — camera feeds attach to gate zones, which only exist once an event is activated.</div>
+      </div>
+    </div>
+
+    <div id="sports-editor" class="row-card p-5 mb-4 hidden">
+      <h3 class="eyebrow mb-3">Edit Sport &amp; Competition</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3" id="sports-editor-fields"></div>
+      <div class="flex gap-2">
+        <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="saveSportsEditor()">SAVE</button>
+        <button class="btn-secondary px-4 py-2 rounded-lg text-xs" onclick="document.getElementById('sports-editor').classList.add('hidden')">CANCEL</button>
+      </div>
+      <div id="sports-editor-status" class="text-xs text-muted mt-2"></div>
+    </div>
+
+    <div class="flex gap-3 justify-center flex-wrap">
+      <a href="my-events-organizer.html" class="btn-primary px-5 py-2.5 rounded-lg text-xs no-underline inline-block">📋 GO TO MY EVENTS</a>
+      <button class="btn-secondary px-5 py-2.5 rounded-lg text-xs" onclick="resetWizard()">+ CREATE ANOTHER EVENT</button>
+      <a href="event-setup.html" class="btn-secondary px-5 py-2.5 rounded-lg text-xs no-underline text-ink inline-block">Live Event Setup →</a>
+    </div>
+  </div>
+</main>
+
+<!-- Map picker (venue location) -->
+<div id="map-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="row-card p-4 max-w-lg w-full">
+    <h2 class="text-sm font-extrabold m-0 mb-1">Pick the venue location</h2>
+    <p class="text-muted text-xs m-0 mb-3">Search a place name, or click the map directly, then confirm.</p>
+    <div class="flex gap-2 mb-2">
+      <input type="text" id="map-picker-search" placeholder="Search venue, address or city…" class="p-2.5 text-xs flex-1"
+             onkeydown="if(event.key==='Enter'){event.preventDefault(); searchMapPickerLocation();}" />
+      <button type="button" class="btn-secondary rounded-lg px-3 py-2 text-xs" onclick="searchMapPickerLocation()">SEARCH</button>
+    </div>
+    <div id="map-picker-search-status" class="text-[10.5px] text-muted mb-2"></div>
+    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+    <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
+      <span id="map-picker-coords" class="text-xs text-muted font-mono">No point selected yet — click the map.</span>
+      <div class="flex gap-2">
+        <button class="btn-secondary rounded-lg px-3 py-1.5 text-xs" onclick="closeMapPicker()">Cancel</button>
+        <button class="btn-primary rounded-lg px-3 py-1.5 text-xs" onclick="confirmMapPicker()">USE THIS LOCATION</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API = "";
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Request failed");
+  return data;
+}
+function getOperatorEmail() { try { return sessionStorage.getItem("vyavastha_email") || ""; } catch (e) { return ""; } }
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+// --- Data model --------------------------------------------------------
+const SPORTS = ["Cricket", "Football", "Hockey", "Kabaddi"];
+const COMPETITIONS = ["Domestic Trophy", "FIFA World Cup Qualifier", "Hockey India League", "ICC World Cup", "IPL", "ISL", "National Championship", "Pro Kabaddi League", "State League"];
+const STAGES = ["League", "Qualifier", "Semi-Final", "Final"];
+const GENDERS = ["Men's", "Women's"];
+
+function defaultForm() {
+  return {
+    name: "Vyavastha Mega Cricket Championship",
+    description: "A marquee T20 league fixture — Mumbai Indians vs Chennai Super Kings — at Suraj Complex, Mumbai.",
+    category: "Sports",
+    is_sport: true,
+    sport: "Cricket", competition: "IPL", stage: "League", tournament_gender: "Men's",
+    team_home: "Mumbai Indians", team_away: "Chennai Super Kings",
+    event_date: "2026-11-14", event_time: "19:30",
+    venue_name: "Suraj Complex", venue_address: "Suraj Complex, Mumbai, Maharashtra", city: "Mumbai",
+    region: null, venue_lat: null, venue_lng: null,
+    expected_attendance: 42000, safe_capacity: 45300,
+    tiers: [
+      { name: "General", price: 500, capacity: 30000, gate_name: "" },
+      { name: "Premium", price: 1500, capacity: 12000, gate_name: "" },
+      { name: "VIP", price: 5000, capacity: 3300, gate_name: "" },
+    ],
+    banner_emoji: "🏏",
+  };
+}
+let wizardForm = defaultForm();
+
+const STEPS = [
+  { key: "details", label: "Event Details", icon: "📋" },
+  { key: "sport", label: "Sport & Competition", icon: "🏏" },
+  { key: "datetime", label: "Date & Time", icon: "🗓" },
+  { key: "venue", label: "Venue & Location", icon: "📍" },
+  { key: "capacity", label: "Capacity", icon: "👥" },
+  { key: "tiers", label: "Ticket Tiers", icon: "🎟" },
+  { key: "review", label: "Review & Publish", icon: "✅" },
+];
+let stepIndex = 0;
+let regionList = [];
+let selectedRegionState = null;
+
+function renderStepper() {
+  document.getElementById("stepper-list").innerHTML = STEPS.map((s, i) => `
+    <div class="step-row ${i === stepIndex ? "active" : ""} ${i < stepIndex ? "done" : ""}" onclick="goToStep(${i})">
+      <div class="step-num">${i < stepIndex ? "✓" : i + 1}</div>
+      <div>
+        <div class="step-label">${s.icon} ${s.label}</div>
+        ${s.locked ? `<div class="step-sub">available after launch</div>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+function goToStep(i) { stepIndex = i; render(); }
+function stepBack() { if (stepIndex > 0) { stepIndex--; render(); } }
+function stepNext() {
+  if (!validateStep()) return;
+  if (stepIndex < STEPS.length - 1) { stepIndex++; render(); }
+}
+
+function validateStep() {
+  const key = STEPS[stepIndex].key;
+  if (key === "details" && !wizardForm.name.trim()) { alert("Event name is required."); return false; }
+  if (key === "venue") {
+    if (!selectedRegionState) { alert("Pick a state/region first."); return false; }
+    if (wizardForm.venue_lat == null || wizardForm.venue_lng == null) { alert("Pick the venue location on the map first."); return false; }
+  }
+  if (key === "capacity" && (!wizardForm.expected_attendance || !wizardForm.safe_capacity)) { alert("Enter expected attendance and safe capacity."); return false; }
+  if (key === "tiers") {
+    const total = wizardForm.tiers.reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
+    if (wizardForm.tiers.length === 0) { alert("Add at least one ticket tier."); return false; }
+    if (total > wizardForm.safe_capacity) { alert(`Ticket tiers total ${total.toLocaleString()}, which exceeds safe capacity ${wizardForm.safe_capacity.toLocaleString()}.`); return false; }
+  }
+  return true;
+}
+
+function field(label, inputHtml) {
+  return `<div><label class="block text-[10px] text-muted uppercase tracking-wide mb-1">${label}</label>${inputHtml}</div>`;
+}
+
+function renderStep() {
+  const key = STEPS[stepIndex].key;
+  const el = document.getElementById("step-content");
+  document.getElementById("btn-back").style.visibility = stepIndex === 0 ? "hidden" : "visible";
+  document.getElementById("btn-next").textContent = stepIndex === STEPS.length - 1 ? "PUBLISH EVENT →" : "CONTINUE →";
+  document.getElementById("btn-next").onclick = stepIndex === STEPS.length - 1 ? publishEvent : stepNext;
+
+  if (key === "details") {
+    el.innerHTML = `
+      <h3 class="text-base font-extrabold mb-1">📋 Event Details</h3>
+      <p class="text-muted text-xs mb-4">The headline info shown across the catalog, event page and search.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${field("Event name", `<input type="text" id="f-name" class="w-full p-2.5 text-sm" value="${esc(wizardForm.name)}" oninput="wizardForm.name=this.value" />`)}
+        ${field("Banner emoji", `<input type="text" id="f-emoji" maxlength="2" class="w-full p-2.5 text-sm" value="${esc(wizardForm.banner_emoji)}" oninput="wizardForm.banner_emoji=this.value" />`)}
+      </div>
+      <div class="mt-3">${field("Description", `<textarea id="f-desc" rows="3" class="w-full p-2.5 text-sm" oninput="wizardForm.description=this.value">${esc(wizardForm.description)}</textarea>`)}</div>
+      <label class="flex items-center gap-2 text-xs mt-3">
+        <input type="checkbox" id="f-issport" ${wizardForm.is_sport ? "checked" : ""} onchange="wizardForm.is_sport=this.checked; wizardForm.category = this.checked ? 'Sports' : ''; " />
+        This is a sports fixture (adds team/competition metadata in the next step)
+      </label>`;
+  } else if (key === "sport") {
+    if (!wizardForm.is_sport) {
+      el.innerHTML = `<div class="locked-panel"><div class="locked-icon">🏏</div><p class="text-sm text-muted mt-2">Not a sports event — skip this step, or go back and check "This is a sports fixture".</p></div>`;
+    } else {
+      el.innerHTML = `
+        <h3 class="text-base font-extrabold mb-1">🏏 Sport &amp; Competition</h3>
+        <p class="text-muted text-xs mb-4">Feeds the LSTM/GNN advisory forecast (Command Centre's "AI Forecast") once this event is live — values must match its trained vocabulary.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          ${field("Sport", selectHtml("f-sport", SPORTS, wizardForm.sport, "wizardForm.sport=this.value"))}
+          ${field("Competition", selectHtml("f-comp", COMPETITIONS, wizardForm.competition, "wizardForm.competition=this.value"))}
+          ${field("Stage", selectHtml("f-stage", STAGES, wizardForm.stage, "wizardForm.stage=this.value"))}
+          ${field("Gender", selectHtml("f-gender", GENDERS, wizardForm.tournament_gender, "wizardForm.tournament_gender=this.value"))}
+          ${field("Home team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
+          ${field("Away team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
+        </div>`;
+    }
+  } else if (key === "datetime") {
+    el.innerHTML = `
+      <h3 class="text-base font-extrabold mb-1">🗓 Date &amp; Time</h3>
+      <p class="text-muted text-xs mb-4">When doors open — shown on the catalog and event page.</p>
+      <div class="grid grid-cols-2 gap-3 max-w-sm">
+        ${field("Event date", `<input type="date" class="w-full p-2.5 text-sm" value="${esc(wizardForm.event_date)}" oninput="wizardForm.event_date=this.value" />`)}
+        ${field("Event time", `<input type="time" class="w-full p-2.5 text-sm" value="${esc(wizardForm.event_time)}" oninput="wizardForm.event_time=this.value" />`)}
+      </div>`;
+  } else if (key === "venue") {
+    el.innerHTML = `
+      <h3 class="text-base font-extrabold mb-1">📍 Venue &amp; City</h3>
+      <p class="text-muted text-xs mb-4">Venue name/address, city, and a map point — the same location picker Event Setup uses.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${field("Venue name", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_name)}" oninput="wizardForm.venue_name=this.value" />`)}
+        ${field("City", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.city)}" oninput="wizardForm.city=this.value" />`)}
+      </div>
+      <div class="mt-3">${field("Venue address", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_address)}" oninput="wizardForm.venue_address=this.value" />`)}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end mt-3">
+        <div class="dropdown" id="region-dropdown">
+          <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">State / Region</label>
+          <button type="button" class="dropdown-btn" id="region-btn" onclick="toggleRegionDropdown()">
+            ${selectedRegionState ? esc(selectedRegionState) : "Select a region"} <span class="dropdown-caret">▾</span>
+          </button>
+          <div class="dropdown-panel hidden" id="region-panel">
+            <input type="text" class="dropdown-search" placeholder="Search state or city…" oninput="renderRegionPanel(this.value)" />
+            <div id="region-items"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-secondary rounded-lg px-3 py-2.5 text-xs" onclick="openMapPicker()">📍 Pick venue on map</button>
+      </div>
+      <div class="text-[10.5px] text-muted mt-2 font-mono" id="venue-coords-status">
+        ${wizardForm.venue_lat != null ? `${wizardForm.venue_lat.toFixed(5)}, ${wizardForm.venue_lng.toFixed(5)}` : "No point selected yet."}
+      </div>`;
+    setTimeout(() => { if (!regionList.length) loadRegions(); }, 0);
+  } else if (key === "capacity") {
+    el.innerHTML = `
+      <h3 class="text-base font-extrabold mb-1">👥 Capacity</h3>
+      <p class="text-muted text-xs mb-4">Drives the risk engine's capacity-pressure term once this event is live, and the "Sold Out" state on the catalog.</p>
+      <div class="grid grid-cols-2 gap-3 max-w-sm">
+        ${field("Expected attendance", `<input type="number" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.expected_attendance}" oninput="wizardForm.expected_attendance=parseInt(this.value)||0" />`)}
+        ${field("Safe capacity", `<input type="number" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.safe_capacity}" oninput="wizardForm.safe_capacity=parseInt(this.value)||0" />`)}
+      </div>`;
+  } else if (key === "tiers") {
+    el.innerHTML = `
+      <h3 class="text-base font-extrabold mb-1">🎟 Ticket Tiers</h3>
+      <p class="text-muted text-xs mb-4">Each tier books against its own capacity pool (large tiers ≥10,000 also get a numbered-seat block).</p>
+      <div id="tiers-rows" class="flex flex-col gap-2"></div>
+      <button class="btn-secondary px-3 py-2 rounded-lg text-xs mt-2" onclick="addTierRow()">+ ADD TIER</button>
+      <div class="text-xs mt-3" id="tiers-total"></div>`;
+    renderTierRows();
+  } else if (key === "review") {
+    el.innerHTML = renderReview();
+  }
+}
+
+function selectHtml(id, options, value, onchange) {
+  return `<select id="${id}" class="w-full p-2.5 text-sm" onchange="${onchange}">${options.map(o => `<option value="${esc(o)}" ${o === value ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+}
+
+function esc(s) { return (s ?? "").toString().replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+// Operational configuration areas — deliberately shown (not hidden) so the
+// organizer sees the full future shape of event management, but none of
+// these collect data here: they all depend on this event becoming the
+// live operational event, which "Launch Live" doesn't implement yet
+// (Vyavastha runs one live event at a time — see the prior architecture
+// note). No inputs, no onclick handlers that pretend to save anything.
+const OPERATIONAL_AREAS = [
+  { icon: "🚪", title: "Zones / Gates", body: "Configured in Event Setup's \"Gates & Staff\" tab once this event is activated." },
+  { icon: "📈", title: "Crowd Management", body: "The deterministic Risk Engine scores an activated event's zones live." },
+  { icon: "🎥", title: "Cameras", body: "Webcam / CCTV-RTSP / uploaded video, attached per gate once gates exist." },
+  { icon: "🚌", title: "Transport", body: "Corridors and hubs, added the same way as gates once activated." },
+  { icon: "🏨", title: "Hospitality / Hotels", body: "Room inventory and price tiers, searched around the venue/city set above." },
+  { icon: "🚑", title: "Emergency Services", body: "Evacuation routing and the emergency directory, computed from live zones." },
+];
+
+function operationalConfigBlock() {
+  return `
+    <div class="flex items-center gap-2 mt-5 mb-2 flex-wrap">
+      <span class="eyebrow">🔧 Operational Configuration</span>
+      <span class="status-pill-inline">Available after event activation</span>
+    </div>
+    <p class="text-[11px] text-muted mb-3">
+      These areas are part of Vyavastha's full event-management flow and stay visible so you know what's next —
+      but none of them collect data on this page. They activate once this event becomes the live operational event
+      (a separate step, not implemented in this build — Vyavastha runs one live event at a time today).
+    </p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      ${OPERATIONAL_AREAS.map(a => `
+        <div class="row-card p-3 opacity-70">
+          <div class="text-sm font-bold mb-0.5">${a.icon} ${a.title}</div>
+          <div class="text-muted text-[10.5px] leading-snug">${a.body}</div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function addTierRow() { wizardForm.tiers.push({ name: "", price: 0, capacity: 0, gate_name: "" }); renderTierRows(); }
+function removeTierRow(i) { wizardForm.tiers.splice(i, 1); renderTierRows(); }
+function renderTierRows() {
+  document.getElementById("tiers-rows").innerHTML = wizardForm.tiers.map((t, i) => `
+    <div class="row-card p-3 flex items-center gap-2 flex-wrap">
+      <input type="text" placeholder="Tier name" class="p-2 text-xs flex-1 min-w-[110px]" value="${esc(t.name)}" oninput="wizardForm.tiers[${i}].name=this.value" />
+      <input type="number" placeholder="Price ₹" class="p-2 text-xs w-24 font-mono" value="${t.price}" oninput="wizardForm.tiers[${i}].price=parseFloat(this.value)||0; renderTierTotal();" />
+      <input type="number" placeholder="Capacity" class="p-2 text-xs w-28 font-mono" value="${t.capacity}" oninput="wizardForm.tiers[${i}].capacity=parseInt(this.value)||0; renderTierTotal();" />
+      <input type="text" placeholder="Gate label (optional)" class="p-2 text-xs w-40" value="${esc(t.gate_name)}" oninput="wizardForm.tiers[${i}].gate_name=this.value" />
+      <button class="btn-danger px-2.5 py-1.5 rounded-lg text-[11px]" onclick="removeTierRow(${i})">✕</button>
+    </div>`).join("");
+  renderTierTotal();
+}
+function renderTierTotal() {
+  const total = wizardForm.tiers.reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
+  const over = total > wizardForm.safe_capacity;
+  document.getElementById("tiers-total").innerHTML =
+    `Total tier capacity: <b class="${over ? "text-danger" : "text-ok"}">${total.toLocaleString()}</b> / safe capacity ${wizardForm.safe_capacity.toLocaleString()}` +
+    (over ? ` <span class="text-danger">— exceeds safe capacity</span>` : "");
+}
+
+function renderReview() {
+  const totalTierCap = wizardForm.tiers.reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
+  return `
+    <h3 class="text-base font-extrabold mb-1">✅ Review &amp; Publish</h3>
+    <p class="text-muted text-xs mb-4">Check everything below, then publish. This creates the event as <b>upcoming</b> — it will not go live automatically.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="eyebrow mb-1">Event</div>
+        <div class="font-bold">${wizardForm.banner_emoji} ${esc(wizardForm.name)}</div>
+        <div class="text-muted text-xs mt-0.5">${esc(wizardForm.description)}</div>
+      </div>
+      <div>
+        <div class="eyebrow mb-1">Sport &amp; Competition</div>
+        ${wizardForm.is_sport
+          ? `<div>${esc(wizardForm.sport)} · ${esc(wizardForm.competition)} · ${esc(wizardForm.stage)} · ${esc(wizardForm.tournament_gender)}</div>
+             <div class="text-muted text-xs mt-0.5">${esc(wizardForm.team_home)} vs ${esc(wizardForm.team_away)}</div>`
+          : `<div class="text-muted">Not a sports fixture</div>`}
+      </div>
+      <div>
+        <div class="eyebrow mb-1">Date &amp; Time</div>
+        <div>${wizardForm.event_date || "—"} ${wizardForm.event_time || ""}</div>
+      </div>
+      <div>
+        <div class="eyebrow mb-1">Venue</div>
+        <div>${esc(wizardForm.venue_name)}, ${esc(wizardForm.city)}</div>
+        <div class="text-muted text-xs mt-0.5">${esc(wizardForm.venue_address)}</div>
+        <div class="text-muted text-xs font-mono mt-0.5">${selectedRegionState || "—"} · ${wizardForm.venue_lat != null ? wizardForm.venue_lat.toFixed(5) + ", " + wizardForm.venue_lng.toFixed(5) : "no point picked"}</div>
+      </div>
+      <div>
+        <div class="eyebrow mb-1">Capacity</div>
+        <div>Expected: ${wizardForm.expected_attendance.toLocaleString()} · Safe capacity: ${wizardForm.safe_capacity.toLocaleString()}</div>
+      </div>
+      <div>
+        <div class="eyebrow mb-1">Ticket Tiers (${wizardForm.tiers.length})</div>
+        ${wizardForm.tiers.map(t => `<div>${esc(t.name)} — ₹${t.price.toLocaleString()} × ${parseInt(t.capacity).toLocaleString()}</div>`).join("")}
+        <div class="text-muted text-xs mt-0.5">Total: ${totalTierCap.toLocaleString()}</div>
+      </div>
+    </div>
+    ${operationalConfigBlock()}
+    <div id="publish-status" class="text-xs text-muted mt-3"></div>`;
+}
+
+// --- Region dropdown -----------------------------------------------------
+async function loadRegions() {
+  regionList = (await api("/api/regions")).sort((a, b) => a.state.localeCompare(b.state));
+  renderRegionPanel();
+}
+function renderRegionPanel(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? regionList.filter(r => r.state.toLowerCase().includes(q) || r.city.toLowerCase().includes(q)) : regionList;
+  const itemsEl = document.getElementById("region-items");
+  if (!itemsEl) return;
+  itemsEl.innerHTML = filtered.length ? filtered.map(r => `
+    <div class="dropdown-item ${r.state === selectedRegionState ? "selected" : ""}" onclick="selectRegion('${r.state.replace(/'/g, "\\'")}')">${r.state} — ${r.city}</div>
+  `).join("") : `<div class="dropdown-item text-muted">No match</div>`;
+}
+function selectRegion(state) {
+  selectedRegionState = state;
+  wizardForm.region = state;
+  document.getElementById("region-btn").innerHTML = `${esc(state)} <span class="dropdown-caret">▾</span>`;
+  document.getElementById("region-panel").classList.add("hidden");
+}
+function toggleRegionDropdown() {
+  const panel = document.getElementById("region-panel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) {
+    if (!regionList.length) loadRegions(); else renderRegionPanel();
+  }
+}
+document.addEventListener("click", (e) => {
+  const dd = document.getElementById("region-dropdown");
+  if (dd && !dd.contains(e.target)) document.getElementById("region-panel")?.classList.add("hidden");
+});
+
+// --- Map picker ------------------------------------------------------------
+let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null;
+function openMapPicker() {
+  mapPickerPoint = wizardForm.venue_lat != null ? { lat: wizardForm.venue_lat, lng: wizardForm.venue_lng } : null;
+  document.getElementById("map-picker-coords").textContent = mapPickerPoint ? `${mapPickerPoint.lat.toFixed(5)}, ${mapPickerPoint.lng.toFixed(5)}` : "No point selected yet — click the map.";
+  document.getElementById("map-picker-search").value = "";
+  document.getElementById("map-picker-search-status").textContent = "";
+  document.getElementById("map-picker-overlay").classList.remove("hidden");
+  setTimeout(() => {
+    const startLat = mapPickerPoint ? mapPickerPoint.lat : 19.023073;
+    const startLng = mapPickerPoint ? mapPickerPoint.lng : 73.090847;
+    if (!mapPickerInstance) {
+      mapPickerInstance = L.map("map-picker-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapPickerInstance);
+      mapPickerInstance.on("click", (e) => setMapPickerPoint(e.latlng.lat, e.latlng.lng));
+    }
+    mapPickerInstance.setView([startLat, startLng], mapPickerPoint ? 14 : 12);
+    mapPickerInstance.invalidateSize();
+    if (mapPickerPoint) setMapPickerPoint(mapPickerPoint.lat, mapPickerPoint.lng);
+  }, 50);
+}
+function setMapPickerPoint(lat, lng) {
+  mapPickerPoint = { lat, lng };
+  if (mapPickerMarker) mapPickerInstance.removeLayer(mapPickerMarker);
+  mapPickerMarker = L.marker([lat, lng]).addTo(mapPickerInstance);
+  document.getElementById("map-picker-coords").textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+async function searchMapPickerLocation() {
+  const query = document.getElementById("map-picker-search").value.trim();
+  const status = document.getElementById("map-picker-search-status");
+  if (!query) { status.textContent = "Type a place name to search."; return; }
+  status.textContent = "Searching…";
+  try {
+    const res = await fetch("/api/hotels/geocode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); status.textContent = b.detail || "Location not found."; return; }
+    const data = await res.json();
+    mapPickerInstance.setView([data.lat, data.lng], 15);
+    setMapPickerPoint(data.lat, data.lng);
+    status.textContent = data.display_name || "";
+  } catch (e) { status.textContent = "Search unavailable right now."; }
+}
+function closeMapPicker() { document.getElementById("map-picker-overlay").classList.add("hidden"); }
+function confirmMapPicker() {
+  if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
+  wizardForm.venue_lat = mapPickerPoint.lat; wizardForm.venue_lng = mapPickerPoint.lng;
+  document.getElementById("venue-coords-status").textContent = `${wizardForm.venue_lat.toFixed(5)}, ${wizardForm.venue_lng.toFixed(5)}`;
+  closeMapPicker();
+}
+
+// --- Publish ---------------------------------------------------------------
+let createdEventId = null;
+
+async function publishEvent() {
+  if (!validateStep()) return;
+  const status = document.getElementById("publish-status");
+  status.textContent = "Publishing…";
+  document.getElementById("btn-next").disabled = true;
+  try {
+    const body = {
+      name: wizardForm.name.trim(), description: wizardForm.description, event_date: wizardForm.event_date, event_time: wizardForm.event_time,
+      category: wizardForm.category || null, city: wizardForm.city, venue_name: wizardForm.venue_name, venue_address: wizardForm.venue_address,
+      banner_emoji: wizardForm.banner_emoji, is_featured: false, region: wizardForm.region,
+      expected_attendance: wizardForm.expected_attendance, safe_capacity: wizardForm.safe_capacity,
+      venue_lat: wizardForm.venue_lat, venue_lng: wizardForm.venue_lng,
+      owner_email: getOperatorEmail() || null,
+      tiers: wizardForm.tiers.map(t => ({ name: t.name, price: t.price, capacity: t.capacity, gate_name: t.gate_name || null })),
+    };
+    const created = await api("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    createdEventId = created.id;
+
+    if (wizardForm.is_sport) {
+      await api(`/api/events/${created.id}/sports-details`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sport: wizardForm.sport, competition: wizardForm.competition, tournament_gender: wizardForm.tournament_gender,
+          stage: wizardForm.stage, team_home: wizardForm.team_home, team_away: wizardForm.team_away,
+          owner_email: getOperatorEmail() || null,
+        }),
+      });
+    }
+    showSuccess(created);
+  } catch (e) {
+    status.textContent = "Something went wrong: " + e.message;
+    document.getElementById("btn-next").disabled = false;
+  }
+}
+
+function showSuccess(created) {
+  document.getElementById("wizard-view").classList.add("hidden");
+  document.getElementById("success-view").classList.remove("hidden");
+  document.getElementById("success-name").textContent = `${wizardForm.banner_emoji} ${created.name}`;
+  document.getElementById("success-id").textContent = "#" + created.id;
+  document.getElementById("success-live-name").textContent = document.getElementById("live-event-name").textContent;
+  document.getElementById("success-view-link").href = `event-detail.html?id=${created.id}`;
+  document.getElementById("success-tiers-link").href = `event-detail.html?id=${created.id}`;
+  document.getElementById("sports-editor").classList.add("hidden");
+}
+
+function resetWizard() {
+  wizardForm = defaultForm();
+  selectedRegionState = null;
+  createdEventId = null;
+  stepIndex = 0;
+  document.getElementById("success-view").classList.add("hidden");
+  document.getElementById("wizard-view").classList.remove("hidden");
+  document.getElementById("btn-next").disabled = false;
+  render();
+}
+
+// --- Sports editor (post-create, genuinely functional upsert) --------------
+function openSportsEditor() {
+  const box = document.getElementById("sports-editor");
+  box.classList.remove("hidden");
+  document.getElementById("sports-editor-fields").innerHTML = `
+    ${field("Sport", selectHtml("se-sport", SPORTS, wizardForm.sport, "wizardForm.sport=this.value"))}
+    ${field("Competition", selectHtml("se-comp", COMPETITIONS, wizardForm.competition, "wizardForm.competition=this.value"))}
+    ${field("Stage", selectHtml("se-stage", STAGES, wizardForm.stage, "wizardForm.stage=this.value"))}
+    ${field("Gender", selectHtml("se-gender", GENDERS, wizardForm.tournament_gender, "wizardForm.tournament_gender=this.value"))}
+    ${field("Home team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
+    ${field("Away team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
+  `;
+}
+async function saveSportsEditor() {
+  const status = document.getElementById("sports-editor-status");
+  status.textContent = "Saving…";
+  try {
+    await api(`/api/events/${createdEventId}/sports-details`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sport: wizardForm.sport, competition: wizardForm.competition, tournament_gender: wizardForm.tournament_gender,
+        stage: wizardForm.stage, team_home: wizardForm.team_home, team_away: wizardForm.team_away,
+        owner_email: getOperatorEmail() || null,
+      }),
+    });
+    status.textContent = "Saved.";
+    showToast("Sport & competition details updated.");
+  } catch (e) { status.textContent = "Failed: " + e.message; }
+}
+
+// --- Boot ----------------------------------------------------------------
+async function loadLiveEventBanner() {
+  try {
+    const ev = await api("/api/event");
+    document.getElementById("live-event-name").textContent = ev.configured ? ev.name : "No live event configured";
+  } catch (e) { document.getElementById("live-event-name").textContent = "Unavailable"; }
+}
+
+function render() { renderStepper(); renderStep(); }
+
+loadLiveEventBanner();
+render();
+</script>
+</body>
+</html>

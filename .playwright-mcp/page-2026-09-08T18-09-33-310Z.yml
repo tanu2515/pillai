@@ -1,0 +1,93 @@
+- generic [active] [ref=f26e1]:
+  - banner [ref=f26e2]:
+    - generic [ref=f26e3]:
+      - generic [ref=f26e4]:
+        - img "VYAVASTHA" [ref=f26e5]
+        - generic [ref=f26e6]:
+          - generic [ref=f26e7]: VYAVASTHA
+          - generic [ref=f26e8]: Service Provider Portal
+      - generic [ref=f26e9]:
+        - generic [ref=f26e10]: provider.demo@vyavastha.app
+        - button "SIGN OUT" [ref=f26e11] [cursor=pointer]
+  - main [ref=f26e12]:
+    - generic [ref=f26e20]:
+      - generic [ref=f26e21]:
+        - generic [ref=f26e22]:
+          - generic [ref=f26e23]: Property
+          - heading "Landmark Hotel" [level=1] [ref=f26e24]
+        - button "Switch property" [ref=f26e25] [cursor=pointer]
+      - generic [ref=f26e26]:
+        - generic [ref=f26e27]:
+          - generic [ref=f26e28]: Current accommodation
+          - generic [ref=f26e29]:
+            - generic [ref=f26e30]:
+              - generic [ref=f26e31]: Total rooms
+              - generic [ref=f26e32]: "200"
+            - generic [ref=f26e33]:
+              - generic [ref=f26e34]: Occupied
+              - generic [ref=f26e35]: "120"
+            - generic [ref=f26e36]:
+              - generic [ref=f26e37]: Available
+              - generic [ref=f26e38]: "80"
+          - generic [ref=f26e39]:
+            - generic [ref=f26e40]: Occupancy
+            - generic [ref=f26e41]: 60%
+          - generic [ref=f26e44]:
+            - generic [ref=f26e45]: Manual update
+            - generic [ref=f26e46]:
+              - spinbutton "Occupied rooms" [ref=f26e47]: "120"
+              - button "UPDATE" [ref=f26e48] [cursor=pointer]
+        - generic [ref=f26e49]:
+          - generic [ref=f26e50]: 🧠 Predicted situation
+          - generic [ref=f26e51]:
+            - generic [ref=f26e52]: LSTM forecast
+            - generic [ref=f26e53]:
+              - generic [ref=f26e54]:
+                - generic [ref=f26e55]: +15m
+                - generic [ref=f26e56]: 57%
+              - generic [ref=f26e57]:
+                - generic [ref=f26e58]: +30m
+                - generic [ref=f26e59]: 74.5%
+              - generic [ref=f26e60]:
+                - generic [ref=f26e61]: +60m
+                - generic [ref=f26e62]: 95.8%
+            - paragraph [ref=f26e63]: LSTM forecast trained on this property's own occupancy history (camera/check-in/manual counts, whichever feeds this zone) projects occupancy rising from 57.0% (+15m) to 95.8% (+60m).
+      - generic [ref=f26e64]:
+        - generic [ref=f26e65]:
+          - generic [ref=f26e66]:
+            - generic [ref=f26e67]: Nearby events
+            - heading "Opt in to coordinate with an event" [level=2] [ref=f26e68]
+          - button "REFRESH" [ref=f26e69] [cursor=pointer]
+        - paragraph [ref=f26e70]: Events discovered within 30 km of your property. Opting in signals your rooms as available to that event's attendees and organiser.
+        - generic [ref=f26e71]:
+          - generic [ref=f26e72]:
+            - generic [ref=f26e73]:
+              - generic [ref=f26e74]: Suraj Complex IPL
+              - generic [ref=f26e75]: 2.8 km
+            - generic [ref=f26e76]: venue TBD · date TBD
+            - generic [ref=f26e77]: Sports · 500 expected · live
+            - generic [ref=f26e78]:
+              - button "✓ Opted in" [ref=f26e79] [cursor=pointer]
+              - button "Withdraw" [ref=f26e80] [cursor=pointer]
+          - generic [ref=f26e81]:
+            - generic [ref=f26e82]:
+              - generic [ref=f26e83]: Vyavastha Mega Cricket Championship
+              - generic [ref=f26e84]: 2.8 km
+            - generic [ref=f26e85]: Suraj Complex · 2026-11-14 19:30
+            - generic [ref=f26e86]: Sports · 42000 expected · upcoming
+            - button "Opt in" [ref=f26e88] [cursor=pointer]
+          - generic [ref=f26e89]:
+            - generic [ref=f26e90]:
+              - generic [ref=f26e91]: Tata IPL
+              - generic [ref=f26e92]: 27.4 km
+            - generic [ref=f26e93]: Wankhede Stadium · 2026-11-14 19:30
+            - generic [ref=f26e94]: Sports · 42000 expected · upcoming
+            - button "Opt in" [ref=f26e96] [cursor=pointer]
+      - generic [ref=f26e97]:
+        - generic [ref=f26e98]: 📊 Event service report
+        - heading "How well did we serve an event?" [level=2] [ref=f26e99]
+        - generic [ref=f26e100]:
+          - combobox [ref=f26e101]:
+            - option "Select an event…" [selected]
+            - option "Suraj Complex IPL"
+          - button "GENERATE REPORT" [ref=f26e102] [cursor=pointer]

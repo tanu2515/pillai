@@ -1,0 +1,51 @@
+- generic [active] [ref=f14e1]:
+  - generic [ref=f14e3]:
+    - generic [ref=f14e4]:
+      - link [ref=f14e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=f14e6]
+      - heading "MY EVENTS EVENT COMMAND OPERATOR" [level=1] [ref=f14e7]:
+        - generic [ref=f14e8]: MY EVENTS
+        - generic [ref=f14e9]: EVENT COMMAND OPERATOR
+    - generic [ref=f14e10]:
+      - link "Live Event Setup →" [ref=f14e11] [cursor=pointer]:
+        - /url: event-setup.html
+      - link "Switch role →" [ref=f14e12] [cursor=pointer]:
+        - /url: /login.html
+  - main [ref=f14e13]:
+    - generic [ref=f14e14]:
+      - generic [ref=f14e15]:
+        - paragraph [ref=f14e17]: Signed in as tataipl@gmail.com — showing only events you created.
+        - link "+ CREATE NEW EVENT" [ref=f14e18] [cursor=pointer]:
+          - /url: create-event.html
+      - generic [ref=f14e19]:
+        - generic [ref=f14e20]: 🔴 Live (0)
+        - paragraph [ref=f14e23]: No live event right now.
+        - generic [ref=f14e24]: 🗓 Upcoming (1)
+        - link "🏏 Tata IPL UPCOMING Sports Date 2026-11-14 · 19:30 Venue Wankhede Stadium City Mumbai Expected attendance 42,000 Capacity 45,300 Owner tataipl@gmail.com View Event →" [ref=f14e28] [cursor=pointer]:
+          - /url: event-detail.html?id=17
+          - generic [ref=f14e29]:
+            - generic [ref=f14e30]: 🏏 Tata IPL
+            - generic [ref=f14e31]: UPCOMING
+          - generic [ref=f14e32]: Sports
+          - generic [ref=f14e33]:
+            - generic [ref=f14e34]: Date
+            - generic [ref=f14e35]: 2026-11-14 · 19:30
+          - generic [ref=f14e36]:
+            - generic [ref=f14e37]: Venue
+            - generic [ref=f14e38]: Wankhede Stadium
+          - generic [ref=f14e39]:
+            - generic [ref=f14e40]: City
+            - generic [ref=f14e41]: Mumbai
+          - generic [ref=f14e42]:
+            - generic [ref=f14e43]: Expected attendance
+            - generic [ref=f14e44]: 42,000
+          - generic [ref=f14e45]:
+            - generic [ref=f14e46]: Capacity
+            - generic [ref=f14e47]: 45,300
+          - generic [ref=f14e48]:
+            - generic [ref=f14e49]: Owner
+            - generic [ref=f14e50]: tataipl@gmail.com
+          - generic [ref=f14e51]: View Event →
+        - generic [ref=f14e52]: ✅ Completed (0)
+        - paragraph [ref=f14e55]: No completed events yet.
