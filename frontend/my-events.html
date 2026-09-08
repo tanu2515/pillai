@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>VYAVASTHA — My Events</title>
+<title>VYAVASTHA — My Event</title>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,17 +57,16 @@
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link">Home</a>
       <a href="events.html?explore=1" class="nav-link">Explore</a>
-      <a href="my-events.html" class="nav-link active">My Events</a>
+      <a href="my-events.html" class="nav-link active">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
-      <a href="attendee.html" class="nav-link">Live Status</a>
     </div>
     <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
   </div>
 </nav>
 
 <header class="max-w-7xl mx-auto px-6 lg:px-10 pt-8 fade-up">
-  <h1 class="text-2xl font-extrabold m-0">My Events</h1>
-  <p class="text-muted text-sm mt-1">Every registration, in one place.</p>
+  <h1 class="text-2xl font-extrabold m-0">My Event</h1>
+  <p class="text-muted text-sm mt-1">Everything about your bookings, in one place.</p>
 </header>
 
 <div id="noemail" class="max-w-md mx-auto mt-8 card p-5 hidden fade-up">
@@ -82,8 +81,36 @@
     <div class="tab-btn" data-tab="active" onclick="switchTab(this)">Active</div>
     <div class="tab-btn" data-tab="past" onclick="switchTab(this)">Past</div>
   </div>
-  <section id="notif-box" class="card p-4 mt-6 hidden fade-up"></section>
   <section id="bookings-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6"></section>
+
+  <section id="live-crowd-box" class="card p-4 mt-6 hidden fade-up"></section>
+
+  <section id="live-info" class="mt-6 hidden fade-up">
+    <section class="card p-5 mb-5">
+      <h2 class="eyebrow mb-3">🗺️ Inside the venue — accessibility &amp; emergency exits</h2>
+      <label class="flex items-center gap-2 text-sm mb-3">
+        <input type="checkbox" id="accessible-toggle" onchange="onAccessibleToggle()" />
+        I need a wheelchair-accessible exit
+      </label>
+      <div id="evac-status" class="text-sm"></div>
+    </section>
+    <section class="card p-5 mb-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="eyebrow">🏨 More hotels near the venue</h2>
+        <button class="qr-btn px-3 py-1.5 rounded-lg text-[10px]" onclick="loadUserHotels(liveEventId)">REFRESH</button>
+      </div>
+      <div id="user-hotels" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </section>
+    <section class="card p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="eyebrow">🚌 City transport (not event-specific)</h2>
+        <button class="qr-btn px-3 py-1.5 rounded-lg text-[10px]" onclick="loadUserTransport(liveEventId)">REFRESH</button>
+      </div>
+      <div id="user-transport" class="text-sm"></div>
+    </section>
+  </section>
+
+  <section id="notif-box" class="card p-4 mt-6 hidden fade-up"></section>
 </div>
 
 <div class="modal-veil" id="qr-veil" onclick="if(event.target===this) closeQr()">
@@ -101,7 +128,13 @@ let bookingsData = { upcoming: [], active: [], past: [] };
 let activeTab = "upcoming";
 let plansByCode = {};
 let notifs = [];
+let anyLiveActive = false;
+let liveEventId = null;
+let cachedLocation = null, locationRequested = false;
 const LEVEL_HEX = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" };
+// Attendee-friendly words instead of raw risk-engine terminology — the
+// underlying level/number is unchanged, only the label shown is translated.
+const LEVEL_LABEL = { LOW: "Quiet", MODERATE: "Moderate crowd", HIGH: "Busy", CRITICAL: "Very busy" };
 const NOTIF_ICON = { CRITICAL: "🔴", HIGH: "🟠", MEDIUM: "🟡", LOW: "🟢" };
 
 function getEmail() { try { return sessionStorage.getItem("vyavastha_email") || ""; } catch (e) { return ""; } }
@@ -143,30 +176,157 @@ function planBlockHtml(plan) {
   if (!plan || !plan.is_live) return "";
   const navLink = (lat, lng) => lat != null && lng != null
     ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener" class="text-accent text-[10px] font-bold no-underline">🧭 Navigate</a>` : "";
-  const rows = [];
-  if (plan.gate) rows.push(`<div class="flex items-center justify-between py-1"><span class="text-[10.5px]">Gate: <b>${plan.gate.name}</b> · <span style="color:${LEVEL_HEX[plan.gate.level]}">${plan.gate.level}</span></span>${navLink(plan.gate.lat, plan.gate.lng)}</div>`);
-  if (plan.hotel) rows.push(`<div class="flex items-center justify-between py-1"><span class="text-[10.5px]">Hotel: <b>${plan.hotel.name}</b></span>${navLink(plan.hotel.lat, plan.hotel.lng)}</div>`);
-  if (plan.transport) rows.push(`<div class="text-[10.5px] text-muted py-1">🚍 ${plan.transport.recommendation}</div>`);
-  if (plan.arrival) rows.push(`<div class="text-[10.5px] text-muted py-1">🕒 ${plan.arrival.recommendation}</div>`);
-  if (!rows.length) return "";
-  return `<div class="mt-3 pt-3" style="border-top:1px solid #E7EEF7;"><div class="eyebrow mb-1" style="font-size:9.5px;">Your Plan</div>${rows.join("")}</div>`;
+  let html = "";
+  if (plan.gate) {
+    html += `<div class="mt-3 pt-3" style="border-top:1px solid #E7EEF7;">
+      <div class="eyebrow mb-1" style="font-size:9.5px;">📍 Your Gate</div>
+      <div class="flex items-center justify-between py-1">
+        <span class="text-[10.5px]">${plan.gate.name} · <span style="color:${LEVEL_HEX[plan.gate.level]}">${LEVEL_LABEL[plan.gate.level] || plan.gate.level}</span></span>
+        ${navLink(plan.gate.lat, plan.gate.lng)}
+      </div>
+    </div>`;
+  }
+  const journeyRows = [];
+  if (plan.hotel) journeyRows.push(`<div class="flex items-center justify-between py-1"><span class="text-[10.5px]">🏨 <b>${plan.hotel.name}</b></span>${navLink(plan.hotel.lat, plan.hotel.lng)}</div>`);
+  if (plan.transport) journeyRows.push(`<div class="text-[10.5px] text-muted py-1">🚍 ${plan.transport.recommendation}</div>`);
+  if (plan.arrival) journeyRows.push(`<div class="text-[10.5px] text-muted py-1">🕒 ${plan.arrival.recommendation}</div>`);
+  if (journeyRows.length) {
+    html += `<div class="mt-3 pt-3" style="border-top:1px solid #E7EEF7;"><div class="eyebrow mb-1" style="font-size:9.5px;">🧭 Your Journey</div>${journeyRows.join("")}</div>`;
+  }
+  return html;
+}
+
+async function renderLiveCrowd() {
+  const box = document.getElementById("live-crowd-box");
+  if (activeTab !== "active" || !anyLiveActive) { box.classList.add("hidden"); return; }
+  try {
+    const res = await api("/api/ai/attendee-advisory");
+    if (res.text) {
+      box.classList.remove("hidden");
+      box.innerHTML = `<div class="eyebrow mb-1">🔴 Live Crowd</div><p class="text-sm text-accent m-0">✨ ${res.text}</p>`;
+    } else {
+      box.classList.remove("hidden");
+      box.innerHTML = `<div class="eyebrow mb-1">🔴 Live Crowd</div><p class="text-sm text-muted m-0">All gates are moving smoothly right now.</p>`;
+    }
+  } catch (e) { box.classList.add("hidden"); }
 }
 
 function renderNotifs() {
   const box = document.getElementById("notif-box");
   if (activeTab !== "active" || !notifs.length) { box.classList.add("hidden"); return; }
+  const unread = notifs.filter(n => !n.is_read).length;
   box.classList.remove("hidden");
-  box.innerHTML = `<div class="eyebrow mb-2">🔔 Notifications</div>` + notifs.map(n => `
-    <div class="flex items-start gap-2 py-1 cursor-pointer" onclick="markNotifRead(${n.id})">
-      <span class="text-sm">${NOTIF_ICON[n.priority] || "🟡"}</span>
-      <span class="text-xs">${n.message}</span>
-    </div>`).join("");
+  box.innerHTML = `
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <span class="text-sm">🔔 <b>${unread}</b> unread alert${unread === 1 ? "" : "s"} for attendees</span>
+      <a href="notifications.html" class="text-accent text-xs font-bold no-underline">View all in Alerts →</a>
+    </div>`;
 }
 
-async function markNotifRead(id) {
-  await api(`/api/notifications/${id}/read`, { method: "POST" });
-  notifs = notifs.filter(n => n.id !== id);
-  renderNotifs();
+// --- Live-event info (accessibility/evacuation, hotels, transport) --------
+// Only shown when the attendee's own active booking is for the currently
+// live event (plan.is_live from /api/my-plan) — never "whatever event
+// happens to be live globally" independent of what this attendee booked.
+
+function getMyLocation() {
+  if (cachedLocation || locationRequested) return Promise.resolve(cachedLocation);
+  locationRequested = true;
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { cachedLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(cachedLocation); },
+      () => resolve(null),
+      { timeout: 4000 },
+    );
+  });
+}
+
+async function onAccessibleToggle() {
+  const checked = document.getElementById("accessible-toggle").checked;
+  if (checked) {
+    const loc = await getMyLocation();
+    await api("/api/attendee/accessibility-request", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: getEmail() || null, ...(loc ? { lat: loc.lat, lng: loc.lng } : {}) }),
+    });
+  }
+  await renderEvacuation(liveEventId);
+}
+
+async function renderEvacuation(eventId) {
+  const el = document.getElementById("evac-status");
+  if (!el) return;
+  const accessibleOnly = document.getElementById("accessible-toggle").checked;
+  const loc = await getMyLocation();
+  const locQuery = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : "";
+  const eventQuery = eventId != null ? `&event_id=${eventId}` : "";
+  const data = await api(`/api/evacuation-routes?accessible_only=${accessibleOnly}${locQuery}${eventQuery}`);
+  const top = data.routes[0];
+  const exitLine = top
+    ? `<b>${top.name}</b>${top.distance_km != null ? ` (${top.distance_km} km)` : ""}${top.is_accessible ? " ♿" : ""}`
+    : null;
+  if (data.emergency_active) {
+    el.innerHTML = `<span class="text-danger font-bold">🚨 Emergency near ${data.emergency_zone || "the venue"}.</span> ` +
+      (exitLine ? `Nearest safe exit: ${exitLine}.` : `No safe exit currently computed — follow staff instructions.`);
+  } else if (exitLine) {
+    el.innerHTML = `Recommended exit: ${exitLine}.`;
+  } else {
+    el.innerHTML = accessibleOnly
+      ? `<span class="text-muted">No accessible exit configured yet — ask a staff member for assistance.</span>`
+      : `<span class="text-muted">No gate data yet.</span>`;
+  }
+}
+
+async function loadUserHotels(eventId) {
+  const el = document.getElementById("user-hotels");
+  if (!el) return;
+  el.innerHTML = '<div class="text-xs text-muted">Loading live room availability…</div>';
+  try {
+    const data = await api(`/api/attendee/hotels${eventId != null ? `?event_id=${eventId}` : ""}`);
+    el.innerHTML = data.hotels.length ? data.hotels.slice(0, 4).map(h => {
+      const live = h.last_updated ? "LIVE" : "DEMO";
+      return `<div class="p-3 rounded-xl" style="border:1px solid #E7EEF7;">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold text-sm">🏨 ${h.name}</span>
+          <span class="text-[10px] text-muted">${live}</span>
+        </div>
+        <div class="text-[10.5px] text-muted mt-1">${h.available_rooms} rooms free${h.distance_km != null ? ` · ${h.distance_km} km from venue` : ""}</div>
+      </div>`;
+    }).join("") : '<div class="text-xs text-muted">No connected hotel inventory yet.</div>';
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Live hotel data is temporarily unavailable.</div>'; }
+}
+
+async function loadUserTransport(eventId) {
+  const el = document.getElementById("user-transport");
+  if (!el) return;
+  el.innerHTML = '<div class="text-xs text-muted">Loading transport options…</div>';
+  try {
+    const data = await api(`/api/attendee/transport${eventId != null ? `?event_id=${eventId}` : ""}`);
+    const local = data.local || {};
+    const buses = (local.buses && local.buses.city) || [];
+    const trains = (local.trains && local.trains.suburban) || [];
+    const flights = (data.flights && data.flights.arrivals) || [];
+    let html = "";
+    if (buses.length) html += `<div class="mb-2"><div class="eyebrow mb-1" style="font-size:9.5px;">🚌 Buses (citywide)</div>${buses.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.route}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    if (trains.length) html += `<div class="mb-2"><div class="eyebrow mb-1" style="font-size:9.5px;">🚆 Trains (citywide)</div>${trains.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.line}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    if (flights.length) html += `<div><div class="eyebrow mb-1" style="font-size:9.5px;">✈️ Arrivals (citywide)</div>${flights.slice(0, 3).map(x => `<div class="flex justify-between py-1 text-xs"><span>${x.airline}</span><span class="font-mono">${x.arrives_in_min} min</span></div>`).join("")}</div>`;
+    html += `<div class="text-[10px] text-muted mt-2">Buses/trains/flights above are city/region-level schedules (illustrative, not live operator tracking) — not specific to this event. Only bus-dispatch predictions below are computed for this event's own transport zones.</div>`;
+    el.innerHTML = html || '<div class="text-xs text-muted">No transport feed available for this event.</div>';
+  } catch (e) { el.innerHTML = '<div class="text-xs text-muted">Transport data is temporarily unavailable.</div>'; }
+}
+
+function renderLiveInfo() {
+  const box = document.getElementById("live-info");
+  if (activeTab !== "active" || !anyLiveActive) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  const toggle = document.getElementById("accessible-toggle");
+  if (!toggle.dataset.defaulted) {
+    toggle.dataset.defaulted = "1";
+    try { toggle.checked = localStorage.getItem("vyavastha_pref_accessible") === "1"; } catch (e) {}
+  }
+  renderEvacuation(liveEventId);
+  loadUserHotels(liveEventId);
+  loadUserTransport(liveEventId);
 }
 
 function render() {
@@ -174,6 +334,8 @@ function render() {
   document.getElementById("bookings-list").innerHTML = list.length
     ? list.map(bookingCard).join("")
     : `<div class="text-center text-muted text-xs py-16 col-span-full">No ${activeTab} events yet.</div>`;
+  renderLiveCrowd();
+  renderLiveInfo();
   renderNotifs();
 }
 
@@ -201,10 +363,20 @@ async function load() {
       try { return [b.code, await api(`/api/my-plan?code=${b.code}`)]; } catch (e) { return null; }
     }));
     plansByCode = Object.fromEntries(entries.filter(Boolean));
-    try { notifs = (await api("/api/notifications?role=Attendee")).slice(0, 3); } catch (e) { notifs = []; }
+    const livePlan = Object.values(plansByCode).find(p => p && p.is_live);
+    anyLiveActive = !!livePlan;
+    liveEventId = livePlan ? livePlan.event_id : null;
+    try {
+      // Scoped to the attendee's own live event (falls back to including
+      // event-agnostic system notices) — never another event's feed mixed in.
+      const notifQuery = liveEventId != null ? `&event_id=${liveEventId}` : "";
+      notifs = await api(`/api/notifications?role=Attendee${notifQuery}`);
+    } catch (e) { notifs = []; }
   } else {
     plansByCode = {};
     notifs = [];
+    anyLiveActive = false;
+    liveEventId = null;
   }
   render();
 }

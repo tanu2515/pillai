@@ -12,6 +12,10 @@ export default function Profile() {
   const [phone, setPhone] = useState("");
   const [apiBase, setApiBaseInput] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
+  const [accessiblePref, setAccessiblePref] = useState(false);
+  const [showPrefs, setShowPrefs] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showDevOptions, setShowDevOptions] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -19,6 +23,7 @@ export default function Profile() {
       setName((await AsyncStorage.getItem("vyavastha_profile_name")) || "");
       setPhone((await AsyncStorage.getItem("vyavastha_profile_phone")) || "");
       setApiBaseInput(await getApiBase());
+      setAccessiblePref((await AsyncStorage.getItem("vyavastha_pref_accessible")) === "1");
     })();
   }, []);
 
@@ -27,6 +32,12 @@ export default function Profile() {
     await AsyncStorage.setItem("vyavastha_profile_phone", phone);
     setSaveStatus("Saved.");
     setTimeout(() => setSaveStatus(""), 1500);
+  }
+
+  async function toggleAccessiblePref() {
+    const next = !accessiblePref;
+    setAccessiblePref(next);
+    await AsyncStorage.setItem("vyavastha_pref_accessible", next ? "1" : "0");
   }
 
   async function saveServer() {
@@ -69,42 +80,60 @@ export default function Profile() {
         {!!saveStatus && <Text style={styles.savedText}>{saveStatus}</Text>}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>API server address</Text>
-        <Text style={styles.hint}>
-          On a physical device this must be your computer's LAN IP (e.g. http://192.168.1.5:8001), not localhost.
-        </Text>
-        <TextInput style={styles.input} autoCapitalize="none" value={apiBase} onChangeText={setApiBaseInput} />
-        <Pressable style={styles.saveBtn} onPress={saveServer}>
-          <Text style={styles.saveBtnText}>UPDATE SERVER</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.menuCard}>
         <Pressable style={styles.menuItem} onPress={() => router.push("/(tabs)/my-events")}>
-          <Text style={styles.menuText}>🎟️ My Events &amp; Registrations</Text>
+          <Text style={styles.menuText}>🎟️ My Event &amp; Registrations</Text>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
         <Pressable style={styles.menuItem} onPress={() => router.push("/(tabs)/notifications")}>
           <Text style={styles.menuText}>🔔 Notifications</Text>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
-        <Pressable style={styles.menuItem} onPress={() => Alert.alert("Preferences", "Coming soon.")}>
+        <Pressable style={styles.menuItem} onPress={() => setShowPrefs((v) => !v)}>
           <Text style={styles.menuText}>⚙️ Preferences</Text>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
-        <Pressable
-          style={[styles.menuItem, { borderBottomWidth: 0 }]}
-          onPress={() => Alert.alert("Help", "Contact your event organizer or use the AI chatbot on the event page for help.")}
-        >
+        {showPrefs && (
+          <View style={styles.subPanel}>
+            <Pressable style={styles.rowBetween} onPress={toggleAccessiblePref}>
+              <Text style={[styles.menuText, { flex: 1, fontSize: 12.5 }]}>Always request a wheelchair-accessible exit for my bookings</Text>
+              <Text style={{ fontWeight: "800", color: accessiblePref ? colors.accent : colors.muted }}>{accessiblePref ? "ON" : "OFF"}</Text>
+            </Pressable>
+            <Text style={styles.hint}>Used as the default in My Event's accessibility toggle — you can still change it per event.</Text>
+          </View>
+        )}
+        <Pressable style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => setShowHelp((v) => !v)}>
           <Text style={styles.menuText}>❓ Help</Text>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
+        {showHelp && (
+          <View style={styles.subPanel}>
+            <Text style={styles.hint}>
+              Contact your event organizer or use the AI chatbot on the event page for help. For urgent safety issues, use the accessibility/evacuation section in My Event or speak to venue staff directly.
+            </Text>
+          </View>
+        )}
       </View>
 
       <Pressable style={styles.logoutBtn} onPress={logout}>
         <Text style={styles.logoutText}>LOG OUT</Text>
       </Pressable>
+
+      <Pressable style={styles.devToggle} onPress={() => setShowDevOptions((v) => !v)}>
+        <Text style={styles.devToggleText}>{showDevOptions ? "Hide" : "Show"} developer options</Text>
+      </Pressable>
+      {showDevOptions && (
+        <View style={styles.card}>
+          <Text style={styles.label}>API server address</Text>
+          <Text style={styles.hint}>
+            On a physical device this must be your computer's LAN IP (e.g. http://192.168.1.5:8001), not localhost.
+          </Text>
+          <TextInput style={styles.input} autoCapitalize="none" value={apiBase} onChangeText={setApiBaseInput} />
+          <Pressable style={styles.saveBtn} onPress={saveServer}>
+            <Text style={styles.saveBtnText}>UPDATE SERVER</Text>
+          </Pressable>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -157,6 +186,10 @@ const styles = StyleSheet.create({
   },
   menuText: { fontSize: 13, color: colors.ink },
   chevron: { color: colors.muted, fontSize: 16 },
-  logoutBtn: { backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.high, borderRadius: radius.lg, paddingVertical: 14, alignItems: "center" },
+  subPanel: { padding: 14, backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  logoutBtn: { backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.high, borderRadius: radius.lg, paddingVertical: 14, alignItems: "center", marginBottom: spacing.lg },
   logoutText: { color: colors.danger, fontWeight: "800", fontSize: 13 },
+  devToggle: { alignItems: "center", paddingVertical: spacing.sm },
+  devToggleText: { color: colors.muted, fontSize: 11, textDecorationLine: "underline" },
 });

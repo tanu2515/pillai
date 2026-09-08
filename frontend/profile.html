@@ -52,9 +52,8 @@
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link">Home</a>
       <a href="events.html?explore=1" class="nav-link">Explore</a>
-      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
-      <a href="attendee.html" class="nav-link">Live Status</a>
     </div>
     <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#1976D2;color:#fff;">👤</a>
   </div>
@@ -81,10 +80,20 @@
   </div>
 
   <section class="card overflow-hidden mt-6 fade-up" style="animation-delay:.15s">
-    <a href="my-events.html" class="menu-item"><span>🎟️ My Events &amp; Registrations</span><span class="text-muted">›</span></a>
+    <a href="my-events.html" class="menu-item"><span>🎟️ My Event &amp; Registrations</span><span class="text-muted">›</span></a>
     <a href="notifications.html" class="menu-item"><span>🔔 Notifications</span><span class="text-muted">›</span></a>
-    <a href="#" class="menu-item" onclick="alert('Preferences coming soon.'); return false;"><span>⚙️ Preferences</span><span class="text-muted">›</span></a>
-    <a href="#" class="menu-item" onclick="alert('Contact your event organizer or use the AI chatbot on the event page for help.'); return false;"><span>❓ Help</span><span class="text-muted">›</span></a>
+    <a href="#" class="menu-item" onclick="togglePanel('prefs-panel'); return false;"><span>⚙️ Preferences</span><span class="text-muted">›</span></a>
+    <div id="prefs-panel" class="hidden px-5 py-4" style="border-bottom:1px solid #E7EEF7;">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="pref-accessible" onchange="savePrefs()" />
+        Always request a wheelchair-accessible exit for my bookings
+      </label>
+      <p class="text-muted text-[10.5px] mt-1.5">Used as the default in My Event's accessibility toggle — you can still change it per event.</p>
+    </div>
+    <a href="#" class="menu-item" onclick="togglePanel('help-panel'); return false;"><span>❓ Help</span><span class="text-muted">›</span></a>
+    <div id="help-panel" class="hidden px-5 py-4 text-sm text-muted">
+      Contact your event organizer or use the AI chatbot on the event page for help. For urgent safety issues, use the accessibility/evacuation section in My Event or speak to venue staff directly.
+    </div>
   </section>
 
   <section class="mt-6 fade-up" style="animation-delay:.2s">
@@ -102,7 +111,16 @@ function load() {
   try {
     document.getElementById("p-name").value = localStorage.getItem("vyavastha_profile_name") || "";
     document.getElementById("p-phone").value = localStorage.getItem("vyavastha_profile_phone") || "";
+    document.getElementById("pref-accessible").checked = localStorage.getItem("vyavastha_pref_accessible") === "1";
   } catch (e) {}
+}
+
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle("hidden");
+}
+
+function savePrefs() {
+  try { localStorage.setItem("vyavastha_pref_accessible", document.getElementById("pref-accessible").checked ? "1" : "0"); } catch (e) {}
 }
 
 function saveProfile() {

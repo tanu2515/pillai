@@ -87,9 +87,8 @@
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link">Home</a>
       <a href="events.html?explore=1" class="nav-link">Explore</a>
-      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
-      <a href="attendee.html" class="nav-link">Live Status</a>
     </div>
     <a href="events.html" class="text-accent text-sm font-bold">← Back</a>
   </div>
@@ -108,6 +107,7 @@
           <span id="ev-live-pill" class="live-pill hidden">LIVE</span>
         </div>
         <p id="ev-datetime" class="text-muted text-sm font-mono mt-1.5"></p>
+        <div id="ev-sports" class="hidden mt-2 text-sm"></div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
             <p id="ev-venue" class="text-sm font-bold m-0"></p>
@@ -134,6 +134,7 @@
         <section class="card p-6 fade-up" style="animation-delay:.15s">
           <h3 class="eyebrow mb-2">Gates &amp; crowd status</h3>
           <div id="ev-gates"></div>
+          <p id="ev-advisory" class="hidden text-accent text-xs mt-2 leading-relaxed"></p>
         </section>
         <section class="card p-6 fade-up" style="animation-delay:.2s">
           <h3 class="eyebrow mb-2">Transport</h3>
@@ -192,6 +193,9 @@ function fmtDate(dateStr, timeStr) {
 }
 
 const LEVEL_HEX = { LOW: "#22C55E", MODERATE: "#F59E0B", HIGH: "#F87171", CRITICAL: "#DC2626" };
+// Attendee-friendly words instead of raw risk-engine terminology (LOW/MODERATE/HIGH/CRITICAL) —
+// the underlying level/number is unchanged, only the label shown to attendees is translated.
+const LEVEL_LABEL = { LOW: "Quiet", MODERATE: "Moderate crowd", HIGH: "Busy", CRITICAL: "Very busy" };
 
 function renderGates() {
   const el = document.getElementById("ev-gates");
@@ -206,8 +210,29 @@ function renderGates() {
   el.innerHTML = eventData.gates.map(g => `
     <div class="flex items-center justify-between py-1.5">
       <span class="flex items-center gap-2 text-sm"><span class="level-dot" style="background:${LEVEL_HEX[g.level]}"></span>${g.name}</span>
-      <span class="text-xs font-mono text-muted">${g.occupancy_pct}% · ${g.level}</span>
+      <span class="text-xs font-mono text-muted">${LEVEL_LABEL[g.level] || g.level}</span>
     </div>`).join("");
+  loadAdvisory();
+}
+
+async function loadAdvisory() {
+  const el = document.getElementById("ev-advisory");
+  if (!eventData.is_live) { el.classList.add("hidden"); return; }
+  try {
+    const res = await api("/api/ai/attendee-advisory");
+    if (res.text) { el.textContent = "✨ " + res.text; el.classList.remove("hidden"); }
+    else { el.classList.add("hidden"); }
+  } catch (e) { el.classList.add("hidden"); }
+}
+
+function renderSportsDetails() {
+  const el = document.getElementById("ev-sports");
+  const s = eventData.sports_details;
+  if (!s) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  const teams = s.team_home && s.team_away ? `${s.team_home} vs ${s.team_away}` : "";
+  const meta = [s.competition, s.stage, s.tournament_gender].filter(Boolean).join(" · ");
+  el.innerHTML = `<span class="font-bold">🏏 ${s.sport}</span>${meta ? ` — ${meta}` : ""}${teams ? `<br><span class="text-muted">${teams}</span>` : ""}`;
 }
 
 function renderTransport() {
@@ -337,6 +362,7 @@ async function loadEvent() {
   document.getElementById("tiers-list").innerHTML = eventData.tiers.map(tierCard).join("") ||
     `<div class="text-muted text-sm">No tickets configured for this event yet.</div>`;
 
+  renderSportsDetails();
   renderSchedule();
   renderGates();
   renderTransport();
@@ -479,7 +505,7 @@ function planSectionHtml(plan) {
   const rows = [];
   if (plan.gate) rows.push(`
     <div class="flex items-center justify-between py-1.5">
-      <span class="text-xs">Gate: <b>${plan.gate.name}</b> · <span style="color:${LEVEL_HEX[plan.gate.level]}">${plan.gate.level}</span></span>
+      <span class="text-xs">Gate: <b>${plan.gate.name}</b> · <span style="color:${LEVEL_HEX[plan.gate.level]}">${LEVEL_LABEL[plan.gate.level] || plan.gate.level}</span></span>
       ${navLink(plan.gate.lat, plan.gate.lng)}
     </div>`);
   if (plan.hotel) rows.push(`
@@ -502,9 +528,9 @@ async function showConfirmation(res) {
       <div class="card p-4 mt-4 inline-block"><div id="qr-code" class="flex items-center justify-center"></div></div>
       <div class="text-2xl tracking-[5px] text-center font-mono font-bold text-accent my-3">${res.code}</div>
       <p class="text-muted text-xs">${res.tier}${res.seat_label ? " · Seat " + res.seat_label : ""}${res.quantity > 1 ? " · Qty " + res.quantity : ""} · ₹${res.total_price.toLocaleString()}</p>
-      <p class="text-muted text-[10.5px] mt-2">Show this code / QR at the gate. Find it anytime under My Events.</p>
+      <p class="text-muted text-[10.5px] mt-2">Show this code / QR at the gate. Find it anytime under My Event.</p>
       <div id="plan-section"></div>
-      <button class="btn-primary w-full py-3 rounded-xl text-sm mt-4" onclick="location.href='my-events.html'">GO TO MY EVENTS</button>
+      <button class="btn-primary w-full py-3 rounded-xl text-sm mt-4" onclick="location.href='my-events.html'">GO TO MY EVENT</button>
     </div>`;
   try { new QRCode(document.getElementById("qr-code"), { text: res.code, width: 140, height: 140, colorDark: "#123B6D", colorLight: "#ffffff" }); } catch (e) {}
   try {

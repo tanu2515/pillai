@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { useFocusEffect, router } from "expo-router";
 import * as Location from "expo-location";
-import { api, apiPost, getEmail, setEmail as saveEmail } from "../src/api";
+import { api, apiPost, getEmail } from "../src/api";
 import { colors, radius, spacing, shadow, levelColor } from "../src/theme";
 import { ChatFab } from "../src/components/ChatFab";
 
 type Gate = { id: number; name: string; remaining: number; capacity_pressure_pct: number; level: string };
 type Advisory = { gates: Gate[]; suggestion: { crowded_gate: string; crowded_pct: number; suggested_gate: string; suggested_pct: number } | null };
 type OffPeak = { current_level: string; recommendation: string };
-type MyEvent = { event_attendee_id: number; event_name: string; is_current: boolean; is_live: boolean; registration_status: string };
 type EvacRoute = { id: number; name: string; distance_km: number | null; is_accessible: boolean; recommended: boolean };
 type Evacuation = {
   emergency_active: boolean; emergency_zone: string | null; all_exits_congested: boolean;
@@ -21,9 +20,6 @@ export default function LiveStatus() {
   const [advisory, setAdvisory] = useState<Advisory>({ gates: [], suggestion: null });
   const [offPeak, setOffPeak] = useState<OffPeak[]>([]);
   const [aiText, setAiText] = useState<string | null>(null);
-  const [email, setEmailState] = useState("");
-  const [emailInput, setEmailInput] = useState("");
-  const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
   const [accessibleOnly, setAccessibleOnly] = useState(false);
   const [evac, setEvac] = useState<Evacuation>({
     emergency_active: false, emergency_zone: null, all_exits_congested: false, from_attendee_location: false, routes: [],
@@ -58,13 +54,6 @@ export default function LiveStatus() {
     setAiText(ai.text);
     setOffPeak(offpeak);
     setEvac(evacData);
-
-    const storedEmail = await getEmail();
-    setEmailState(storedEmail);
-    if (storedEmail) {
-      const events = await api<MyEvent[]>(`/api/attendee/my-events?email=${encodeURIComponent(storedEmail)}`);
-      setMyEvents(events);
-    }
   }, [accessibleOnly, location]);
 
   useFocusEffect(
@@ -74,25 +63,6 @@ export default function LiveStatus() {
       return () => clearInterval(interval);
     }, [load])
   );
-
-  async function continueWithEmail() {
-    if (!emailInput.trim()) return;
-    await saveEmail(emailInput.trim());
-    await load();
-  }
-
-  async function registerForCurrent() {
-    const em = await getEmail();
-    if (!em) return;
-    await apiPost("/api/attendee/register-event", { email: em });
-    await load();
-  }
-
-  async function switchEvent(id: number) {
-    const em = await getEmail();
-    await apiPost("/api/attendee/current-event", { email: em, event_attendee_id: id });
-    await load();
-  }
 
   async function toggleAccessible() {
     const next = !accessibleOnly;
@@ -164,48 +134,9 @@ export default function LiveStatus() {
           )}
         </View>
 
-        {!email ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Events</Text>
-            <Text style={styles.mutedText}>Sign in to register for events and switch between them.</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="none"
-              value={emailInput}
-              onChangeText={setEmailInput}
-            />
-            <Pressable style={styles.secondaryBtn} onPress={continueWithEmail}>
-              <Text style={styles.secondaryBtnText}>CONTINUE</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Events</Text>
-            {myEvents.map((e) => (
-              <View key={e.event_attendee_id} style={styles.myEventRow}>
-                <View>
-                  <Text style={styles.rowLabel}>
-                    {e.event_name} {e.is_live ? <Text style={{ color: colors.ok, fontSize: 10 }}>LIVE</Text> : null}
-                  </Text>
-                  <Text style={styles.mutedText}>{e.registration_status}</Text>
-                </View>
-                {e.is_current ? (
-                  <Text style={styles.currentTag}>CURRENT</Text>
-                ) : (
-                  <Pressable style={styles.switchBtn} onPress={() => switchEvent(e.event_attendee_id)}>
-                    <Text style={styles.switchBtnText}>Switch</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
-            {!myEvents.length && <Text style={styles.mutedText}>Not registered for any events yet.</Text>}
-            <Pressable style={styles.primaryBtn} onPress={registerForCurrent}>
-              <Text style={styles.primaryBtnText}>REGISTER FOR CURRENT EVENT</Text>
-            </Pressable>
-          </View>
-        )}
+        <Pressable style={[styles.secondaryBtn, { marginBottom: spacing.md }]} onPress={() => router.push("/(tabs)/my-events")}>
+          <Text style={styles.secondaryBtnText}>VIEW MY EVENT →</Text>
+        </Pressable>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Gate status — spots remaining</Text>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet } from "react-native";
+import { View, Text, SectionList, Pressable, StyleSheet } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useState } from "react";
 import { Header } from "../../src/components/Header";
@@ -12,8 +12,18 @@ type Notif = {
   message: string;
   priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   is_read: boolean;
+  event_name?: string | null;
   created_at?: string;
 };
+
+// Groups by severity tier (Critical/Important/Information) rather than a
+// flat list — the underlying priority field is unchanged, only the grouping
+// shown to attendees is added on top.
+const GROUPS: { key: string; title: string; priorities: Notif["priority"][] }[] = [
+  { key: "CRITICAL", title: "🔴 Critical", priorities: ["CRITICAL"] },
+  { key: "HIGH", title: "🟠 Important", priorities: ["HIGH"] },
+  { key: "INFO", title: "🟢 Information", priorities: ["MEDIUM", "LOW"] },
+];
 
 const SEVERITY: Record<string, { color: string; icon: string }> = {
   CRITICAL: { color: colors.danger, icon: "🔴" },
@@ -52,16 +62,26 @@ export default function Notifications() {
     load();
   }
 
+  const sections = GROUPS.map((g) => ({
+    key: g.key,
+    title: g.title,
+    data: list.filter((n) => g.priorities.includes(n.priority)),
+  })).filter((s) => s.data.length > 0);
+
   return (
     <View style={styles.container}>
-      <Header title="Notifications" subtitle="Gate, transport, and safety alerts for your events." />
-      <FlatList
-        data={list}
+      <Header title="Alerts" subtitle="Shared alerts for attendees at this event — not a private per-user inbox." />
+      <SectionList
+        sections={sections}
         keyExtractor={(n) => String(n.id)}
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
+        stickySectionHeadersEnabled={false}
         ListEmptyComponent={
-          <Text style={styles.empty}>No notifications yet — you'll see gate, transport, and safety alerts here once an event is live.</Text>
+          <Text style={styles.empty}>No alerts yet — you'll see gate, transport, and safety alerts here once an event is live.</Text>
         }
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionHeader}>{section.title} ({section.data.length})</Text>
+        )}
         renderItem={({ item }) => {
           const sev = SEVERITY[item.priority] || SEVERITY.MEDIUM;
           return (
@@ -72,6 +92,7 @@ export default function Notifications() {
               <Text style={{ color: sev.color, fontSize: 16 }}>{sev.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{item.title}</Text>
+                {!!item.event_name && <Text style={styles.eventName}>{item.event_name}</Text>}
                 <Text style={styles.message}>{item.message}</Text>
                 <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
               </View>
@@ -95,7 +116,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...shadow.card,
   },
+  sectionHeader: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: colors.ink, textTransform: "uppercase", marginBottom: spacing.sm, marginTop: spacing.sm },
   title: { fontWeight: "800", fontSize: 13, color: colors.ink },
+  eventName: { fontSize: 10.5, color: colors.muted, fontFamily: "monospace", marginTop: 1 },
   message: { fontSize: 12.5, color: colors.ink, marginTop: 2 },
   time: { fontSize: 10, color: colors.muted, marginTop: 4 },
   empty: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 40 },

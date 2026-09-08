@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VYAVASTHA — Government / City Intelligence</title>
+<link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Deliberately a LIGHT, city-ops palette — same brand family as the rest of
+  // Vyavastha (this is index.html's original palette), but visually distinct
+  // from the dark Event Organizer Command Centre. Government reads a
+  // different screen for a different question ("what's happening across my
+  // city" vs "what do I do in my event right now").
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", panel2: "#F1F5F9",
+          border: "#E2E8F0", muted: "#64748B", ink: "#123B6D",
+          accent: "#1976D2", accentDim: "#123B6D", green: "#20C997", greenLight: "#5BE7A9",
+          warn: "#F59E0B", ok: "#22C55E", high: "#F87171", danger: "#DC2626",
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "sans-serif"],
+          mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body{
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
+      radial-gradient(circle at 5% 100%, rgba(32,201,151,.05), transparent 45%),
+      linear-gradient(#E2E8F0 1px, transparent 1px),
+      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px;
+    background-color:#EAF7F4;
+    background-attachment:fixed;
+  }
+  .kpi-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; padding:14px 16px; }
+  .kpi-label{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:#64748B; text-transform:uppercase; }
+  .kpi-value{ font-size:26px; font-weight:800; margin-top:6px; color:#123B6D; }
+  .kpi-value.unavailable{ font-size:14px; font-weight:700; color:#94A3B8; font-style:italic; }
+  .kpi-trend{ font-size:11px; color:#64748B; margin-top:4px; }
+  .panel{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; padding:16px; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.14em; color:#64748B; text-transform:uppercase; }
+  .badge{ font-size:10px; font-weight:800; letter-spacing:.05em; padding:3px 9px; border-radius:20px; }
+  .b-low{ background:rgba(34,197,94,.12); color:#16803C; }
+  .b-moderate{ background:rgba(245,158,11,.14); color:#92620A; }
+  .b-high{ background:rgba(248,113,113,.16); color:#B91C1C; }
+  .b-critical{ background:rgba(220,38,38,.16); color:#991B1B; }
+  .table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .table th{ text-align:left; font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:.06em; padding:8px 6px; border-bottom:1px solid #E2E8F0; }
+  .table td{ padding:9px 6px; border-bottom:1px solid #F1F5F9; }
+  .table tr.clickable{ cursor:pointer; }
+  .table tr.clickable:hover{ background:rgba(25,118,210,.05); }
+  .table tr.current{ background:rgba(25,118,210,.08); }
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:#22C55E; box-shadow:0 0 6px rgba(34,197,94,.6); display:inline-block; animation:blink 1.6s ease-in-out infinite; }
+  @keyframes blink{ 50%{ opacity:.3; } }
+  .modal-veil{ position:fixed; inset:0; background:rgba(18,59,109,.45); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-veil.show{ display:flex; }
+  .modal-box{ width:100%; max-width:720px; max-height:88vh; overflow-y:auto; background:#FFFFFF; border:1.5px solid rgba(25,118,210,.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); }
+  #city-map{ height:340px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0; }
+  .unavail{ color:#94A3B8; font-style:italic; font-size:12.5px; }
+  .insight-card{ background:linear-gradient(135deg, rgba(25,118,210,.06), rgba(32,201,151,.06)); border:1px solid #E2E8F0; border-radius:12px; padding:12px 14px; }
+</style>
+</head>
+<body class="bg-bg text-ink font-sans m-0 min-h-screen">
+
+<div class="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-border">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-6 py-3">
+    <div class="flex items-center gap-3">
+      <a href="/"><img src="/assets/vyavastha-icon.png" alt="VYAVASTHA" class="w-8 h-8 rounded-lg" /></a>
+      <div>
+        <h1 class="text-sm font-extrabold m-0 leading-tight tracking-[0.1em] uppercase">VYAVASTHA — Government / City Intelligence</h1>
+        <p class="text-[11px] text-muted m-0 mt-0.5">City-wide mega-event intelligence — how events affect the city, not how to run one</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 text-xs text-muted font-mono">
+      <span><span class="live-dot"></span> Last updated: <span id="last-updated">—</span></span>
+      <a href="/" class="text-accent hover:underline font-medium">Exit →</a>
+    </div>
+  </div>
+</div>
+
+<main class="p-3 sm:p-6 max-w-7xl mx-auto">
+
+  <!-- 1. Top KPI row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5" id="kpi-row"></div>
+
+  <!-- City-level insight cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="insight-row"></div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5 items-start">
+    <!-- 2. City Event Overview -->
+    <section class="panel">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">City Event Overview</h2>
+        <span class="text-[10.5px] text-muted">click a row for impact detail</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table" id="events-table">
+          <thead><tr>
+            <th>Event</th><th>Status</th><th>Attendance</th><th>Live Crowd</th>
+            <th>Risk</th><th>Hotel</th><th>Transport</th><th>Incidents</th>
+          </tr></thead>
+          <tbody id="events-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. City Risk -->
+    <section class="panel">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">City Risk</h2>
+        <span class="text-[10.5px] text-muted">from the same Risk Engine as the Command Centre</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 mb-3" id="risk-counts"></div>
+      <div class="overflow-x-auto" style="max-height:260px; overflow-y:auto;">
+        <table class="table">
+          <thead><tr><th>Event</th><th>Zone</th><th>Score</th><th>Level</th></tr></thead>
+          <tbody id="risk-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5 items-start">
+    <!-- 6. City Map -->
+    <section class="panel">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">City Map</h2>
+        <span class="text-[10.5px] text-muted">event venues + high/critical zones with real coordinates only</span>
+      </div>
+      <div id="city-map"></div>
+      <p class="unavail mt-2" id="map-note"></p>
+    </section>
+
+    <!-- 5. City Trends -->
+    <section class="panel">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="eyebrow">City Trends</h2>
+        <span class="text-[10.5px] text-muted">real historical data only</span>
+      </div>
+      <div class="mb-4">
+        <div class="text-[11px] text-muted mb-1">Crowd (live event) — total count per minute</div>
+        <div style="height:160px; position:relative;"><canvas id="chart-crowd"></canvas></div>
+        <p class="unavail hidden" id="crowd-unavail"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-[11px] text-muted mb-1">Bookings by day</div>
+          <div style="height:140px; position:relative;"><canvas id="chart-bookings"></canvas></div>
+        </div>
+        <div>
+          <div class="text-[11px] text-muted mb-1">Alerts by day</div>
+          <div style="height:140px; position:relative;"><canvas id="chart-alerts"></canvas></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<!-- 4. Event Impact Detail modal -->
+<div class="modal-veil" id="impactModal" onclick="if(event.target===this) closeImpact()">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-surface">
+      <h3 class="text-base font-extrabold m-0" id="impact-title">Event Impact</h3>
+      <button onclick="closeImpact()" class="text-muted hover:text-accent text-lg">✕</button>
+    </div>
+    <div class="p-4" id="impact-body"></div>
+  </div>
+</div>
+
+<script>
+const API = "";
+async function api(path) {
+  try {
+    const res = await fetch(API + path);
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+const LEVEL_BADGE = { LOW: "b-low", MODERATE: "b-moderate", HIGH: "b-high", CRITICAL: "b-critical" };
+function na(v) { return (v === null || v === undefined) ? `<span class="unavail">Data unavailable</span>` : v; }
+function fmtPct(v) { return (v === null || v === undefined) ? null : `${v}%`; }
+
+let cachedEvents = [];
+let cachedRisk = null;
+let cityMap = null;
+let mapLayer = null;
+let charts = {};
+
+function kpiCard(label, value, trend) {
+  const isNA = value === null || value === undefined;
+  return `
+    <div class="kpi-card">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value ${isNA ? 'unavailable' : ''}">${isNA ? 'Data unavailable' : value}</div>
+      ${trend ? `<div class="kpi-trend">${trend}</div>` : ""}
+    </div>`;
+}
+
+async function loadOverview() {
+  const o = await api("/api/government/overview");
+  if (!o) return;
+  document.getElementById("kpi-row").innerHTML = [
+    kpiCard("Active Events", o.events.live, `${o.events.upcoming} upcoming · ${o.events.completed} completed`),
+    kpiCard("Total Attendance", o.attendance.total_bookings_all_events, "all events, all time"),
+    kpiCard("Live Crowd", o.attendance.live_attendance, o.events.live ? "current venue occupancy" : "no live event"),
+    kpiCard("High/Critical Zones", o.risk.critical_or_high_zones_in_live_events, "across live events"),
+    kpiCard("Hotel Demand", fmtPct(o.hospitality.avg_occupancy_pct), `${o.hospitality.total_hotels} hotels · ${o.hospitality.total_room_capacity} rooms`),
+    kpiCard("Transport Resources", o.transport.resources.length ? o.transport.resources.map(r => `${r.available}/${r.total} ${r.type}`).join(", ") : null, `${o.transport.reference_routes} reference routes`),
+    kpiCard("Open Incidents", o.emergency.open_incidents, "across all events"),
+  ].join("");
+}
+
+function insightCard(label, value, sub) {
+  return `<div class="insight-card"><div class="kpi-label">${label}</div><div class="text-base font-extrabold mt-1">${value ?? '<span class="unavail">Data unavailable</span>'}</div>${sub ? `<div class="kpi-trend">${sub}</div>` : ""}</div>`;
+}
+
+function renderInsights(events, risk) {
+  const liveEvents = events.filter(e => e.status === "live");
+  const highestRisk = liveEvents.length
+    ? liveEvents.reduce((a, b) => ((b.risk_zone_counts?.CRITICAL || 0) + (b.risk_zone_counts?.HIGH || 0)) > ((a.risk_zone_counts?.CRITICAL || 0) + (a.risk_zone_counts?.HIGH || 0)) ? b : a)
+    : null;
+  const topZone = risk?.zones?.length ? risk.zones[0] : null; // already sorted by score desc, server-side
+  const openIncidents = events.reduce((sum, e) => sum + (e.alert_count || 0), 0);
+  const hotelEvent = events.filter(e => e.hotel_occupancy_pct != null).sort((a, b) => b.hotel_occupancy_pct - a.hotel_occupancy_pct)[0];
+
+  document.getElementById("insight-row").innerHTML = [
+    insightCard("Highest-Risk Event", highestRisk ? highestRisk.name : null, highestRisk ? `${(highestRisk.risk_zone_counts?.CRITICAL||0)+(highestRisk.risk_zone_counts?.HIGH||0)} high/critical zones` : "no live events"),
+    insightCard("Most Pressured Zone", topZone ? `${topZone.zone_name}` : null, topZone ? `${topZone.event_name} · score ${topZone.score} · ${topZone.level}` : null),
+    insightCard("Open Incidents", openIncidents, "sum across all events"),
+    insightCard("Hotel Pressure", hotelEvent ? `${hotelEvent.name}` : null, hotelEvent ? `${hotelEvent.hotel_occupancy_pct}% occupancy` : "no hotel data"),
+  ].join("");
+}
+
+function eventRow(e) {
+  const risk = e.risk_zone_counts
+    ? Object.entries(e.risk_zone_counts).filter(([, c]) => c > 0).map(([lvl, c]) => `<span class="badge ${LEVEL_BADGE[lvl]}">${c} ${lvl}</span>`).join(" ") || `<span class="badge b-low">0 risk</span>`
+    : `<span class="unavail">n/a</span>`;
+  return `
+    <tr class="clickable ${e.status === 'live' ? 'current' : ''}" onclick="openImpact(${e.event_id}, '${e.name.replace(/'/g, "\\'")}')">
+      <td><b>${e.name}</b>${e.status === 'live' ? ' <span class="live-dot" title="LIVE"></span>' : ''}</td>
+      <td class="uppercase text-[11px] font-bold">${e.status}</td>
+      <td>${e.bookings}</td>
+      <td>${e.live_crowd ?? '<span class="unavail">—</span>'}</td>
+      <td>${risk}</td>
+      <td>${fmtPct(e.hotel_occupancy_pct) ?? '<span class="unavail">n/a</span>'}</td>
+      <td>${fmtPct(e.transport_utilization_pct) ?? '<span class="unavail">n/a</span>'}</td>
+      <td>${e.alert_count}</td>
+    </tr>`;
+}
+
+async function loadEvents() {
+  const events = await api("/api/government/events");
+  if (!events) return [];
+  cachedEvents = events;
+  document.getElementById("events-tbody").innerHTML = events.map(eventRow).join("");
+  return events;
+}
+
+async function loadRisk() {
+  const risk = await api("/api/government/risk");
+  if (!risk) return null;
+  cachedRisk = risk;
+  document.getElementById("risk-counts").innerHTML = ["CRITICAL", "HIGH", "MODERATE", "LOW"].map(lvl => `
+    <div class="text-center">
+      <div class="badge ${LEVEL_BADGE[lvl]}" style="display:block; padding:8px 4px;">
+        <div class="text-lg font-extrabold">${risk.counts[lvl] ?? 0}</div>
+        <div class="text-[9px]">${lvl}</div>
+      </div>
+    </div>`).join("");
+  document.getElementById("risk-tbody").innerHTML = risk.zones.length
+    ? risk.zones.map(z => `
+        <tr>
+          <td>${z.event_name}</td><td>${z.zone_name}</td>
+          <td class="font-mono">${z.score}</td>
+          <td><span class="badge ${LEVEL_BADGE[z.level]}">${z.level}</span></td>
+        </tr>`).join("")
+    : `<tr><td colspan="4" class="unavail">No live events — nothing to show.</td></tr>`;
+  return risk;
+}
+
+function renderMap(events, risk) {
+  if (!cityMap) {
+    cityMap = L.map("city-map").setView([19.05, 73.05], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(cityMap);
+  }
+  if (mapLayer) mapLayer.remove();
+  mapLayer = L.layerGroup().addTo(cityMap);
+
+  let placed = 0, skipped = 0;
+  events.forEach(e => {
+    if (e.venue_lat == null || e.venue_lng == null) { skipped++; return; }
+    L.circleMarker([e.venue_lat, e.venue_lng], { radius: 9, color: "#1976D2", fillColor: "#1976D2", fillOpacity: 0.85, weight: 2 })
+      .bindPopup(`<b>${e.name}</b><br>${e.status.toUpperCase()}${e.status === 'live' ? ' — LIVE' : ''}`)
+      .addTo(mapLayer);
+    placed++;
+  });
+  (risk?.zones || []).forEach(z => {
+    if (z.lat == null || z.lng == null) return;
+    if (z.level !== "HIGH" && z.level !== "CRITICAL") return;
+    const color = z.level === "CRITICAL" ? "#DC2626" : "#F87171";
+    L.circleMarker([z.lat, z.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.9, weight: 1 })
+      .bindPopup(`<b>${z.zone_name}</b><br>${z.event_name}<br>${z.level} · score ${z.score}`)
+      .addTo(mapLayer);
+    placed++;
+  });
+  document.getElementById("map-note").textContent = placed
+    ? (skipped ? `${skipped} event(s) have no venue coordinates set — omitted, not guessed.` : "")
+    : "No event or zone coordinates available yet — map has nothing to plot.";
+}
+
+function lineChart(ctx, labels, data, color, label) {
+  return new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets: [{ label, data, borderColor: color, backgroundColor: color + "22", fill: true, tension: 0.25, pointRadius: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { maxTicksLimit: 6, font: { size: 9 } } }, y: { beginAtZero: true, ticks: { font: { size: 9 } } } } },
+  });
+}
+
+async function loadTrends() {
+  const t = await api("/api/government/trends");
+  if (!t) return;
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const crowdCanvas = document.getElementById("chart-crowd");
+  const crowdUnavail = document.getElementById("crowd-unavail");
+  if (t.crowd_trend && t.crowd_trend.length) {
+    crowdCanvas.classList.remove("hidden"); crowdUnavail.classList.add("hidden");
+    charts.crowd = lineChart(crowdCanvas,
+      t.crowd_trend.map(p => new Date(p.captured_at).toLocaleTimeString()),
+      t.crowd_trend.map(p => p.total_count), "#1976D2", "Total crowd count");
+  } else {
+    crowdCanvas.classList.add("hidden"); crowdUnavail.classList.remove("hidden");
+    crowdUnavail.textContent = `Data unavailable — ${t.crowd_trend_scope}`;
+  }
+
+  charts.bookings = lineChart(document.getElementById("chart-bookings"),
+    t.booking_trend_by_day.map(p => p.date), t.booking_trend_by_day.map(p => p.count), "#20C997", "Bookings");
+  charts.alerts = lineChart(document.getElementById("chart-alerts"),
+    t.alert_trend_by_day.map(p => p.date), t.alert_trend_by_day.map(p => p.count), "#DC2626", "Alerts");
+}
+
+async function openImpact(eventId, name) {
+  document.getElementById("impact-title").textContent = `Impact — ${name}`;
+  document.getElementById("impact-body").innerHTML = `<p class="unavail">Loading…</p>`;
+  document.getElementById("impactModal").classList.add("show");
+  const d = await api(`/api/government/events/${eventId}/impact`);
+  if (!d) { document.getElementById("impact-body").innerHTML = `<p class="unavail">Data unavailable.</p>`; return; }
+
+  const section = (title, rows) => `
+    <div class="mb-4">
+      <div class="eyebrow mb-2">${title}</div>
+      <div class="grid grid-cols-2 gap-2 text-sm">${rows}</div>
+    </div>`;
+  const field = (label, value) => `<div><div class="text-[10px] text-muted uppercase">${label}</div><div class="font-semibold">${value ?? na(value)}</div></div>`;
+
+  const crowd = section("Crowd", [
+    field("Attendance", d.crowd.attendance),
+    field("Checked In", d.crowd.checked_in),
+    field("Peak Occupancy", fmtPct(d.crowd.peak_occupancy_pct)),
+    field("High-Risk Zones", Array.isArray(d.crowd.high_risk_zones) ? (d.crowd.high_risk_zones.length ? d.crowd.high_risk_zones.map(z => z.zone_name).join(", ") : "none") : na(null)),
+  ].join(""));
+
+  const crowdTrendNote = typeof d.crowd.crowd_trend === "string"
+    ? `<p class="unavail mt-1">${d.crowd.crowd_trend}</p>`
+    : (d.crowd.crowd_trend.length ? `<p class="text-[11px] text-muted mt-1">${d.crowd.crowd_trend.length} recent crowd readings tracked.</p>` : "");
+
+  const hospitality = section("Hospitality", [
+    field("Hotels", d.hospitality.hotels.length || na(null)),
+    field("Avg Occupancy", fmtPct(d.hospitality.avg_occupancy_pct)),
+  ].join("")) + (d.hospitality.hotels.length ? `
+    <div class="text-[11.5px] mb-3">${d.hospitality.hotels.map(h => `${h.name}: ${h.occupancy_pct ?? '—'}%`).join(" · ")}</div>` : "");
+
+  const transport = section("Transport", [
+    field("Zones", d.transport.zones.length || na(null)),
+    field("Avg Utilization", fmtPct(d.transport.avg_utilization_pct)),
+  ].join(""));
+
+  const emergency = section("Emergency", [
+    field("Open/Total Alerts", `${d.emergency.alerts.filter(a => a.status !== 'resolved').length}/${d.emergency.alert_count}`),
+  ].join("")) + `<p class="text-[11px] text-muted -mt-2 mb-3">${d.emergency.note}</p>`;
+
+  const business = `<div class="mb-2"><div class="eyebrow mb-2">Business / Services</div><p class="unavail">${d.business_services.note}</p></div>`;
+
+  document.getElementById("impact-body").innerHTML = crowd + crowdTrendNote + hospitality + transport + emergency + business +
+    `<div class="text-[11px] text-muted mt-2">Event health score: ${d.event_health_score ?? '<span class="unavail">Data unavailable (only computed for the live event)</span>'}</div>`;
+}
+function closeImpact() { document.getElementById("impactModal").classList.remove("show"); }
+
+async function refreshAll() {
+  const [events, risk] = await Promise.all([loadOverview(), loadEvents(), loadRisk()]).then(([, e, r]) => [e, r]);
+  renderInsights(events, risk);
+  renderMap(events, risk);
+  await loadTrends();
+  document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
+}
+
+refreshAll();
+setInterval(refreshAll, 8000);
+</script>
+</body>
+</html>

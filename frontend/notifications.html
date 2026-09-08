@@ -45,20 +45,19 @@
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link">Home</a>
       <a href="events.html?explore=1" class="nav-link">Explore</a>
-      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link active">Alerts</a>
-      <a href="attendee.html" class="nav-link">Live Status</a>
     </div>
     <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
   </div>
 </nav>
 
 <header class="max-w-4xl mx-auto px-6 lg:px-10 pt-8 fade-up">
-  <h1 class="text-2xl font-extrabold m-0">Notifications</h1>
-  <p class="text-muted text-sm mt-1">Gate, transport, and safety alerts for your events.</p>
+  <h1 class="text-2xl font-extrabold m-0">Alerts</h1>
+  <p class="text-muted text-sm mt-1">Shared alerts for attendees at this event — not a private per-user inbox.</p>
 </header>
 
-<section id="notif-list" class="max-w-4xl mx-auto px-6 lg:px-10 mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4"></section>
+<div id="notif-groups" class="max-w-4xl mx-auto px-6 lg:px-10 mt-6"></div>
 
 <script>
 const API = "";
@@ -85,19 +84,40 @@ function notifCard(n, i) {
       <span class="sev-dot" style="background:${sev.color}"></span>
       <div class="flex-1">
         <div class="font-bold text-sm">${sev.icon} ${n.title}</div>
+        ${n.event_name ? `<div class="text-muted text-[10.5px] font-mono mt-0.5">${n.event_name}</div>` : ""}
         <div class="text-sm mt-0.5">${n.message}</div>
         <div class="text-muted text-[10px] font-mono mt-1">${timeAgo(n.created_at)}</div>
       </div>
     </div>`;
 }
 
+// Groups by severity tier (Critical/Important/Information) rather than a
+// flat list — the underlying priority field is unchanged, only the grouping
+// shown to attendees is added on top.
+const GROUPS = [
+  { key: "CRITICAL", label: "🔴 Critical", priorities: ["CRITICAL"] },
+  { key: "HIGH", label: "🟠 Important", priorities: ["HIGH"] },
+  { key: "INFO", label: "🟢 Information", priorities: ["MEDIUM", "LOW"] },
+];
+
 async function markRead(id) { await api(`/api/notifications/${id}/read`, { method: "POST" }); load(); }
 
 async function load() {
   const list = await api("/api/notifications?role=Attendee");
-  document.getElementById("notif-list").innerHTML = list.length
-    ? list.map(notifCard).join("")
-    : `<div class="text-center text-muted text-xs py-16 col-span-full">No notifications yet — you'll see gate, transport, and safety alerts here once an event is live.</div>`;
+  const container = document.getElementById("notif-groups");
+  if (!list.length) {
+    container.innerHTML = `<div class="text-center text-muted text-xs py-16">No alerts yet — you'll see gate, transport, and safety alerts here once an event is live.</div>`;
+    return;
+  }
+  container.innerHTML = GROUPS.map(g => {
+    const items = list.filter(n => g.priorities.includes(n.priority));
+    if (!items.length) return "";
+    return `
+      <section class="mb-6">
+        <h2 class="eyebrow mb-3">${g.label} (${items.length})</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${items.map(notifCard).join("")}</div>
+      </section>`;
+  }).join("");
 }
 
 load();

@@ -96,8 +96,8 @@ export default function Home() {
           <>
             <Rail title="UPCOMING EVENTS" data={sections.upcoming} emptyMsg="No upcoming events right now." onSeeAll={() => router.push("/(tabs)/explore")} />
             <Rail title="POPULAR EVENTS" data={sections.popular} emptyMsg="No popular events yet." />
-            <Rail title="EVENTS NEAR YOU" data={sections.near} emptyMsg="No events near you yet." />
-            <Rail title="RECOMMENDED FOR YOU" data={sections.recommended} emptyMsg="Nothing recommended yet." />
+            <Rail title="IN THIS REGION" data={sections.near} emptyMsg="No events in this region yet." />
+            <Rail title="MORE FEATURED EVENTS" data={sections.recommended} emptyMsg="No other featured events right now." />
             <Rail title="LIVE NOW" data={sections.live} emptyMsg="No event is live right now." onSeeAll={() => router.push("/live-status")} />
           </>
         )}

@@ -86,9 +86,8 @@
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link active">Home</a>
       <a href="events.html?explore=1" class="nav-link">Explore</a>
-      <a href="my-events.html" class="nav-link">My Events</a>
+      <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
-      <a href="attendee.html" class="nav-link">Live Status</a>
     </div>
     <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
   </div>
@@ -132,19 +131,19 @@
   </section>
 
   <section class="my-6 fade-up" style="animation-delay:.25s">
-    <h2 class="eyebrow mb-3">Events near you</h2>
+    <h2 class="eyebrow mb-3">In this region</h2>
     <div id="rail-near" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
   </section>
 
   <section class="my-6 fade-up" style="animation-delay:.3s">
-    <h2 class="eyebrow mb-3">Recommended for you</h2>
+    <h2 class="eyebrow mb-3">More featured events</h2>
     <div id="rail-recommended" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
   </section>
 
   <section class="my-6 fade-up" style="animation-delay:.35s">
     <div class="flex items-center justify-between mb-3">
       <h2 class="eyebrow m-0">Live now</h2>
-      <a href="attendee.html" class="text-accent text-xs font-bold uppercase hover:underline">Live gate status →</a>
+      <a href="my-events.html" class="text-accent text-xs font-bold uppercase hover:underline">My Event →</a>
     </div>
     <div id="rail-live" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
   </section>
@@ -269,8 +268,8 @@ async function loadHomeSections() {
   ]);
   renderRail("rail-upcoming", upcoming.slice(0, 8), "No upcoming events right now.");
   renderRail("rail-popular", popular, "No popular events yet.");
-  renderRail("rail-near", near.filter(e => e.status !== "live"), "No events near you yet.");
-  renderRail("rail-recommended", recommended.slice().reverse(), "Nothing recommended yet.");
+  renderRail("rail-near", near.filter(e => e.status !== "live"), "No events in this region yet.");
+  renderRail("rail-recommended", recommended.slice().reverse(), "No other featured events right now.");
   renderRail("rail-live", all.filter(e => e.status === "live"), "No event is live right now.");
 }
 

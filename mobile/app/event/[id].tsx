@@ -21,6 +21,10 @@ type Hotel = { zone_id: number; name: string; available_pct: number; distance_km
 type Transport = { zone_name: string; current_pct: number; extra_buses_needed: number };
 type Announcement = { severity: string; message: string };
 type OffPeak = { recommendation: string; current_level?: string };
+type SportsDetails = {
+  sport: string; competition?: string; tournament_gender?: string;
+  stage?: string; team_home?: string; team_away?: string;
+};
 type EventDetail = {
   id: number;
   name: string;
@@ -38,8 +42,13 @@ type EventDetail = {
   hotels: Hotel[];
   announcements: Announcement[];
   off_peak: OffPeak[];
+  sports_details: SportsDetails | null;
   tiers: Tier[];
 };
+
+// Attendee-friendly words instead of raw risk-engine terminology — the
+// underlying level/number is unchanged, only the label shown is translated.
+const LEVEL_LABEL: Record<string, string> = { LOW: "Quiet", MODERATE: "Moderate crowd", HIGH: "Busy", CRITICAL: "Very busy" };
 type Seat = { id: number; seat_label: string; status: string };
 type PlanGate = { name: string; level: string; capacity_pressure_pct: number; lat: number | null; lng: number | null };
 type PlanHotel = { name: string; available_pct: number; lat: number | null; lng: number | null; reason: string };
@@ -66,10 +75,21 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [selectedTier, setSelectedTier] = useState<Tier | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [advisoryText, setAdvisoryText] = useState<string | null>(null);
 
   async function load() {
     const data = await api<EventDetail>(`/api/events/${id}`);
     setEvent(data);
+    if (data.is_live) {
+      try {
+        const res = await api<{ text: string | null }>("/api/ai/attendee-advisory");
+        setAdvisoryText(res.text);
+      } catch {
+        setAdvisoryText(null);
+      }
+    } else {
+      setAdvisoryText(null);
+    }
   }
 
   useEffect(() => {
@@ -106,6 +126,16 @@ export default function EventDetailScreen() {
             )}
           </View>
           <Text style={styles.datetime}>{fmtDate(event.event_date, event.event_time)}</Text>
+          {!!event.sports_details && (
+            <Text style={styles.sportsLine}>
+              🏏 {event.sports_details.sport}
+              {[event.sports_details.competition, event.sports_details.stage, event.sports_details.tournament_gender].filter(Boolean).length
+                ? ` — ${[event.sports_details.competition, event.sports_details.stage, event.sports_details.tournament_gender].filter(Boolean).join(" · ")}`
+                : ""}
+              {event.sports_details.team_home && event.sports_details.team_away
+                ? `\n${event.sports_details.team_home} vs ${event.sports_details.team_away}` : ""}
+            </Text>
+          )}
           <Text style={styles.venue}>{event.venue_name || "Venue to be announced"}</Text>
           <Text style={styles.address}>{event.venue_address || ""}</Text>
           <View style={styles.statRow}>
@@ -121,17 +151,18 @@ export default function EventDetailScreen() {
         <Section title="Gates & crowd status">
           {event.is_live ? (
             event.gates.length ? (
-              event.gates.map((g) => (
-                <View key={g.name} style={styles.listRow}>
-                  <View style={styles.rowLeft}>
-                    <View style={[styles.dot, { backgroundColor: levelColor[g.level] }]} />
-                    <Text style={styles.rowLabel}>{g.name}</Text>
+              <>
+                {event.gates.map((g) => (
+                  <View key={g.name} style={styles.listRow}>
+                    <View style={styles.rowLeft}>
+                      <View style={[styles.dot, { backgroundColor: levelColor[g.level] }]} />
+                      <Text style={styles.rowLabel}>{g.name}</Text>
+                    </View>
+                    <Text style={styles.rowValue}>{LEVEL_LABEL[g.level] || g.level}</Text>
                   </View>
-                  <Text style={styles.rowValue}>
-                    {g.occupancy_pct}% · {g.level}
-                  </Text>
-                </View>
-              ))
+                ))}
+                {!!advisoryText && <Text style={styles.advisoryText}>✨ {advisoryText}</Text>}
+              </>
             ) : (
               <Text style={styles.mutedText}>No gate data available.</Text>
             )
@@ -283,7 +314,7 @@ function PlanSection({ plan }: { plan: Plan }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.planLabel}>Entry gate</Text>
             <Text style={styles.planValue}>
-              {plan.gate.name} · <Text style={{ color: levelColor[plan.gate.level] }}>{plan.gate.level}</Text>
+              {plan.gate.name} · <Text style={{ color: levelColor[plan.gate.level] }}>{LEVEL_LABEL[plan.gate.level] || plan.gate.level}</Text>
             </Text>
           </View>
           {plan.gate.lat != null && plan.gate.lng != null && (
@@ -434,7 +465,7 @@ function BookingSheet({
                   router.push("/(tabs)/my-events");
                 }}
               >
-                <Text style={styles.registerBtnText}>GO TO MY EVENTS</Text>
+                <Text style={styles.registerBtnText}>GO TO MY EVENT</Text>
               </Pressable>
             </View>
           ) : showSeats ? (
@@ -579,6 +610,8 @@ const styles = StyleSheet.create({
   livePill: { backgroundColor: colors.ok, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: 9 },
   liveText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   datetime: { fontSize: 11, color: colors.muted, marginTop: 6 },
+  sportsLine: { fontSize: 12, fontWeight: "700", color: colors.ink, marginTop: 6, lineHeight: 17 },
+  advisoryText: { color: colors.accent, fontSize: 12.5, marginTop: spacing.sm, lineHeight: 17 },
   venue: { fontSize: 13, fontWeight: "700", color: colors.ink, marginTop: 8 },
   address: { fontSize: 11, color: colors.muted },
   statRow: { flexDirection: "row", gap: spacing.lg, marginTop: 8 },

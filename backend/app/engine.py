@@ -303,17 +303,30 @@ def set_alert_status(db, alert_id, status):
     return alert
 
 
-def list_notifications(db, role=None, limit=50):
+def list_notifications(db, role=None, event_id=None, limit=50):
+    """event_id (reuses the existing Notification.event_id column — no
+    schema change) scopes the feed to one event plus event-agnostic system
+    notices (event_id is null), so an attendee's own event's feed never
+    mixes in another event's notifications. Still a role-broadcast, not a
+    per-user inbox — omitting event_id preserves the previous all-events
+    behavior for existing callers (e.g. the operator dashboard)."""
     q = db.query(models.Notification).order_by(models.Notification.id.desc())
     if role:
         q = q.filter((models.Notification.audience_role == role) | (models.Notification.audience_role.is_(None)))
+    if event_id is not None:
+        q = q.filter((models.Notification.event_id == event_id) | (models.Notification.event_id.is_(None)))
+    rows = q.limit(limit).all()
+    event_ids = {n.event_id for n in rows if n.event_id is not None}
+    event_names = {
+        e.id: e.name for e in db.query(models.Event.id, models.Event.name).filter(models.Event.id.in_(event_ids)).all()
+    } if event_ids else {}
     return [
         {
             "id": n.id, "title": n.title, "message": n.message, "priority": n.priority,
             "audience_role": n.audience_role, "zone_domain": n.zone_domain, "is_read": n.is_read,
-            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "event_name": event_names.get(n.event_id), "created_at": n.created_at.isoformat() if n.created_at else None,
         }
-        for n in q.limit(limit).all()
+        for n in rows
     ]
 
 
@@ -1624,7 +1637,8 @@ def attendee_plan(db, code):
     if not is_live:
         hint = schedule_offpeak_hint(event.event_time)
         return {
-            "event_name": event.name, "is_live": False, "gate": None, "hotel": None, "transport": None,
+            "event_id": event.id, "event_name": event.name, "is_live": False,
+            "gate": None, "hotel": None, "transport": None,
             "arrival": {"recommendation": hint} if hint else None,
         }
 
@@ -1649,7 +1663,7 @@ def attendee_plan(db, code):
     transport = None
     if booking.wants_transport and gate and gate.get("linked_transport_zone_id"):
         transport = next(
-            (t for t in transport_demand_prediction(db) if t["zone_id"] == gate["linked_transport_zone_id"]), None
+            (t for t in transport_demand_prediction(db, event_id=event.id) if t["zone_id"] == gate["linked_transport_zone_id"]), None
         )
 
     off_peak = offpeak_recommendations(db)
@@ -1657,7 +1671,7 @@ def attendee_plan(db, code):
     if off_peak:
         arrival = next((o for o in off_peak if gate and o["zone_id"] == gate["id"]), off_peak[0])
     return {
-        "event_name": event.name, "is_live": True,
+        "event_id": event.id, "event_name": event.name, "is_live": True,
         "gate": gate, "hotel": hotel, "transport": transport,
         "arrival": arrival,
     }
@@ -1765,11 +1779,15 @@ def hotel_recommendations(db):
 # capacity to flag likely shortfall before it happens, same "predict before
 # critical" pattern preventive_alerts already uses for gates.
 
-def transport_demand_prediction(db):
-    live = get_live_event(db)
-    if not live:
+def transport_demand_prediction(db, event_id=None):
+    """event_id lets a caller scope this to one specific event (e.g. an
+    attendee's own booked event) instead of always the currently-live one —
+    falls back to get_live_event(db) when omitted, so existing callers
+    (operator dashboard, attendee_plan below) are unaffected."""
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
+    if not event:
         return []
-    transport_zones = db.query(models.Zone).filter(models.Zone.domain == "transport", models.Zone.event_id == live.id).all()
+    transport_zones = db.query(models.Zone).filter(models.Zone.domain == "transport", models.Zone.event_id == event.id).all()
     resources = {r.type: r for r in db.query(models.Resource).all()}
     bus = resources.get("bus")
     out = []
@@ -1910,7 +1928,13 @@ def _nearest_gate(db, lat, lng):
     return (best, round(best_km, 2)) if best else (None, None)
 
 
-def evacuation_routes(db, accessible_only=False, lat=None, lng=None):
+def evacuation_routes(db, accessible_only=False, lat=None, lng=None, event_id=None):
+    """event_id scopes gates/arena to one event (e.g. the attendee's own
+    booked event, from /api/my-plan) so a gate belonging to a different
+    event is never offered as an exit route — falls back to the
+    currently-live event when omitted, matching every other attendee
+    recommendation function in this file."""
+    event = db.get(models.Event, event_id) if event_id is not None else get_live_event(db)
     state = get_state_row(db)
     emergency_active = bool(state and state.emergency_active)
     emergency_zone = (
@@ -1924,11 +1948,17 @@ def evacuation_routes(db, accessible_only=False, lat=None, lng=None):
     if lat is not None and lng is not None:
         origin_lat, origin_lng = lat, lng
     else:
-        origin = emergency_zone or db.query(models.Zone).filter(models.Zone.type == "arena").first()
+        origin = emergency_zone or (
+            db.query(models.Zone).filter(models.Zone.type == "arena", models.Zone.event_id == event.id).first()
+            if event else None
+        )
         origin_lat = origin.lat if origin else None
         origin_lng = origin.lng if origin else None
 
-    gates = db.query(models.Zone).filter(models.Zone.type == "gate").all()
+    gates = (
+        db.query(models.Zone).filter(models.Zone.type == "gate", models.Zone.event_id == event.id).all()
+        if event else []
+    )
     level_rank = {"LOW": 0, "MODERATE": 1, "HIGH": 2, "CRITICAL": 3}
     routes = []
     for g in gates:
@@ -2047,6 +2077,258 @@ def event_analytics(db, event_id=None):
              "peak_pct": round(z.peak_count / z.capacity * 100, 1) if z.capacity else 0, "peak_tick": z.peak_tick}
             for z in sorted(zones, key=lambda z: (z.peak_count / z.capacity if z.capacity else 0), reverse=True)
         ],
+    }
+
+
+# --- Government/Admin: city-level intelligence (read-only aggregation) -----
+# Every function here is a thin read/aggregate layer over the SAME functions
+# the operator Command Centre and attendee APIs already use (zone_risk,
+# list_alerts, hotel_recommendations, transport_demand_prediction,
+# event_analytics) -- no second risk formula, no new mutation path, nothing
+# these functions do can change any Zone/Event/Alert row. A field this
+# schema genuinely has no data for (restaurants/shops/service providers,
+# per-event health for a non-live event) is returned as null/"unavailable"
+# with a note, never guessed.
+
+def government_overview(db):
+    events = db.query(models.Event).all()
+    by_status = {"live": [], "upcoming": [], "completed": [], "paused": []}
+    for e in events:
+        by_status.setdefault(e.status, []).append(e)
+
+    total_bookings = db.query(models.VisitorProfile).count()
+    live_zones = [z for e in by_status["live"] for z in db.query(models.Zone).filter(models.Zone.event_id == e.id).all()]
+    live_attendance = sum(z.current_count for z in live_zones if z.domain == "venue")
+
+    hotel_zones = db.query(models.Zone).filter(models.Zone.type == "hotel").all()
+    total_hotel_capacity = sum(h.capacity for h in hotel_zones)
+    hotel_occupancies = [h.current_count / h.capacity * 100 for h in hotel_zones if h.capacity]
+    avg_hotel_occupancy = round(sum(hotel_occupancies) / len(hotel_occupancies), 1) if hotel_occupancies else None
+
+    transport_routes = db.query(models.TransitRoute).count()
+    resources = db.query(models.Resource).all()
+
+    open_alerts = db.query(models.Alert).filter(models.Alert.status.in_(["open", "acknowledged"])).count()
+
+    critical_high_zones = 0
+    for z in live_zones:
+        if z.domain and zone_risk(z, db)["level"] in ("HIGH", "CRITICAL"):
+            critical_high_zones += 1
+
+    return {
+        "events": {
+            "live": len(by_status["live"]), "upcoming": len(by_status["upcoming"]),
+            "completed": len(by_status["completed"]),
+        },
+        "attendance": {
+            "total_bookings_all_events": total_bookings,
+            "live_attendance": live_attendance if by_status["live"] else None,
+        },
+        "hospitality": {
+            "total_hotels": len(hotel_zones), "total_room_capacity": total_hotel_capacity,
+            "avg_occupancy_pct": avg_hotel_occupancy,
+        },
+        "transport": {
+            "reference_routes": transport_routes,
+            "resources": [{"type": r.type, "total": r.quantity_total, "available": r.quantity_available} for r in resources],
+        },
+        "business_services": {
+            "restaurants": None, "shops": None, "service_providers": None,
+            "note": "unavailable — no restaurant/shop/service-provider table exists in the current schema",
+        },
+        "emergency": {"open_incidents": open_alerts},
+        "risk": {"critical_or_high_zones_in_live_events": critical_high_zones},
+        "as_of": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def government_events(db):
+    events = db.query(models.Event).filter(models.Event.status != "paused").order_by(models.Event.id.desc()).all()
+    out = []
+    for e in events:
+        zones = db.query(models.Zone).filter(models.Zone.event_id == e.id).all()
+        bookings = db.query(models.VisitorProfile).filter(models.VisitorProfile.event_id == e.id).count()
+        is_live = e.status == "live"
+
+        venue_zones = [z for z in zones if z.domain == "venue"]
+        live_crowd = sum(z.current_count for z in venue_zones) if is_live else None
+
+        risk_counts = None
+        if is_live and zones:
+            levels = [zone_risk(z, db)["level"] for z in zones]
+            risk_counts = {lvl: levels.count(lvl) for lvl in ("LOW", "MODERATE", "HIGH", "CRITICAL")}
+
+        hotel_zones = [z for z in zones if z.type == "hotel"]
+        hotel_occ = round(sum(z.current_count / z.capacity * 100 for z in hotel_zones if z.capacity) / len(hotel_zones), 1) if hotel_zones else None
+
+        transport_zones = [z for z in zones if z.domain == "transport"]
+        transport_util = round(sum(z.current_count / z.capacity * 100 for z in transport_zones if z.capacity) / len(transport_zones), 1) if transport_zones else None
+
+        alerts = list_alerts(db, event_id=e.id)
+
+        out.append({
+            "event_id": e.id, "name": e.name, "status": e.status,
+            "event_date": e.event_date, "event_time": e.event_time,
+            "venue_lat": e.venue_lat, "venue_lng": e.venue_lng,
+            "bookings": bookings,
+            "live_crowd": live_crowd,
+            "risk_zone_counts": risk_counts,
+            "hotel_occupancy_pct": hotel_occ,
+            "transport_utilization_pct": transport_util,
+            "alert_count": len(alerts),
+            "event_health_score": event_health_score(db)["overall"] if is_live else None,
+        })
+    return out
+
+
+def government_event_impact(db, event_id):
+    event = db.get(models.Event, event_id)
+    if not event:
+        return None
+    is_live = event.status == "live"
+    zones = db.query(models.Zone).filter(models.Zone.event_id == event.id).all()
+    analytics = event_analytics(db, event_id=event.id)
+
+    venue_zones = [z for z in zones if z.domain == "venue"]
+    high_risk_zones = []
+    if is_live:
+        for z in venue_zones:
+            r = zone_risk(z, db)
+            if r["level"] in ("HIGH", "CRITICAL"):
+                high_risk_zones.append({"zone_id": z.id, "zone_name": z.name, "level": r["level"], "score": r["score"]})
+
+    crowd_trend = None
+    if is_live:
+        snapshots = (
+            db.query(models.CrowdSnapshot)
+            .join(models.Zone, models.CrowdSnapshot.zone_id == models.Zone.id)
+            .filter(models.Zone.event_id == event.id)
+            .order_by(models.CrowdSnapshot.captured_at.desc())
+            .limit(200)
+            .all()
+        )
+        crowd_trend = [{"captured_at": s.captured_at.isoformat(), "zone_id": s.zone_id, "count": s.count} for s in reversed(snapshots)]
+
+    hotel_zones = [z for z in zones if z.type == "hotel"]
+    hotels = [{
+        "zone_id": h.id, "name": h.name, "capacity": h.capacity, "current_count": h.current_count,
+        "occupancy_pct": round(h.current_count / h.capacity * 100, 1) if h.capacity else None,
+    } for h in hotel_zones]
+
+    transport_zones = [z for z in zones if z.domain == "transport"]
+    transport = [{
+        "zone_id": t.id, "name": t.name, "capacity": t.capacity, "current_count": t.current_count,
+        "utilization_pct": round(t.current_count / t.capacity * 100, 1) if t.capacity else None,
+    } for t in transport_zones]
+
+    alerts = list_alerts(db, event_id=event.id)
+
+    return {
+        "event_id": event.id, "event_name": event.name, "status": event.status, "is_live": is_live,
+        "crowd": {
+            "attendance": analytics["total_registered"], "checked_in": analytics["total_checked_in"],
+            "peak_occupancy_pct": analytics["peak_occupancy_pct"],
+            "high_risk_zones": high_risk_zones if is_live else None,
+            "crowd_trend": crowd_trend if crowd_trend else ("unavailable — only tracked for the live event" if not is_live else []),
+        },
+        "hospitality": {
+            "hotels": hotels,
+            "avg_occupancy_pct": analytics["hotel_utilization_pct"] if hotel_zones else None,
+        },
+        "transport": {
+            "zones": transport,
+            "avg_utilization_pct": analytics["transport_utilization_pct"] if transport_zones else None,
+            "reference_routes_available": db.query(models.TransitRoute).filter(models.TransitRoute.region == event.region).count() if event.region else 0,
+        },
+        "emergency": {
+            "alerts": alerts, "alert_count": len(alerts),
+            "note": "no separate emergency-resource inventory exists beyond the shared bus/staff/medical Resource pool",
+        },
+        "business_services": {
+            "restaurants": None, "shops": None, "service_providers": None,
+            "note": "unavailable — no restaurant/shop/service-provider table exists in the current schema",
+        },
+        "event_health_score": event_health_score(db)["overall"] if is_live else None,
+    }
+
+
+def government_risk(db):
+    """Aggregates the SAME zone_risk()/risk_level() output the Command
+    Centre's Risk Register already computes -- no second formula. Scoped to
+    events with status=="live" (there is normally exactly one, per this
+    app's own single-live-event design, but this loops generically in case
+    that ever changes)."""
+    live_events = db.query(models.Event).filter(models.Event.status == "live").all()
+    rows = []
+    for event in live_events:
+        zones = db.query(models.Zone).filter(models.Zone.event_id == event.id).all()
+        for z in zones:
+            r = zone_risk(z, db)
+            factors = {
+                "capacity_pressure_pct": r["capacity_pressure_pct"], "arrival_surge": r["arrival_surge"],
+                "flow_instability": r["flow_instability"], "resource_pressure": r["resource_pressure"],
+            }
+            top_factor = max(factors, key=factors.get)
+            rows.append({
+                "event_id": event.id, "event_name": event.name,
+                "zone_id": z.id, "zone_name": z.name, "domain": z.domain,
+                "lat": z.lat, "lng": z.lng,
+                "level": r["level"], "score": r["score"],
+                "top_contributing_factor": top_factor,
+            })
+    counts = {lvl: sum(1 for r in rows if r["level"] == lvl) for lvl in ("LOW", "MODERATE", "HIGH", "CRITICAL")}
+    return {"counts": counts, "zones": sorted(rows, key=lambda r: r["score"], reverse=True)}
+
+
+def government_trends(db):
+    """Real DB-derived time series only. crowd_trend/booking_trend/
+    alert_trend are simple counts bucketed by day from real timestamped
+    rows (CrowdSnapshot/VisitorProfile/Alert) -- an empty list, not a fake
+    curve, when there's no history yet for a bucket."""
+    def _bucket_by_day(rows, get_ts):
+        buckets = {}
+        for row in rows:
+            ts = get_ts(row)
+            if not ts:
+                continue
+            day = ts.date().isoformat()
+            buckets[day] = buckets.get(day, 0) + 1
+        return [{"date": d, "count": c} for d, c in sorted(buckets.items())]
+
+    live = get_live_event(db)
+    crowd_trend = []
+    if live:
+        snapshots = (
+            db.query(models.CrowdSnapshot)
+            .join(models.Zone, models.CrowdSnapshot.zone_id == models.Zone.id)
+            .filter(models.Zone.event_id == live.id)
+            .order_by(models.CrowdSnapshot.captured_at.asc())
+            .all()
+        )
+        # Bucketed by MINUTE (not exact timestamp) -- CrowdSnapshot gets a row
+        # per zone per simulation tick, which can be seconds apart, so the raw
+        # per-snapshot series is too dense to read as a chart. Sum per minute
+        # instead, same "real data, just aggregated for readability" approach
+        # already used for booking/alert trends below (bucketed by day).
+        by_minute = {}
+        for s in snapshots:
+            minute = s.captured_at.replace(second=0, microsecond=0).isoformat()
+            by_minute[minute] = by_minute.get(minute, 0) + s.count
+        crowd_trend = [{"captured_at": ts, "total_count": c} for ts, c in sorted(by_minute.items())][-60:]
+
+    bookings = db.query(models.VisitorProfile).all()
+    booking_trend = _bucket_by_day(bookings, lambda b: b.created_at)
+
+    alerts = db.query(models.Alert).all()
+    alert_trend = _bucket_by_day(alerts, lambda a: a.created_at)
+
+    return {
+        "crowd_trend": crowd_trend if crowd_trend else [],
+        "crowd_trend_scope": "live event only" if live else "unavailable — no live event",
+        "booking_trend_by_day": booking_trend,
+        "alert_trend_by_day": alert_trend,
+        "transport_trend": None,
+        "transport_trend_note": "unavailable — TransitRoute is static reference data, not a time series",
     }
 
 
@@ -2862,8 +3144,11 @@ def chatbot_answer(db, question):
 # to this level of detail — every other region gets an explicit "not
 # available" note instead of a guessed schedule for a station not looked up.
 
-def _region_gated(db):
-    event = get_live_event(db)
+def _region_gated(db, event=None):
+    """event: pass the SPECIFIC event to gate by (e.g. an attendee's own
+    booked event) -- defaults to get_live_event() so every existing operator
+    caller (Command Centre) is completely unaffected."""
+    event = event or get_live_event(db)
     return bool(event and event.region == "Maharashtra")
 
 
@@ -2873,8 +3158,8 @@ def _routes_for(db, region, mode):
     ).order_by(models.TransitRoute.id).all()
 
 
-def transport_hub_arrivals(db):
-    if not _region_gated(db):
+def transport_hub_arrivals(db, event=None):
+    if not _region_gated(db, event):
         return {"available": False, "arrivals": [],
                 "note": "No independently verified flight schedule for this region's airport yet."}
     state = get_state_row(db)
@@ -2893,8 +3178,8 @@ def transport_hub_arrivals(db):
     }
 
 
-def local_transit_feed(db):
-    if not _region_gated(db):
+def local_transit_feed(db, event=None):
+    if not _region_gated(db, event):
         return {
             "available": False,
             "trains": {"suburban": [], "long_distance": []},

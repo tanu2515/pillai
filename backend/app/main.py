@@ -844,9 +844,10 @@ def patch_resource(resource_type: str, req: ResourceUpdate, db: Session = Depend
 
 @app.get("/api/evacuation-routes")
 def get_evacuation_routes(
-    accessible_only: bool = False, lat: float | None = None, lng: float | None = None, db: Session = Depends(get_db),
+    accessible_only: bool = False, lat: float | None = None, lng: float | None = None,
+    event_id: int | None = None, db: Session = Depends(get_db),
 ):
-    return engine.evacuation_routes(db, accessible_only=accessible_only, lat=lat, lng=lng)
+    return engine.evacuation_routes(db, accessible_only=accessible_only, lat=lat, lng=lng, event_id=event_id)
 
 
 @app.post("/api/attendee/accessibility-request")
@@ -1139,8 +1140,8 @@ def patch_alert(alert_id: int, req: AlertStatusUpdate, db: Session = Depends(get
 
 
 @app.get("/api/notifications")
-def get_notifications(role: str | None = None, db: Session = Depends(get_db)):
-    return engine.list_notifications(db, role=role)
+def get_notifications(role: str | None = None, event_id: int | None = None, db: Session = Depends(get_db)):
+    return engine.list_notifications(db, role=role, event_id=event_id)
 
 
 @app.post("/api/notifications/{notification_id}/read")
@@ -1479,12 +1480,24 @@ def hotel_webhook(req: HotelWebhookUpdate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/attendee/hotels")
-def attendee_hotels(db: Session = Depends(get_db)):
-    """Live connected hotel inventory for the attendee side.
+def attendee_hotels(event_id: int | None = None, db: Session = Depends(get_db)):
+    """Live connected hotel inventory for the attendee side, scoped to one
+    event (pass the attendee's booked event_id, e.g. from /api/my-plan) so a
+    hotel booked/mapped for a different event is never shown. Falls back to
+    the currently-live event when no event_id is given — never "every hotel
+    across every event," which was the previous (buggy) behavior.
     Only hotels with KAIRO/partner inventory are shown as live; no room count is invented from map data."""
-    hotels = db.query(models.Zone).filter(models.Zone.type == "hotel").order_by(models.Zone.name).all()
+    event = db.get(models.Event, event_id) if event_id is not None else engine.get_live_event(db)
+    if not event:
+        return {"hotels": [], "note": "No event context available."}
+    hotels = (
+        db.query(models.Zone)
+        .filter(models.Zone.type == "hotel", models.Zone.event_id == event.id)
+        .order_by(models.Zone.name)
+        .all()
+    )
     out = []
-    venue = db.query(models.Zone).filter(models.Zone.type == "arena").first()
+    venue = db.query(models.Zone).filter(models.Zone.type == "arena", models.Zone.event_id == event.id).first()
     for h in hotels:
         occupied, available, updated_at, source = _hotel_snapshot(db, h)
         distance = engine._haversine_km(venue.lat, venue.lng, h.lat, h.lng) if venue else None
@@ -1497,16 +1510,29 @@ def attendee_hotels(db: Session = Depends(get_db)):
             "last_updated": updated_at,
         })
     out.sort(key=lambda x: (x["available_rooms"] <= 0, x["distance_km"] is None, x["distance_km"] or 999))
-    return {"hotels": out, "note": "Live room counts come from connected KAIRO partner inventory. Map-only hotels are not assigned room counts."}
+    return {
+        "event_id": event.id,
+        "hotels": out,
+        "note": "Live room counts come from connected KAIRO partner inventory for this event. Map-only hotels are not assigned room counts.",
+    }
 
 
 @app.get("/api/attendee/transport")
-def attendee_transport(db: Session = Depends(get_db)):
-    """Attendee-facing transport summary using the existing KAIRO transport feeds."""
-    local = engine.local_transit_feed(db)
-    flights = engine.transport_hub_arrivals(db)
-    demand = engine.transport_demand_prediction(db)
-    return {"local": local, "flights": flights, "demand": demand}
+def attendee_transport(event_id: int | None = None, db: Session = Depends(get_db)):
+    """Attendee-facing transport summary. `local` (buses/trains) and `flights`
+    are genuinely city/region-level feeds (not tied to any one event — labeled
+    as such below) but region-gated by the attendee's own event (falling back
+    to the currently-live event) rather than "whichever event happens to be
+    live" independent of what this attendee booked; `demand` is the per-event
+    transport-zone prediction, scoped the same way."""
+    event = db.get(models.Event, event_id) if event_id is not None else engine.get_live_event(db)
+    local = engine.local_transit_feed(db, event=event)
+    flights = engine.transport_hub_arrivals(db, event=event)
+    demand = engine.transport_demand_prediction(db, event_id=event_id)
+    return {
+        "local": local, "flights": flights, "demand": demand,
+        "local_scope": "city/region-level — not specific to any one event",
+    }
 
 
 # --- transport demand prediction (Section 14) -------------------------------
@@ -1552,6 +1578,36 @@ def emergency_status_endpoint(db: Session = Depends(get_db)):
 @app.get("/api/analytics/post-event")
 def post_event_analytics(event_id: int | None = None, db: Session = Depends(get_db)):
     return engine.event_analytics(db, event_id=event_id)
+
+
+# --- Government/Admin: city-level intelligence (read-only) ------------------
+
+@app.get("/api/government/overview")
+def government_overview(db: Session = Depends(get_db)):
+    return engine.government_overview(db)
+
+
+@app.get("/api/government/events")
+def government_events(db: Session = Depends(get_db)):
+    return engine.government_events(db)
+
+
+@app.get("/api/government/events/{event_id}/impact")
+def government_event_impact(event_id: int, db: Session = Depends(get_db)):
+    result = engine.government_event_impact(db, event_id)
+    if result is None:
+        raise HTTPException(404, "event not found")
+    return result
+
+
+@app.get("/api/government/risk")
+def government_risk(db: Session = Depends(get_db)):
+    return engine.government_risk(db)
+
+
+@app.get("/api/government/trends")
+def government_trends(db: Session = Depends(get_db)):
+    return engine.government_trends(db)
 
 
 # --- multi-event attendee registration (Sections 4-5) -----------------------

@@ -27,7 +27,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="my-events"
-        options={{ title: "My Events", tabBarIcon: ({ focused }) => <TabIcon emoji="🎟️" focused={focused} /> }}
+        options={{ title: "My Event", tabBarIcon: ({ focused }) => <TabIcon emoji="🎟️" focused={focused} /> }}
       />
       <Tabs.Screen
         name="notifications"
