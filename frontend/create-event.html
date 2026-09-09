@@ -78,7 +78,27 @@
   .toast.show{ display:block; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .fade-up{ animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
+
+  .clock-time-label{ padding:2px 10px; border-radius:8px; color:#94A3B8; cursor:pointer; user-select:none; }
+  .clock-time-label.active{ background:rgba(25,118,210,.12); color:#1976D2; }
+  .clock-ampm-btn{ background:#F1F5F9; border:1px solid #E2E8F0; color:#64748B; font-size:10px; font-weight:800; letter-spacing:.04em; border-radius:6px; padding:3px 8px; cursor:pointer; }
+  .clock-ampm-btn.active{ background:#1976D2; color:#fff; border-color:#1976D2; }
+  .clock-face{ position:relative; width:240px; height:240px; margin:0 auto; border-radius:50%; background:#F1F5F9; border:1px solid #E2E8F0; }
+  .clock-center-dot{ position:absolute; width:8px; height:8px; border-radius:50%; background:#1976D2; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; }
+  .clock-hand-wrap{ position:absolute; left:50%; top:50%; width:0; height:0; z-index:2; }
+  .clock-hand-line{ position:absolute; left:-1px; top:-92px; width:2px; height:92px; background:#1976D2; transform-origin:bottom center; }
+  .clock-number{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:#123B6D; cursor:pointer; user-select:none; z-index:4; }
+  .clock-number:hover{ background:rgba(25,118,210,.14); }
+  .clock-number.selected{ background:#1976D2; color:#fff; }
+
+  .date-weekday{ width:34px; text-align:center; font-size:10px; font-weight:800; color:#94A3B8; }
+  .date-cell{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:#123B6D; cursor:pointer; user-select:none; }
+  .date-cell:hover{ background:rgba(25,118,210,.14); }
+  .date-cell.selected{ background:#1976D2; color:#fff; }
+  .date-cell.today{ border:1px solid #1976D2; }
+  .date-cell.empty{ visibility:hidden; cursor:default; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
 
@@ -95,6 +115,7 @@
       <a href="my-events-organizer.html" class="text-xs text-accent hover:underline font-bold">← My Events</a>
       <a href="event-setup.html" class="text-xs text-accent hover:underline font-bold">Live Event Setup →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
 </div>
@@ -102,7 +123,7 @@
 <main class="p-4 sm:p-6 max-w-6xl mx-auto">
 
   <!-- Live-event distinction banner -->
-  <div class="row-card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap fade-up">
+  <div id="live-event-banner" class="hidden row-card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap fade-up">
     <div class="flex items-center gap-3 flex-wrap">
       <span class="phase-pill" style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);color:#16A34A;">● CURRENT LIVE EVENT</span>
       <span class="text-sm font-bold" id="live-event-name">Loading…</span>
@@ -224,6 +245,54 @@
   </div>
 </div>
 
+<!-- Clock picker (event time) -->
+<div id="clock-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="row-card p-5 max-w-xs w-full">
+    <div class="flex items-center justify-center gap-1 mb-4">
+      <span id="clock-hour-label" class="clock-time-label text-3xl font-extrabold" onclick="setClockMode('hour')">06</span>
+      <span class="text-3xl font-extrabold text-ink">:</span>
+      <span id="clock-minute-label" class="clock-time-label text-3xl font-extrabold" onclick="setClockMode('minute')">00</span>
+      <div class="flex flex-col gap-1 ml-2">
+        <button type="button" id="clock-am-btn" class="clock-ampm-btn" onclick="setClockAmPm('AM')">AM</button>
+        <button type="button" id="clock-pm-btn" class="clock-ampm-btn" onclick="setClockAmPm('PM')">PM</button>
+      </div>
+    </div>
+    <div class="clock-face">
+      <div class="clock-hand-wrap" id="clock-hand-wrap"><div class="clock-hand-line"></div></div>
+      <div class="clock-center-dot"></div>
+      <div id="clock-face-numbers"></div>
+    </div>
+    <div class="flex items-center justify-end gap-2 mt-4">
+      <button class="btn-secondary rounded-lg px-3 py-1.5 text-xs" onclick="closeClockPicker()">Cancel</button>
+      <button class="btn-primary rounded-lg px-3 py-1.5 text-xs" onclick="confirmClockPicker()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Date picker (event date) -->
+<div id="date-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
+  <div class="row-card p-5 max-w-xs w-full">
+    <div class="flex items-center justify-between mb-3">
+      <button type="button" class="btn-secondary rounded-lg px-2.5 py-1 text-xs" onclick="changeDateMonth(-1)">←</button>
+      <span id="date-picker-month-label" class="text-sm font-extrabold"></span>
+      <button type="button" class="btn-secondary rounded-lg px-2.5 py-1 text-xs" onclick="changeDateMonth(1)">→</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1 mb-1">
+      <div class="date-weekday">Su</div>
+      <div class="date-weekday">Mo</div>
+      <div class="date-weekday">Tu</div>
+      <div class="date-weekday">We</div>
+      <div class="date-weekday">Th</div>
+      <div class="date-weekday">Fr</div>
+      <div class="date-weekday">Sa</div>
+    </div>
+    <div id="date-picker-grid" class="grid grid-cols-7 gap-1"></div>
+    <div class="flex items-center justify-end gap-2 mt-4">
+      <button class="btn-secondary rounded-lg px-3 py-1.5 text-xs" onclick="closeDatePicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -249,22 +318,18 @@ const GENDERS = ["Men's", "Women's"];
 
 function defaultForm() {
   return {
-    name: "Vyavastha Mega Cricket Championship",
-    description: "A marquee T20 league fixture — Mumbai Indians vs Chennai Super Kings — at Suraj Complex, Mumbai.",
-    category: "Sports",
-    is_sport: true,
-    sport: "Cricket", competition: "IPL", stage: "League", tournament_gender: "Men's",
-    team_home: "Mumbai Indians", team_away: "Chennai Super Kings",
-    event_date: "2026-11-14", event_time: "19:30",
-    venue_name: "Suraj Complex", venue_address: "Suraj Complex, Mumbai, Maharashtra", city: "Mumbai",
+    name: "",
+    description: "",
+    category: "",
+    is_sport: false,
+    sport: "", competition: "", stage: "", tournament_gender: "",
+    team_home: "", team_away: "",
+    event_date: "", event_time: "",
+    venue_name: "", venue_address: "", city: "",
     region: null, venue_lat: null, venue_lng: null,
-    expected_attendance: 42000, safe_capacity: 45300,
-    tiers: [
-      { name: "General", price: 500, capacity: 30000, gate_name: "" },
-      { name: "Premium", price: 1500, capacity: 12000, gate_name: "" },
-      { name: "VIP", price: 5000, capacity: 3300, gate_name: "" },
-    ],
-    banner_emoji: "🏏",
+    expected_attendance: 0, safe_capacity: 0,
+    tiers: [],
+    banner_emoji: "",
   };
 }
 let wizardForm = defaultForm();
@@ -332,10 +397,10 @@ function renderStep() {
       <h3 class="text-base font-extrabold mb-1">📋 Event Details</h3>
       <p class="text-muted text-xs mb-4">The headline info shown across the catalog, event page and search.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        ${field("Event name", `<input type="text" id="f-name" class="w-full p-2.5 text-sm" value="${esc(wizardForm.name)}" oninput="wizardForm.name=this.value" />`)}
-        ${field("Banner emoji", `<input type="text" id="f-emoji" maxlength="2" class="w-full p-2.5 text-sm" value="${esc(wizardForm.banner_emoji)}" oninput="wizardForm.banner_emoji=this.value" />`)}
+        ${field("Event name", `<input type="text" id="f-name" placeholder="e.g. Mumbai Global Music Festival" class="w-full p-2.5 text-sm" value="${esc(wizardForm.name)}" oninput="wizardForm.name=this.value" />`)}
+        ${field("Banner emoji", `<input type="text" id="f-emoji" maxlength="2" placeholder="🎉" class="w-full p-2.5 text-sm" value="${esc(wizardForm.banner_emoji)}" oninput="wizardForm.banner_emoji=this.value" />`)}
       </div>
-      <div class="mt-3">${field("Description", `<textarea id="f-desc" rows="3" class="w-full p-2.5 text-sm" oninput="wizardForm.description=this.value">${esc(wizardForm.description)}</textarea>`)}</div>
+      <div class="mt-3">${field("Description", `<textarea id="f-desc" rows="3" placeholder="A short description shown on the event page and catalog listing." class="w-full p-2.5 text-sm" oninput="wizardForm.description=this.value">${esc(wizardForm.description)}</textarea>`)}</div>
       <label class="flex items-center gap-2 text-xs mt-3">
         <input type="checkbox" id="f-issport" ${wizardForm.is_sport ? "checked" : ""} onchange="wizardForm.is_sport=this.checked; wizardForm.category = this.checked ? 'Sports' : ''; " />
         This is a sports fixture (adds team/competition metadata in the next step)
@@ -352,8 +417,8 @@ function renderStep() {
           ${field("Competition", selectHtml("f-comp", COMPETITIONS, wizardForm.competition, "wizardForm.competition=this.value"))}
           ${field("Stage", selectHtml("f-stage", STAGES, wizardForm.stage, "wizardForm.stage=this.value"))}
           ${field("Gender", selectHtml("f-gender", GENDERS, wizardForm.tournament_gender, "wizardForm.tournament_gender=this.value"))}
-          ${field("Home team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
-          ${field("Away team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
+          ${field("Home team", `<input type="text" placeholder="e.g. Mumbai Indians" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
+          ${field("Away team", `<input type="text" placeholder="e.g. Chennai Super Kings" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
         </div>`;
     }
   } else if (key === "datetime") {
@@ -361,18 +426,18 @@ function renderStep() {
       <h3 class="text-base font-extrabold mb-1">🗓 Date &amp; Time</h3>
       <p class="text-muted text-xs mb-4">When doors open — shown on the catalog and event page.</p>
       <div class="grid grid-cols-2 gap-3 max-w-sm">
-        ${field("Event date", `<input type="date" class="w-full p-2.5 text-sm" value="${esc(wizardForm.event_date)}" oninput="wizardForm.event_date=this.value" />`)}
-        ${field("Event time", `<input type="time" class="w-full p-2.5 text-sm" value="${esc(wizardForm.event_time)}" oninput="wizardForm.event_time=this.value" />`)}
+        ${field("Event date", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;" onclick="openDatePicker()"><span>${formatDateDisplay(wizardForm.event_date) || "Select date"}</span><span>📅</span></button>`)}
+        ${field("Event time", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;" onclick="openClockPicker()"><span>${formatTime12(wizardForm.event_time) || "Select time"}</span><span>🕐</span></button>`)}
       </div>`;
   } else if (key === "venue") {
     el.innerHTML = `
       <h3 class="text-base font-extrabold mb-1">📍 Venue &amp; City</h3>
       <p class="text-muted text-xs mb-4">Venue name/address, city, and a map point — the same location picker Event Setup uses.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        ${field("Venue name", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_name)}" oninput="wizardForm.venue_name=this.value" />`)}
-        ${field("City", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.city)}" oninput="wizardForm.city=this.value" />`)}
+        ${field("Venue name", `<input type="text" placeholder="e.g. Wankhede Stadium" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_name)}" oninput="wizardForm.venue_name=this.value" />`)}
+        ${field("City", `<input type="text" placeholder="e.g. Mumbai" class="w-full p-2.5 text-sm" value="${esc(wizardForm.city)}" oninput="wizardForm.city=this.value" />`)}
       </div>
-      <div class="mt-3">${field("Venue address", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_address)}" oninput="wizardForm.venue_address=this.value" />`)}</div>
+      <div class="mt-3">${field("Venue address", `<input type="text" placeholder="Full street address" class="w-full p-2.5 text-sm" value="${esc(wizardForm.venue_address)}" oninput="wizardForm.venue_address=this.value" />`)}</div>
       <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end mt-3">
         <div class="dropdown" id="region-dropdown">
           <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">State / Region</label>
@@ -395,13 +460,20 @@ function renderStep() {
       <h3 class="text-base font-extrabold mb-1">👥 Capacity</h3>
       <p class="text-muted text-xs mb-4">Drives the risk engine's capacity-pressure term once this event is live, and the "Sold Out" state on the catalog.</p>
       <div class="grid grid-cols-2 gap-3 max-w-sm">
-        ${field("Expected attendance", `<input type="number" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.expected_attendance}" oninput="wizardForm.expected_attendance=parseInt(this.value)||0" />`)}
-        ${field("Safe capacity", `<input type="number" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.safe_capacity}" oninput="wizardForm.safe_capacity=parseInt(this.value)||0" />`)}
+        ${field("Expected attendance", `<input type="number" placeholder="e.g. 42000" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.expected_attendance || ""}" oninput="wizardForm.expected_attendance=parseInt(this.value)||0" />`)}
+        ${field("Safe capacity", `<input type="number" placeholder="e.g. 45000" class="w-full p-2.5 text-sm font-mono" value="${wizardForm.safe_capacity || ""}" oninput="wizardForm.safe_capacity=parseInt(this.value)||0" />`)}
       </div>`;
   } else if (key === "tiers") {
     el.innerHTML = `
       <h3 class="text-base font-extrabold mb-1">🎟 Ticket Tiers</h3>
       <p class="text-muted text-xs mb-4">Each tier books against its own capacity pool (large tiers ≥10,000 also get a numbered-seat block).</p>
+      <div class="flex items-center gap-2 flex-wrap px-3 mb-1">
+        <span class="eyebrow flex-1 min-w-[110px]">Tier name</span>
+        <span class="eyebrow w-24">Price ₹</span>
+        <span class="eyebrow w-28">Capacity</span>
+        <span class="eyebrow w-40">Gate label</span>
+        <span class="w-[34px]"></span>
+      </div>
       <div id="tiers-rows" class="flex flex-col gap-2"></div>
       <button class="btn-secondary px-3 py-2 rounded-lg text-xs mt-2" onclick="addTierRow()">+ ADD TIER</button>
       <div class="text-xs mt-3" id="tiers-total"></div>`;
@@ -458,8 +530,8 @@ function renderTierRows() {
   document.getElementById("tiers-rows").innerHTML = wizardForm.tiers.map((t, i) => `
     <div class="row-card p-3 flex items-center gap-2 flex-wrap">
       <input type="text" placeholder="Tier name" class="p-2 text-xs flex-1 min-w-[110px]" value="${esc(t.name)}" oninput="wizardForm.tiers[${i}].name=this.value" />
-      <input type="number" placeholder="Price ₹" class="p-2 text-xs w-24 font-mono" value="${t.price}" oninput="wizardForm.tiers[${i}].price=parseFloat(this.value)||0; renderTierTotal();" />
-      <input type="number" placeholder="Capacity" class="p-2 text-xs w-28 font-mono" value="${t.capacity}" oninput="wizardForm.tiers[${i}].capacity=parseInt(this.value)||0; renderTierTotal();" />
+      <input type="number" placeholder="e.g. 500" class="p-2 text-xs w-24 font-mono" value="${t.price || ""}" oninput="wizardForm.tiers[${i}].price=parseFloat(this.value)||0; renderTierTotal();" />
+      <input type="number" placeholder="e.g. 5000" class="p-2 text-xs w-28 font-mono" value="${t.capacity || ""}" oninput="wizardForm.tiers[${i}].capacity=parseInt(this.value)||0; renderTierTotal();" />
       <input type="text" placeholder="Gate label (optional)" class="p-2 text-xs w-40" value="${esc(t.gate_name)}" oninput="wizardForm.tiers[${i}].gate_name=this.value" />
       <button class="btn-danger px-2.5 py-1.5 rounded-lg text-[11px]" onclick="removeTierRow(${i})">✕</button>
     </div>`).join("");
@@ -547,10 +619,148 @@ document.addEventListener("click", (e) => {
   if (dd && !dd.contains(e.target)) document.getElementById("region-panel")?.classList.add("hidden");
 });
 
+// --- Clock picker (Android-style circular time picker) --------------------
+let clockState = { hour: 6, minute: 0, ampm: "PM", mode: "hour" };
+
+function parseTimeTo12h(t) {
+  if (!t) return null;
+  const [hStr, mStr] = t.split(":");
+  let h = parseInt(hStr, 10), m = parseInt(mStr, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12; if (h === 0) h = 12;
+  return { hour: h, minute: m, ampm };
+}
+
+function formatTime12(t) {
+  const parsed = parseTimeTo12h(t);
+  if (!parsed) return "";
+  return `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")} ${parsed.ampm}`;
+}
+
+function openClockPicker() {
+  const parsed = parseTimeTo12h(wizardForm.event_time);
+  if (parsed) {
+    clockState = { ...parsed, mode: "hour" };
+  } else {
+    const now = new Date();
+    let h = now.getHours() % 12; if (h === 0) h = 12;
+    clockState = { hour: h, minute: Math.round(now.getMinutes() / 5) * 5 % 60, ampm: now.getHours() >= 12 ? "PM" : "AM", mode: "hour" };
+  }
+  renderClockPicker();
+  document.getElementById("clock-picker-overlay").classList.remove("hidden");
+}
+
+function closeClockPicker() { document.getElementById("clock-picker-overlay").classList.add("hidden"); }
+
+function setClockMode(mode) { clockState.mode = mode; renderClockPicker(); }
+function setClockAmPm(ampm) { clockState.ampm = ampm; renderClockPicker(); }
+
+function pickClockValue(val) {
+  if (clockState.mode === "hour") {
+    clockState.hour = val;
+    clockState.mode = "minute";
+  } else {
+    clockState.minute = val;
+  }
+  renderClockPicker();
+}
+
+function renderClockPicker() {
+  document.getElementById("clock-hour-label").textContent = String(clockState.hour).padStart(2, "0");
+  document.getElementById("clock-hour-label").classList.toggle("active", clockState.mode === "hour");
+  document.getElementById("clock-minute-label").textContent = String(clockState.minute).padStart(2, "0");
+  document.getElementById("clock-minute-label").classList.toggle("active", clockState.mode === "minute");
+  document.getElementById("clock-am-btn").classList.toggle("active", clockState.ampm === "AM");
+  document.getElementById("clock-pm-btn").classList.toggle("active", clockState.ampm === "PM");
+
+  const cx = 120, cy = 120, r = 92;
+  const isHourMode = clockState.mode === "hour";
+  const marks = Array.from({ length: 12 }, (_, i) => isHourMode ? (i === 0 ? 12 : i) : i * 5);
+  const selectedIndex = isHourMode ? (clockState.hour % 12) : (Math.round((clockState.minute % 60) / 5) % 12);
+
+  document.getElementById("clock-face-numbers").innerHTML = marks.map((label, i) => {
+    const angle = i * 30 * Math.PI / 180;
+    const x = cx + r * Math.sin(angle);
+    const y = cy - r * Math.cos(angle);
+    return `<div class="clock-number${i === selectedIndex ? " selected" : ""}" style="left:${x}px; top:${y}px;" onclick="pickClockValue(${label})">${String(label).padStart(2, "0")}</div>`;
+  }).join("");
+
+  document.getElementById("clock-hand-wrap").style.transform = `rotate(${selectedIndex * 30}deg)`;
+}
+
+function confirmClockPicker() {
+  let h24 = clockState.hour % 12;
+  if (clockState.ampm === "PM") h24 += 12;
+  wizardForm.event_time = `${String(h24).padStart(2, "0")}:${String(clockState.minute).padStart(2, "0")}`;
+  closeClockPicker();
+  renderStep();
+}
+
+// --- Date picker (calendar) -------------------------------------------------
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+let datePickerView = { year: 2026, month: 0 };
+
+function formatDateDisplay(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function openDatePicker() {
+  const now = new Date();
+  if (wizardForm.event_date) {
+    const [y, m] = wizardForm.event_date.split("-").map(Number);
+    datePickerView = { year: y, month: m - 1 };
+  } else {
+    datePickerView = { year: now.getFullYear(), month: now.getMonth() };
+  }
+  renderDatePicker();
+  document.getElementById("date-picker-overlay").classList.remove("hidden");
+}
+
+function closeDatePicker() { document.getElementById("date-picker-overlay").classList.add("hidden"); }
+
+function changeDateMonth(delta) {
+  let m = datePickerView.month + delta, y = datePickerView.year;
+  if (m < 0) { m = 11; y -= 1; }
+  if (m > 11) { m = 0; y += 1; }
+  datePickerView = { year: y, month: m };
+  renderDatePicker();
+}
+
+function pickDate(y, m, d) {
+  wizardForm.event_date = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  closeDatePicker();
+  renderStep();
+}
+
+function renderDatePicker() {
+  const { year, month } = datePickerView;
+  document.getElementById("date-picker-month-label").textContent = `${MONTH_NAMES[month]} ${year}`;
+
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const now = new Date();
+  const selected = wizardForm.event_date ? wizardForm.event_date.split("-").map(Number) : null;
+
+  const cells = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(`<div class="date-cell empty"></div>`);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = now.getFullYear() === year && now.getMonth() === month && now.getDate() === d;
+    const isSelected = selected && selected[0] === year && selected[1] === month + 1 && selected[2] === d;
+    cells.push(`<div class="date-cell${isSelected ? " selected" : ""}${isToday && !isSelected ? " today" : ""}" onclick="pickDate(${year}, ${month}, ${d})">${d}</div>`);
+  }
+  document.getElementById("date-picker-grid").innerHTML = cells.join("");
+}
+
 // --- Map picker ------------------------------------------------------------
-let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null;
+let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null, mapPickerAddressInfo = null;
 function openMapPicker() {
   mapPickerPoint = wizardForm.venue_lat != null ? { lat: wizardForm.venue_lat, lng: wizardForm.venue_lng } : null;
+  mapPickerAddressInfo = null;
   document.getElementById("map-picker-coords").textContent = mapPickerPoint ? `${mapPickerPoint.lat.toFixed(5)}, ${mapPickerPoint.lng.toFixed(5)}` : "No point selected yet — click the map.";
   document.getElementById("map-picker-search").value = "";
   document.getElementById("map-picker-search-status").textContent = "";
@@ -561,7 +771,7 @@ function openMapPicker() {
     if (!mapPickerInstance) {
       mapPickerInstance = L.map("map-picker-map");
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapPickerInstance);
-      mapPickerInstance.on("click", (e) => setMapPickerPoint(e.latlng.lat, e.latlng.lng));
+      mapPickerInstance.on("click", (e) => { setMapPickerPoint(e.latlng.lat, e.latlng.lng); lookupMapPickerAddress(e.latlng.lat, e.latlng.lng); });
     }
     mapPickerInstance.setView([startLat, startLng], mapPickerPoint ? 14 : 12);
     mapPickerInstance.invalidateSize();
@@ -574,6 +784,17 @@ function setMapPickerPoint(lat, lng) {
   mapPickerMarker = L.marker([lat, lng]).addTo(mapPickerInstance);
   document.getElementById("map-picker-coords").textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
+async function lookupMapPickerAddress(lat, lng) {
+  const status = document.getElementById("map-picker-search-status");
+  mapPickerAddressInfo = null;
+  status.textContent = "Looking up address…";
+  try {
+    const res = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
+    if (!res.ok) { status.textContent = "No address found for this point — you can fill venue details in manually."; return; }
+    mapPickerAddressInfo = await res.json();
+    status.textContent = mapPickerAddressInfo.display_name || "";
+  } catch (e) { status.textContent = ""; }
+}
 async function searchMapPickerLocation() {
   const query = document.getElementById("map-picker-search").value.trim();
   const status = document.getElementById("map-picker-search-status");
@@ -585,6 +806,7 @@ async function searchMapPickerLocation() {
     const data = await res.json();
     mapPickerInstance.setView([data.lat, data.lng], 15);
     setMapPickerPoint(data.lat, data.lng);
+    mapPickerAddressInfo = data;
     status.textContent = data.display_name || "";
   } catch (e) { status.textContent = "Search unavailable right now."; }
 }
@@ -593,7 +815,18 @@ function confirmMapPicker() {
   if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
   wizardForm.venue_lat = mapPickerPoint.lat; wizardForm.venue_lng = mapPickerPoint.lng;
   document.getElementById("venue-coords-status").textContent = `${wizardForm.venue_lat.toFixed(5)}, ${wizardForm.venue_lng.toFixed(5)}`;
+
+  if (mapPickerAddressInfo) {
+    if (mapPickerAddressInfo.venue_name) wizardForm.venue_name = mapPickerAddressInfo.venue_name;
+    if (mapPickerAddressInfo.display_name) wizardForm.venue_address = mapPickerAddressInfo.display_name;
+    if (mapPickerAddressInfo.city) wizardForm.city = mapPickerAddressInfo.city;
+    if (mapPickerAddressInfo.state) {
+      const match = regionList.find(r => r.state.toLowerCase() === mapPickerAddressInfo.state.toLowerCase());
+      if (match) selectedRegionState = match.state;
+    }
+  }
   closeMapPicker();
+  renderStep();
 }
 
 // --- Publish ---------------------------------------------------------------
@@ -665,8 +898,8 @@ function openSportsEditor() {
     ${field("Competition", selectHtml("se-comp", COMPETITIONS, wizardForm.competition, "wizardForm.competition=this.value"))}
     ${field("Stage", selectHtml("se-stage", STAGES, wizardForm.stage, "wizardForm.stage=this.value"))}
     ${field("Gender", selectHtml("se-gender", GENDERS, wizardForm.tournament_gender, "wizardForm.tournament_gender=this.value"))}
-    ${field("Home team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
-    ${field("Away team", `<input type="text" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
+    ${field("Home team", `<input type="text" placeholder="e.g. Mumbai Indians" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_home)}" oninput="wizardForm.team_home=this.value" />`)}
+    ${field("Away team", `<input type="text" placeholder="e.g. Chennai Super Kings" class="w-full p-2.5 text-sm" value="${esc(wizardForm.team_away)}" oninput="wizardForm.team_away=this.value" />`)}
   `;
 }
 async function saveSportsEditor() {
@@ -688,10 +921,17 @@ async function saveSportsEditor() {
 
 // --- Boot ----------------------------------------------------------------
 async function loadLiveEventBanner() {
+  const banner = document.getElementById("live-event-banner");
   try {
     const ev = await api("/api/event");
-    document.getElementById("live-event-name").textContent = ev.configured ? ev.name : "No live event configured";
-  } catch (e) { document.getElementById("live-event-name").textContent = "Unavailable"; }
+    const email = getOperatorEmail();
+    const isOwner = ev.configured && ev.owner_email && email && ev.owner_email.toLowerCase() === email.toLowerCase();
+    // Only relevant to this operator when it's their own live event —
+    // no live event, or someone else's, means nothing to show here.
+    if (!isOwner) { banner.classList.add("hidden"); return; }
+    document.getElementById("live-event-name").textContent = ev.name;
+    banner.classList.remove("hidden");
+  } catch (e) { banner.classList.add("hidden"); }
 }
 
 function render() { renderStepper(); renderStep(); }

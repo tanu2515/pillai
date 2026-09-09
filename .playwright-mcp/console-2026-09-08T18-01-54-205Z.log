@@ -1,7 +1,0 @@
-[     387ms] [WARNING] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation @ https://cdn.tailwindcss.com/:63
-[  159097ms] Uncaught (in promise) Error: Map container is already initialized.
-    at _initContainer (https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js:0:38484)
-    at initialize (https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js:0:27031)
-    at e (https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js:0:2703)
-    at <anonymous> (https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js:0:146622)
-    at renderMap (http://localhost:8001/event-detail.html?id=13:475:16)

@@ -1,7 +1,0 @@
-[    1322ms] [WARNING] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation @ https://cdn.tailwindcss.com/:63
-[  234837ms] [WARNING] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation @ https://cdn.tailwindcss.com/:63
-[ 1697720ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8001/api/cameras:0
-[ 1697719ms] TypeError: Failed to fetch
-    at api (http://localhost:8001/event-setup.html:265:52)
-    at loadCameraStatuses (http://localhost:8001/event-setup.html:575:22)
-    at http://localhost:8001/event-setup.html:926:48

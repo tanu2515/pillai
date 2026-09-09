@@ -196,8 +196,17 @@ function skipEventPicker() {
 
 document.getElementById("email").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 
+const STAFF_ROLES = ["Event Command Operator", "Service Provider"];
 const preselect = new URLSearchParams(window.location.search).get("role");
-if (preselect && ROLE_DEST[preselect]) document.getElementById("role").value = preselect;
+const roleSelect = document.getElementById("role");
+if (preselect === "Attendee") {
+  // Guest sign-in entry point — staff shouldn't be offered here either.
+  [...roleSelect.options].forEach(opt => { if (opt.value !== "Attendee") opt.remove(); });
+} else if (STAFF_ROLES.includes(preselect)) {
+  // Staff sign-in entry point — attendees don't belong in this list.
+  roleSelect.querySelector('option[value="Attendee"]').remove();
+  roleSelect.value = preselect;
+}
 
 (async function loadEvent() {
   const el = document.getElementById("event-subtitle");

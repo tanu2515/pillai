@@ -21,6 +21,7 @@ input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px 
 .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#64748B}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #E2E8F0}
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="min-h-screen font-sans">
 <header class="border-b border-border bg-white/85 backdrop-blur sticky top-0 z-10">
@@ -35,6 +36,7 @@ input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px 
     <div class="flex items-center gap-3">
       <span id="who" class="text-xs text-muted"></span>
       <button class="text-xs font-bold text-muted hover:text-accent" onclick="logout()">SIGN OUT</button>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center"></div>
     </div>
   </div>
 </header>

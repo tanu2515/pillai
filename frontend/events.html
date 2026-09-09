@@ -74,6 +74,7 @@
   .chat-input-row button:hover{ background:#123B6D; }
   .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:8.5px; color:#1976D2; background:#E4F1FF; border:1px solid rgba(25,118,210,.25); border-radius:20px; padding:2px 7px; margin-top:6px; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen">
 
@@ -89,7 +90,7 @@
       <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
     </div>
-    <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
+    <a href="profile.html" id="account-avatar" data-avatar-fallback="👤" class="w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold" style="background:#1976D2;color:#fff;" title=""></a>
   </div>
 </nav>
 

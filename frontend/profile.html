@@ -40,6 +40,7 @@
   .btn-logout{ transition:.2s; }
   .btn-logout:hover{ background:#FEF2F2; transform:translateY(-1px); }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
 
@@ -55,7 +56,7 @@
       <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
     </div>
-    <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#1976D2;color:#fff;">👤</a>
+    <a href="profile.html" id="account-avatar" data-avatar-fallback="👤" class="w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold" style="background:#1976D2;color:#fff;" title=""></a>
   </div>
 </nav>
 

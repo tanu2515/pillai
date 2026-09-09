@@ -47,6 +47,7 @@
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .fade-up{ animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
 
@@ -62,6 +63,7 @@
     <div class="flex items-center gap-3">
       <a href="event-setup.html" class="text-xs text-accent hover:underline font-bold">Live Event Setup →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
 </div>
@@ -78,7 +80,6 @@
       <div>
         <p class="text-muted text-xs m-0">Signed in as <b id="who-email" class="text-ink font-mono"></b> — showing only events you created.</p>
       </div>
-      <a href="create-event.html" class="btn-primary px-5 py-2.5 rounded-lg text-xs no-underline inline-block">+ CREATE NEW EVENT</a>
     </div>
 
     <div id="empty-state" class="row-card p-10 text-center mt-6 hidden fade-up">

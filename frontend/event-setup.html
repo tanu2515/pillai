@@ -62,6 +62,7 @@
   .dropdown-item:hover{ background:rgba(25,118,210,.08); }
   .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
 
@@ -80,6 +81,7 @@
       <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
 </div>
@@ -301,11 +303,23 @@ function openMapPicker(latInputId, lngInputId) {
   }, 50);
 }
 
+let mapPickerAddressInfo = null;
+
 function setMapPickerPoint(lat, lng) {
   mapPickerPoint = { lat, lng };
   if (mapPickerMarker) mapPickerInstance.removeLayer(mapPickerMarker);
   mapPickerMarker = L.marker([lat, lng]).addTo(mapPickerInstance);
   document.getElementById("map-picker-coords").textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  // Only the new-event form has a region field to auto-fill from this point.
+  if (mapPickerTargetLat === "new-ev-lat") lookupMapPickerAddress(lat, lng);
+}
+
+async function lookupMapPickerAddress(lat, lng) {
+  mapPickerAddressInfo = null;
+  try {
+    const res = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
+    if (res.ok) mapPickerAddressInfo = await res.json();
+  } catch (e) { /* best-effort — region just stays manual if this fails */ }
 }
 
 async function searchMapPickerLocation() {
@@ -321,6 +335,7 @@ async function searchMapPickerLocation() {
     const data = await res.json();
     mapPickerInstance.setView([data.lat, data.lng], 15);
     setMapPickerPoint(data.lat, data.lng);
+    if (mapPickerTargetLat === "new-ev-lat") mapPickerAddressInfo = data;
     status.textContent = data.display_name || "";
   } catch (e) {
     status.textContent = "Search unavailable right now.";
@@ -336,6 +351,10 @@ function confirmMapPicker() {
   document.getElementById(mapPickerTargetLat).value = mapPickerPoint.lat.toFixed(6);
   document.getElementById(mapPickerTargetLng).value = mapPickerPoint.lng.toFixed(6);
   if (mapPickerTargetLat === "h-lat") refreshHotelLocationStatus();
+  if (mapPickerTargetLat === "new-ev-lat" && mapPickerAddressInfo?.state) {
+    const match = regionListForCreate.find(r => r.state.toLowerCase() === mapPickerAddressInfo.state.toLowerCase());
+    if (match) selectNewEventRegion(match.state, `${match.state} — ${match.city}`);
+  }
   closeMapPicker();
 }
 
@@ -575,8 +594,19 @@ async function stopCamera(zoneId) {
 
 async function loadCameraStatuses() {
   const list = await api("/api/cameras");
-  cameraStatusMap = Object.fromEntries(list.map(c => [c.zone_id, c]));
-  (setupData?.gates || []).forEach(g => renderCamBlock(g.id));
+  const next = Object.fromEntries(list.map(c => [c.zone_id, c]));
+  (setupData?.gates || []).forEach(g => {
+    const isFirstLoad = !(g.id in cameraStatusMap);
+    const wasRunning = !!cameraStatusMap[g.id]?.running;
+    const isRunning = !!next[g.id]?.running;
+    cameraStatusMap[g.id] = next[g.id];
+    // A zone with no camera running has nothing time-sensitive to refresh —
+    // re-rendering it anyway on every 4s poll wipes out whatever the operator
+    // is mid-typing/mid-selecting in its (still-empty) setup form, including
+    // a file already chosen for upload. Only re-render when it hasn't been
+    // rendered yet, there's live status to show, or the running state flipped.
+    if (isFirstLoad || isRunning || wasRunning !== isRunning) renderCamBlock(g.id);
+  });
 }
 
 async function saveGate(id) {

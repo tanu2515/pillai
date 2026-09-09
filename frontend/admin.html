@@ -58,6 +58,7 @@
   .dropdown-item:hover{ background:rgba(25,118,210,.08); }
   .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen">
 
@@ -74,6 +75,7 @@
       <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
 </div>

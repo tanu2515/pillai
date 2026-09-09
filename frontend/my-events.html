@@ -47,6 +47,7 @@
   .modal-box{ width:100%; max-width:22rem; background:#FFFFFF; border-radius:20px; padding:24px; text-align:center; animation: sheetIn .25s cubic-bezier(.2,.8,.2,1) both; }
   @keyframes sheetIn{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen pb-16">
 
@@ -63,7 +64,7 @@
       <a href="notifications.html" class="nav-link">Alerts</a>
       <a href="ai-architecture.html" class="nav-link">ℹ️ How AI works</a>
     </div>
-    <a href="profile.html" class="w-9 h-9 rounded-full flex items-center justify-center text-lg" style="background:#E4F1FF;">👤</a>
+    <a href="profile.html" id="account-avatar" data-avatar-fallback="👤" class="w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold" style="background:#1976D2;color:#fff;" title=""></a>
   </div>
 </nav>
 

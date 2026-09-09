@@ -1,5 +1,0 @@
-[      91ms] [WARNING] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation @ https://cdn.tailwindcss.com/:63
-[   29501ms] TypeError: Cannot set properties of null (setting 'name')
-    at HTMLInputElement.oninput (http://localhost:8001/create-event.html:701:19)
-[   31930ms] TypeError: Cannot set properties of null (setting 'description')
-    at HTMLTextAreaElement.oninput (http://localhost:8001/create-event.html:701:26)

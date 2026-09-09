@@ -372,6 +372,7 @@ def get_event(db: Session = Depends(get_db)):
         "expected_attendance": event.expected_attendance,
         "safe_capacity": event.safe_capacity, "status": event.status,
         "venue_lat": event.venue_lat, "venue_lng": event.venue_lng,
+        "owner_email": event.owner_email,
     }
 
 
@@ -1264,13 +1265,23 @@ def _overpass_hotels(lat: float, lng: float, radius_m: int):
     raise HTTPException(502, f"hotel discovery source unavailable: {last_error}")
 
 
+def _address_fields(item: dict) -> dict:
+    addr = item.get("address", {}) or {}
+    return {
+        "display_name": item.get("display_name", ""),
+        "venue_name": addr.get("amenity") or addr.get("building") or addr.get("tourism") or addr.get("leisure") or "",
+        "city": addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality") or addr.get("county") or "",
+        "state": addr.get("state") or "",
+    }
+
+
 @app.post("/api/hotels/geocode")
 def hotel_geocode(req: GeocodeRequest):
     query = req.query.strip()
     if len(query) < 2:
         raise HTTPException(400, "Enter a valid event location")
     try:
-        qs = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1})
+        qs = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1, "addressdetails": 1})
         geo_req = urllib.request.Request(
             "https://nominatim.openstreetmap.org/search?" + qs,
             headers={"User-Agent": "KAIRO-PS8-HotelDiscovery/2.0"},
@@ -1283,12 +1294,34 @@ def hotel_geocode(req: GeocodeRequest):
         return {
             "lat": float(item["lat"]),
             "lng": float(item["lon"]),
-            "display_name": item.get("display_name", query),
+            **_address_fields(item),
         }
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(502, f"location search unavailable: {exc}")
+
+
+@app.get("/api/geocode/reverse")
+def geocode_reverse(lat: float, lng: float):
+    """Address details for a map-click point (no search query) — lets Create
+    Event's venue picker fill venue name/city/region from wherever the
+    operator clicks, not just from a text search."""
+    try:
+        qs = urllib.parse.urlencode({"lat": lat, "lon": lng, "format": "jsonv2", "addressdetails": 1})
+        geo_req = urllib.request.Request(
+            "https://nominatim.openstreetmap.org/reverse?" + qs,
+            headers={"User-Agent": "KAIRO-PS8-HotelDiscovery/2.0"},
+        )
+        with urllib.request.urlopen(geo_req, timeout=15) as resp:
+            item = json.loads(resp.read().decode("utf-8"))
+        if not item or "address" not in item:
+            raise HTTPException(404, "No address found for this point")
+        return _address_fields(item)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"reverse geocoding unavailable: {exc}")
 
 
 @app.post("/api/hotels/discover-nearby")
