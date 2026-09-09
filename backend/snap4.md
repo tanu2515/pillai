@@ -1,0 +1,124 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=e6]
+      - heading "EVENT SETUP — Hack Celestial EVENT COMMAND OPERATOR" [level=1] [ref=e7]:
+        - generic [ref=e8]: EVENT SETUP — Hack Celestial
+        - generic [ref=e9]: EVENT COMMAND OPERATOR
+    - generic [ref=e10]:
+      - link "📋 My Events" [ref=e11] [cursor=pointer]:
+        - /url: my-events-organizer.html
+      - link "+ Create New Event" [ref=e12] [cursor=pointer]:
+        - /url: create-event.html
+      - link "Go to Command Centre →" [ref=e13] [cursor=pointer]:
+        - /url: command-center.html?role=command
+      - link "Switch role →" [ref=e14] [cursor=pointer]:
+        - /url: /login.html
+      - button "🌙" [ref=e15] [cursor=pointer]
+  - main [ref=e16]:
+    - paragraph [ref=e18]: Configure every operational detail for Hack Celestial before doors open — gate staffing, which hotels to recommend and their room counts, and transport capacity. Everything here feeds directly into the Command Centre's risk engine, the hotel recommendation ranker, and the attendee-facing event page.
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21] [cursor=pointer]: Gates & Staff
+        - generic [ref=e22] [cursor=pointer]: Hotels
+        - generic [ref=e23] [cursor=pointer]: Transport
+      - generic [ref=e132]:
+        - generic [ref=e133]:
+          - heading "Resources" [level=3] [ref=e134]
+          - generic [ref=e135]:
+            - generic [ref=e136]:
+              - generic [ref=e137]: Buses
+              - generic [ref=e138]: 20 available
+              - generic [ref=e139]:
+                - text: Total
+                - spinbutton "Total" [ref=e140]: "20"
+              - button "SAVE" [ref=e141] [cursor=pointer]
+            - generic [ref=e142]:
+              - generic [ref=e143]: Staff
+              - generic [ref=e144]: 40 available
+              - generic [ref=e145]:
+                - text: Total
+                - spinbutton "Total" [ref=e146]: "40"
+              - button "SAVE" [ref=e147] [cursor=pointer]
+            - generic [ref=e148]:
+              - generic [ref=e149]: Medical units
+              - generic [ref=e150]: 10 available
+              - generic [ref=e151]:
+                - text: Total
+                - spinbutton "Total" [ref=e152]: "10"
+              - button "SAVE" [ref=e153] [cursor=pointer]
+        - generic [ref=e154]:
+          - generic [ref=e155]:
+            - generic [ref=e156]:
+              - generic [ref=e157]: Local Bus Hub hub
+              - button "DELETE" [ref=e158] [cursor=pointer]
+            - generic [ref=e159]: 0% occupied · NORMAL
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - text: Capacity
+                - spinbutton "Capacity" [ref=e162]: "200"
+              - generic [ref=e163]:
+                - text: Currently occupied
+                - spinbutton "Currently occupied" [ref=e164]: "0"
+              - generic [ref=e165]:
+                - text: Mobile number
+                - textbox "Mobile number" [ref=e166]: "9863234576"
+            - generic [ref=e167]:
+              - generic [ref=e168]:
+                - button "Webcam" [ref=e169] [cursor=pointer]
+                - button "CCTV / RTSP" [ref=e170] [cursor=pointer]
+                - button "Upload Video" [ref=e171] [cursor=pointer]
+                - generic [ref=e172]: or manually
+                - spinbutton "Count" [ref=e173]
+                - button "SET COUNT" [ref=e174] [cursor=pointer]
+              - generic [ref=e175]:
+                - spinbutton "0" [ref=e176]
+                - generic [ref=e177]: device index (backend machine's webcam, not the browser's)
+                - button "START WEBCAM" [ref=e178] [cursor=pointer]
+            - button "SAVE" [ref=e179] [cursor=pointer]
+          - generic [ref=e180]:
+            - generic [ref=e181]:
+              - generic [ref=e182]: Railway Station hub
+              - button "DELETE" [ref=e183] [cursor=pointer]
+            - generic [ref=e184]: 25% occupied · NORMAL
+            - generic [ref=e185]:
+              - generic [ref=e186]:
+                - text: Capacity
+                - spinbutton "Capacity" [ref=e187]: "2000"
+              - generic [ref=e188]:
+                - text: Currently occupied
+                - spinbutton "Currently occupied" [ref=e189]: "500"
+              - generic [ref=e190]:
+                - text: Mobile number
+                - textbox "Mobile number" [ref=e191]: "1345678998"
+            - generic [ref=e192]:
+              - generic [ref=e193]:
+                - button "Webcam" [ref=e194] [cursor=pointer]
+                - button "CCTV / RTSP" [ref=e195] [cursor=pointer]
+                - button "Upload Video" [ref=e196] [cursor=pointer]
+                - generic [ref=e197]: or manually
+                - spinbutton "Count" [ref=e198]
+                - button "SET COUNT" [ref=e199] [cursor=pointer]
+              - generic [ref=e200]:
+                - spinbutton "0" [ref=e201]
+                - generic [ref=e202]: device index (backend machine's webcam, not the browser's)
+                - button "START WEBCAM" [ref=e203] [cursor=pointer]
+            - button "SAVE" [ref=e204] [cursor=pointer]
+        - generic [ref=e205]:
+          - heading "Add a transport zone" [level=3] [ref=e206]
+          - generic [ref=e207]:
+            - textbox "Zone name" [ref=e208]
+            - combobox [ref=e209]:
+              - option "Corridor" [selected]
+              - option "Transport Hub"
+            - spinbutton "Capacity" [ref=e210]
+            - textbox "10-digit mobile number" [ref=e211]
+            - spinbutton "Latitude" [ref=e212]
+            - spinbutton "Longitude" [ref=e213]
+          - generic [ref=e214]:
+            - button "📍 Pick on map" [ref=e215] [cursor=pointer]
+            - button "ADD TRANSPORT ZONE" [ref=e216] [cursor=pointer]
+        - 'link "FINISH SETUP: OPEN COMMAND CENTRE →" [ref=e218] [cursor=pointer]':
+          - /url: command-center.html?role=command

@@ -1,0 +1,94 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=e6]
+      - heading "EVENT SETUP — Hack Celestial EVENT COMMAND OPERATOR" [level=1] [ref=e7]:
+        - generic [ref=e8]: EVENT SETUP — Hack Celestial
+        - generic [ref=e9]: EVENT COMMAND OPERATOR
+    - generic [ref=e10]:
+      - link "📋 My Events" [ref=e11] [cursor=pointer]:
+        - /url: my-events-organizer.html
+      - link "+ Create New Event" [ref=e12] [cursor=pointer]:
+        - /url: create-event.html
+      - link "Go to Command Centre →" [ref=e13] [cursor=pointer]:
+        - /url: command-center.html?role=command
+      - link "Switch role →" [ref=e14] [cursor=pointer]:
+        - /url: /login.html
+      - button "🌙" [ref=e15] [cursor=pointer]
+  - main [ref=e16]:
+    - paragraph [ref=e18]: Configure every operational detail for Hack Celestial before doors open — gate staffing, which hotels to recommend and their room counts, and transport capacity. Everything here feeds directly into the Command Centre's risk engine, the hotel recommendation ranker, and the attendee-facing event page.
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21] [cursor=pointer]: Gates & Staff
+        - generic [ref=e22] [cursor=pointer]: Hotels
+        - generic [ref=e23] [cursor=pointer]: Transport
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - generic [ref=e27]:
+              - textbox [ref=e29]: Gate1
+              - generic [ref=e30]: 1,450 / 2,000 currently
+            - generic [ref=e31]:
+              - text: Capacity
+              - spinbutton "Capacity" [ref=e32]: "2000"
+            - generic [ref=e33]:
+              - text: Staff assigned
+              - spinbutton "Staff assigned" [ref=e34]
+            - generic [ref=e35]:
+              - checkbox "Accessible exit" [ref=e36]
+              - text: Accessible exit
+            - button "SAVE" [ref=e37] [cursor=pointer]
+            - button "DELETE" [ref=e38] [cursor=pointer]
+            - generic [ref=e39]:
+              - generic [ref=e40]:
+                - button "Webcam" [ref=e41] [cursor=pointer]
+                - button "CCTV / RTSP" [ref=e42] [cursor=pointer]
+                - button "Upload Video" [ref=e43] [cursor=pointer]
+                - generic [ref=e44]: or manually
+                - spinbutton "Count" [ref=e45]
+                - button "SET COUNT" [ref=e46] [cursor=pointer]
+              - generic [ref=e47]:
+                - spinbutton "0" [ref=e48]
+                - generic [ref=e49]: device index (backend machine's webcam, not the browser's)
+                - button "START WEBCAM" [ref=e50] [cursor=pointer]
+          - generic [ref=e51]:
+            - generic [ref=e52]:
+              - textbox [ref=e54]: Gate 2
+              - generic [ref=e55]: 4,230 / 2,000 currently
+            - generic [ref=e56]:
+              - text: Capacity
+              - spinbutton "Capacity" [ref=e57]: "2000"
+            - generic [ref=e58]:
+              - text: Staff assigned
+              - spinbutton "Staff assigned" [ref=e59]
+            - generic [ref=e60]:
+              - checkbox "Accessible exit" [ref=e61]
+              - text: Accessible exit
+            - button "SAVE" [ref=e62] [cursor=pointer]
+            - button "DELETE" [ref=e63] [cursor=pointer]
+            - generic [ref=e64]:
+              - generic [ref=e65]:
+                - button "Webcam" [ref=e66] [cursor=pointer]
+                - button "CCTV / RTSP" [ref=e67] [cursor=pointer]
+                - button "Upload Video" [ref=e68] [cursor=pointer]
+                - generic [ref=e69]: or manually
+                - spinbutton "Count" [ref=e70]
+                - button "SET COUNT" [ref=e71] [cursor=pointer]
+              - generic [ref=e72]:
+                - spinbutton "0" [ref=e73]
+                - generic [ref=e74]: device index (backend machine's webcam, not the browser's)
+                - button "START WEBCAM" [ref=e75] [cursor=pointer]
+        - generic [ref=e76]:
+          - heading "Add a gate" [level=3] [ref=e77]
+          - paragraph [ref=e78]: Prefer clicking a map instead? Add it from the Command Centre's Overview map — it shows up here too.
+          - generic [ref=e79]:
+            - textbox "Gate name" [ref=e80]
+            - spinbutton "Capacity" [ref=e81]
+            - spinbutton "Latitude" [ref=e82]
+            - spinbutton "Longitude" [ref=e83]
+          - generic [ref=e84]:
+            - button "📍 Pick on map" [ref=e85] [cursor=pointer]
+            - button "ADD GATE" [ref=e86] [cursor=pointer]
+        - 'button "NEXT: HOTELS →" [ref=e88] [cursor=pointer]'

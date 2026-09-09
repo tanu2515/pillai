@@ -1,0 +1,79 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "VYAVASTHA" [ref=e6]
+      - heading "EVENT SETUP — Hack Celestial EVENT COMMAND OPERATOR" [level=1] [ref=e7]:
+        - generic [ref=e8]: EVENT SETUP — Hack Celestial
+        - generic [ref=e9]: EVENT COMMAND OPERATOR
+    - generic [ref=e10]:
+      - link "📋 My Events" [ref=e11] [cursor=pointer]:
+        - /url: my-events-organizer.html
+      - link "+ Create New Event" [ref=e12] [cursor=pointer]:
+        - /url: create-event.html
+      - link "Go to Command Centre →" [ref=e13] [cursor=pointer]:
+        - /url: command-center.html?role=command
+      - link "Switch role →" [ref=e14] [cursor=pointer]:
+        - /url: /login.html
+      - button "🌙" [ref=e15] [cursor=pointer]
+  - main [ref=e16]:
+    - paragraph [ref=e18]: Configure every operational detail for Hack Celestial before doors open — gate staffing, which hotels to recommend and their room counts, and transport capacity. Everything here feeds directly into the Command Centre's risk engine, the hotel recommendation ranker, and the attendee-facing event page.
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21] [cursor=pointer]: Gates & Staff
+        - generic [ref=e22] [cursor=pointer]: Hotels
+        - generic [ref=e23] [cursor=pointer]: Transport
+      - generic [ref=e89]:
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - textbox [ref=e94]: Minority Girls Hostel Panvel
+              - generic [ref=e95]: RECOMMENDED
+            - button "📍 Edit location" [ref=e96] [cursor=pointer]
+            - button "DELETE" [ref=e97] [cursor=pointer]
+          - generic [ref=e98]: 1.2 km from venue
+          - generic [ref=e99]:
+            - generic [ref=e100]:
+              - text: Total rooms
+              - spinbutton "Total rooms" [ref=e101]: "50"
+            - generic [ref=e102]:
+              - text: Occupied rooms
+              - spinbutton "Occupied rooms" [ref=e103]: "0"
+            - generic [ref=e104]:
+              - text: Price tier (1-5)
+              - spinbutton "Price tier (1-5)" [ref=e105]: "1"
+            - generic [ref=e106]:
+              - text: Mobile number
+              - textbox "Mobile number" [ref=e107]: "8764225427"
+          - generic [ref=e108]:
+            - text: Amenities
+            - textbox "Amenities" [ref=e109]: Rooms, Foods
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - checkbox "Manually mark as the recommended hotel (overrides the automatic ranking)" [ref=e112]
+              - text: Manually mark as the recommended hotel (overrides the automatic ranking)
+            - button "SAVE" [ref=e113] [cursor=pointer]
+        - generic [ref=e114]:
+          - heading "Add a hotel" [level=3] [ref=e115]
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - text: Radius
+              - combobox "Radius" [ref=e118]:
+                - option "0.5 km"
+                - option "1 km"
+                - option "2 km"
+                - option "5 km" [selected]
+                - option "10 km"
+            - button "🔎 FIND NEARBY HOTELS" [ref=e119] [cursor=pointer]
+          - generic [ref=e120]:
+            - textbox "Hotel name" [ref=e121]
+            - spinbutton "Total rooms" [ref=e122]
+            - spinbutton "Price tier 1-5" [ref=e123]
+            - textbox "10-digit mobile number" [ref=e124]
+            - textbox "Amenities (comma-separated)" [ref=e125]
+          - generic [ref=e126]:
+            - button "📍 Pick on map instead" [ref=e127] [cursor=pointer]
+            - generic [ref=e128]: No location set yet — search nearby or pick on map.
+            - button "ADD HOTEL" [ref=e129] [cursor=pointer]
+        - 'button "NEXT: TRANSPORT →" [ref=e131] [cursor=pointer]'
