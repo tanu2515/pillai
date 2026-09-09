@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Event Setup</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,10 +17,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
-          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
-          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
-          high: "#F87171", danger: "#DC2626",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", border: "var(--border)",
+          muted: "var(--muted)", ink: "var(--ink)", accent: "var(--accent)", accentDim: "var(--accentDim)",
+          green: "var(--green)", greenLight: "var(--greenLight)", warn: "var(--warn)", ok: "var(--ok)",
+          high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
       },
@@ -27,40 +28,56 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
-      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
-      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
-    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
+      radial-gradient(circle at 85% 0%, rgba(var(--accent-rgb),.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(var(--green-rgb),.05), transparent 45%),
+      linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:var(--bg);
   }
-  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
-  input[type=text], input[type=number], select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; }
-  input:focus, select:focus{ outline:none; border-color:#1976D2; }
-  select option{ background:#FFFFFF; color:#123B6D; }
-  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .row-card{ background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; }
+  input[type=text], input[type=number], select{ background:var(--surface); border:1px solid var(--border); color:var(--ink); border-radius:8px; }
+  input:focus, select:focus{ outline:none; border-color:var(--accent); }
+  select option{ background:var(--surface); color:var(--ink); }
+  .btn-primary{ background:var(--accent); color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-secondary{ background:#F1F5F9; color:#123B6D; font-weight:700; transition:.15s; }
-  .btn-secondary:hover{ background:#E2E8F0; }
-  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; }
+  .btn-secondary{ background:var(--panel2); color:var(--ink); font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:var(--border); }
+  .btn-danger{ background:rgba(var(--danger-rgb),.08); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); }
   .small-input{ padding:6px 8px; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
-  .tab-btn{ padding:9px 16px; font-size:12.5px; font-weight:800; color:#64748B; border-bottom:2px solid transparent; cursor:pointer; }
-  .tab-btn.active{ color:#1976D2; border-color:#1976D2; }
-  .rec-badge{ font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff; background:#22C55E; border-radius:20px; padding:2px 8px; }
-  .toast{ position:fixed; bottom:20px; right:20px; background:#123B6D; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
+  .tab-btn{ padding:9px 16px; font-size:12.5px; font-weight:800; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; }
+  .tab-btn.active{ color:var(--accent); border-color:var(--accent); }
+  .rec-badge{ font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff; background:var(--ok); border-radius:20px; padding:2px 8px; }
+  .toast{ position:fixed; bottom:20px; right:20px; background:var(--accentDim); color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
   .toast.show{ display:block; }
   .dropdown{ position:relative; min-width:220px; }
-  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
-  .dropdown-btn:hover{ border-color:#1976D2; }
-  .dropdown-caret{ color:#64748B; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
-  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid #E2E8F0; padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:#123B6D; border-radius:0; }
-  input.dropdown-search:focus{ outline:none; border-color:#1976D2; }
+  .dropdown-btn{ width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); color:var(--ink); border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:var(--accent); }
+  .dropdown-caret{ color:var(--muted); font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
+  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid var(--border); padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:var(--ink); border-radius:0; }
+  input.dropdown-search:focus{ outline:none; border-color:var(--accent); }
   .dropdown-panel > div{ max-height:200px; overflow-y:auto; }
   .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
-  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
-  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
+  .dropdown-item:hover{ background:rgba(var(--accent-rgb),.08); }
+  .dropdown-item.selected{ background:rgba(var(--accent-rgb),.12); color:var(--accent); }
 </style>
 <script src="/assets/account-avatar.js"></script>
 </head>
@@ -81,6 +98,7 @@
       <a href="command-center.html?role=command" class="text-xs text-accent hover:underline font-bold">Go to Command Centre →</a>
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
       <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
@@ -105,7 +123,7 @@
       <button type="button" class="btn-secondary rounded-lg px-3 py-2 text-xs" onclick="searchMapPickerLocation()">SEARCH</button>
     </div>
     <div id="map-picker-search-status" class="text-[10.5px] text-muted mb-2"></div>
-    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid var(--border);"></div>
     <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
       <span id="map-picker-coords" class="text-xs text-muted font-mono">No point selected yet — click the map.</span>
       <div class="flex gap-2">
@@ -123,6 +141,19 @@
       which hotels to recommend and their room counts, and transport capacity. Everything here feeds directly into the
       Command Centre's risk engine, the hotel recommendation ranker, and the attendee-facing event page.
     </p>
+  </div>
+
+  <div id="wrong-event" class="row-card p-6 hidden">
+    <p class="text-sm text-muted m-0 mb-1 text-center">
+      The live event right now is <b id="wrong-event-name" class="text-ink"></b>, owned by
+      <b id="wrong-event-owner" class="text-ink font-mono"></b> — not you. Its gates, hotels and transport aren't yours to see or edit.
+    </p>
+    <p class="text-xs text-muted m-0 mb-4 text-center">Pick one of your own events below to open its setup instead.</p>
+    <div id="wrong-event-picker-list" class="flex flex-col gap-2 max-w-md mx-auto mb-3"></div>
+    <p id="wrong-event-empty" class="text-xs text-muted text-center hidden mb-4">You don't have any events yet.</p>
+    <div class="text-center">
+      <a href="create-event.html" class="btn-primary inline-block px-5 py-2.5 rounded-lg text-xs no-underline">+ CREATE A NEW EVENT</a>
+    </div>
   </div>
 
   <div id="not-configured" class="row-card p-6 hidden">
@@ -167,7 +198,7 @@
   </div>
 
   <div id="setup-body" class="hidden">
-    <div class="flex border-b" style="border-color:#E2E8F0;">
+    <div class="flex border-b" style="border-color:var(--border);">
       <div class="tab-btn active" data-tab="gates" onclick="switchTab(this)">Gates &amp; Staff</div>
       <div class="tab-btn" data-tab="hotels" onclick="switchTab(this)">Hotels</div>
       <div class="tab-btn" data-tab="transport" onclick="switchTab(this)">Transport</div>
@@ -175,6 +206,10 @@
 
     <!-- GATES -->
     <section id="tab-gates" class="mt-4">
+      <div id="gate-activity" class="row-card p-3 mb-3 hidden">
+        <div class="eyebrow mb-1">Gate Activity</div>
+        <div id="gate-activity-text" class="text-xs text-ink"></div>
+      </div>
       <div id="gates-list" class="mb-4"></div>
       <div class="row-card p-4">
         <h3 class="eyebrow mb-3">Add a gate</h3>
@@ -266,7 +301,12 @@
 
 <script>
 const API = "";
-async function api(path, opts) { const res = await fetch(API + path, opts); return res.json(); }
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Request failed");
+  return data;
+}
 function getOperatorEmail() { return sessionStorage.getItem("vyavastha_email") || ""; }
 
 // --- Map location picker (shared by the create-event field and every add-a-gate/hotel/transport form) ---
@@ -358,6 +398,23 @@ function confirmMapPicker() {
   closeMapPicker();
 }
 
+function eventStatusPill(status) {
+  if (status === "live") return '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>';
+  if (status === "upcoming") return '<span class="text-[9.5px] font-mono uppercase bg-accent/10 border border-accent/40 text-accent rounded-full px-2 py-0.5">UPCOMING</span>';
+  return '<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">PAUSED</span>';
+}
+
+function eventPickerRow(ev) {
+  return `
+    <button onclick="pickEvent(${ev.id})" class="text-left border border-border rounded-xl p-3 hover:border-accent transition">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-bold">${escapeHtml(ev.name)}</span>
+        ${eventStatusPill(ev.status)}
+      </div>
+      <div class="text-muted text-[11px] mt-0.5">${ev.region || ""}</div>
+    </button>`;
+}
+
 async function refreshSwitchEventLink() {
   const email = getOperatorEmail();
   if (!email) return;
@@ -368,20 +425,22 @@ async function refreshSwitchEventLink() {
 async function openEventPicker() {
   const email = getOperatorEmail();
   const events = await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`);
-  document.getElementById("event-picker-list").innerHTML = events.map(ev => `
-    <button onclick="pickEvent(${ev.id})" class="text-left border border-border rounded-xl p-3 hover:border-accent transition">
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-sm font-bold">${ev.name}</span>
-        ${ev.status === "live" ? '<span class="text-[9.5px] font-mono uppercase bg-green/10 border border-green/40 text-green rounded-full px-2 py-0.5">LIVE</span>' : '<span class="text-[9.5px] font-mono uppercase text-muted border border-border rounded-full px-2 py-0.5">PAUSED</span>'}
-      </div>
-      <div class="text-muted text-[11px] mt-0.5">${ev.region || ""}</div>
-    </button>
-  `).join("");
+  document.getElementById("event-picker-list").innerHTML = events.map(eventPickerRow).join("");
   document.getElementById("event-picker-overlay").classList.remove("hidden");
 }
 
 function closeEventPicker() {
   document.getElementById("event-picker-overlay").classList.add("hidden");
+}
+
+async function showWrongEventPanel(data) {
+  document.getElementById("wrong-event-name").textContent = data.event_name;
+  document.getElementById("wrong-event-owner").textContent = data.owner_email;
+  document.getElementById("wrong-event").classList.remove("hidden");
+  const email = getOperatorEmail();
+  const events = email ? await api(`/api/admin/my-events?email=${encodeURIComponent(email)}`) : [];
+  document.getElementById("wrong-event-empty").classList.toggle("hidden", events.length > 0);
+  document.getElementById("wrong-event-picker-list").innerHTML = events.map(eventPickerRow).join("");
 }
 
 async function pickEvent(eventId) {
@@ -397,10 +456,15 @@ async function pickEvent(eventId) {
       if (!ok) return;
     }
   }
-  await api("/api/admin/switch-event", {
+  const res = await fetch("/api/admin/switch-event", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event_id: eventId, email: getOperatorEmail() }),
   });
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}));
+    alert(b.detail || "Couldn't switch to this event — if it's still 'upcoming', make sure it has a venue location set.");
+    return;
+  }
   location.reload();
 }
 
@@ -411,6 +475,11 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+function setGateStatus(msg) {
+  document.getElementById("gate-activity").classList.remove("hidden");
+  document.getElementById("gate-activity-text").textContent = `${msg} — ${new Date().toLocaleTimeString()}`;
 }
 
 function switchTab(el) {
@@ -426,8 +495,11 @@ function gateRow(g) {
   return `
     <div class="row-card flex items-center gap-3 px-4 py-3 mb-2 flex-wrap">
       <div class="flex-1 min-w-[120px]">
-        <div class="font-bold text-sm">${g.name} ${g.is_accessible ? '<span title="Wheelchair-accessible">♿</span>' : ""}</div>
-        <div class="text-muted text-[10.5px] font-mono">${g.current_count.toLocaleString()} / ${g.capacity.toLocaleString()} currently</div>
+        <div class="flex items-center gap-1.5">
+          <input type="text" class="small-input font-bold text-sm flex-1 min-w-[100px]" id="g-name-${g.id}" value="${escapeHtml(g.name)}" />
+          ${g.is_accessible ? '<span title="Wheelchair-accessible">♿</span>' : ""}
+        </div>
+        <div class="text-muted text-[10.5px] font-mono mt-1">${g.current_count.toLocaleString()} / ${g.capacity.toLocaleString()} currently</div>
       </div>
       <label class="text-[10px] text-muted uppercase tracking-wide">Capacity
         <input type="number" class="small-input w-24" id="g-cap-${g.id}" value="${g.capacity}" />
@@ -441,7 +513,7 @@ function gateRow(g) {
       </label>
       <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveGate(${g.id})">SAVE</button>
       <button class="btn-danger px-3 py-1.5 rounded-lg text-[11px]" onclick="removeGate(${g.id})">DELETE</button>
-      <div id="cam-block-${g.id}" class="w-full mt-1 pt-2 border-t" style="border-color:#E2E8F0;"></div>
+      <div id="cam-block-${g.id}" class="w-full mt-1 pt-2 border-t" style="border-color:var(--border);"></div>
     </div>`;
 }
 
@@ -452,7 +524,7 @@ async function addGate() {
     capacity: parseInt(document.getElementById("g-new-capacity").value) || 0,
     lat: parseFloat(document.getElementById("g-new-lat").value),
     lng: parseFloat(document.getElementById("g-new-lng").value),
-    domain: "venue", type: "gate",
+    domain: "venue", type: "gate", email: getOperatorEmail(),
   };
   if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
     status.textContent = "Name, capacity, latitude and longitude are required.";
@@ -462,15 +534,16 @@ async function addGate() {
   if (!res.ok) { const b = await res.json().catch(() => ({})); status.textContent = b.detail || "Couldn't add this gate."; return; }
   ["g-name", "g-new-capacity", "g-new-lat", "g-new-lng"].forEach(id => document.getElementById(id).value = "");
   status.textContent = "";
-  showToast("Gate added.");
+  setGateStatus(`✓ Gate "${body.name}" added`);
   await load();
 }
 
 async function removeGate(id) {
   if (!confirm("Delete this gate?")) return;
-  const res = await fetch(`/api/zones/${id}`, { method: "DELETE" });
+  const gate = (setupData?.gates || []).find(g => g.id === id);
+  const res = await fetch(`/api/zones/${id}?email=${encodeURIComponent(getOperatorEmail())}`, { method: "DELETE" });
   if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this gate."); return; }
-  showToast("Gate deleted.");
+  setGateStatus(`✓ Gate "${gate ? gate.name : id}" deleted`);
   await load();
 }
 
@@ -540,11 +613,28 @@ function renderCamBlock(zoneId) {
   }
 
   el.innerHTML = `
-    <div class="flex items-center gap-1.5">
+    <div class="flex items-center gap-1.5 flex-wrap">
       ${tabBtn("webcam", "Webcam")}${tabBtn("rtsp", "CCTV / RTSP")}${tabBtn("upload", "Upload Video")}
+      <span class="text-muted text-[10px] mx-1">or manually</span>
+      <input type="number" min="0" class="small-input w-20" id="cam-manual-${zoneId}" placeholder="Count" />
+      <button type="button" class="btn-secondary px-2 py-1 rounded text-[10px]" onclick="submitManualCount(${zoneId})">SET COUNT</button>
     </div>
     ${sourceForm}
     ${cam && cam.error ? `<div class="text-danger text-[10px] mt-1">${escapeHtml(cam.error)}</div>` : ""}`;
+}
+
+async function submitManualCount(zoneId) {
+  const input = document.getElementById(`cam-manual-${zoneId}`);
+  const count = parseInt(input?.value ?? "");
+  if (isNaN(count) || count < 0) { showToast("Enter a valid count first."); return; }
+  const res = await fetch(`/api/zones/${zoneId}/crowd-count`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count, source: "manual", email: getOperatorEmail() }),
+  });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't set the count."); return; }
+  const gate = (setupData?.gates || []).find(g => g.id === zoneId);
+  setGateStatus(`✓ Gate "${gate ? gate.name : zoneId}" count set to ${count.toLocaleString()}`);
+  input.value = "";
+  await load();
 }
 
 async function startWebcam(zoneId) {
@@ -610,15 +700,19 @@ async function loadCameraStatuses() {
 }
 
 async function saveGate(id) {
+  const name = document.getElementById(`g-name-${id}`).value.trim();
+  if (!name) { showToast("Gate name can't be empty."); return; }
   const capacity = parseInt(document.getElementById(`g-cap-${id}`).value);
   const staffVal = document.getElementById(`g-staff-${id}`).value;
   const staff_assigned = staffVal === "" ? null : parseInt(staffVal);
   const is_accessible = document.getElementById(`g-access-${id}`).checked;
-  await api(`/api/event-setup/gates/${id}`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capacity, staff_assigned, is_accessible }),
-  });
-  showToast("Gate updated.");
-  await load();
+  try {
+    await api(`/api/event-setup/gates/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, capacity, staff_assigned, is_accessible, email: getOperatorEmail() }),
+    });
+    setGateStatus(`✓ Gate "${name}" updated`);
+    await load();
+  } catch (e) { showToast(e.message); }
 }
 
 // --- Hotels ------------------------------------------------------------------
@@ -679,15 +773,18 @@ async function saveHotel(id) {
     manual_recommended: document.getElementById(`h-manual-${id}`).checked,
     lat: isNaN(lat) ? null : lat,
     lng: isNaN(lng) ? null : lng,
+    email: getOperatorEmail(),
   };
-  await api(`/api/event-setup/hotels/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  showToast("Hotel updated.");
-  await load();
+  try {
+    await api(`/api/event-setup/hotels/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    showToast("Hotel updated.");
+    await load();
+  } catch (e) { showToast(e.message); }
 }
 
 async function removeHotel(id) {
   if (!confirm("Delete this hotel?")) return;
-  const res = await fetch(`/api/event-setup/hotels/${id}`, { method: "DELETE" });
+  const res = await fetch(`/api/event-setup/hotels/${id}?email=${encodeURIComponent(getOperatorEmail())}`, { method: "DELETE" });
   if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this hotel."); return; }
   await load();
 }
@@ -753,12 +850,15 @@ async function addHotel() {
     amenities: document.getElementById("h-amenities").value.trim() || null,
     lat: parseFloat(document.getElementById("h-lat").value),
     lng: parseFloat(document.getElementById("h-lng").value),
+    email: getOperatorEmail(),
   };
   if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
     document.getElementById("hotel-add-status").textContent = "Name, total rooms, latitude and longitude are required.";
     return;
   }
-  await api("/api/event-setup/hotels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    await api("/api/event-setup/hotels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { document.getElementById("hotel-add-status").textContent = e.message; return; }
   ["h-name", "h-rooms", "h-price", "h-contact", "h-amenities", "h-lat", "h-lng"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("hotel-add-status").textContent = "";
   document.getElementById("h-discovered").classList.add("hidden");
@@ -798,15 +898,18 @@ async function saveTransport(id) {
     capacity: parseInt(document.getElementById(`t-cap-${id}`).value) || null,
     current_count: parseInt(document.getElementById(`t-occ-${id}`).value),
     contact: document.getElementById(`t-contact-${id}`).value.trim() || null,
+    email: getOperatorEmail(),
   };
-  await api(`/api/event-setup/transport/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  showToast("Transport zone updated.");
-  await load();
+  try {
+    await api(`/api/event-setup/transport/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    showToast("Transport zone updated.");
+    await load();
+  } catch (e) { showToast(e.message); }
 }
 
 async function removeTransport(id) {
   if (!confirm("Delete this transport zone?")) return;
-  const res = await fetch(`/api/event-setup/transport/${id}`, { method: "DELETE" });
+  const res = await fetch(`/api/event-setup/transport/${id}?email=${encodeURIComponent(getOperatorEmail())}`, { method: "DELETE" });
   if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this zone."); return; }
   await load();
 }
@@ -819,12 +922,15 @@ async function addTransport() {
     contact: document.getElementById("t-contact").value.trim() || null,
     lat: parseFloat(document.getElementById("t-lat").value),
     lng: parseFloat(document.getElementById("t-lng").value),
+    email: getOperatorEmail(),
   };
   if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
     document.getElementById("transport-add-status").textContent = "Name, capacity, latitude and longitude are required.";
     return;
   }
-  await api("/api/event-setup/transport", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    await api("/api/event-setup/transport", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { document.getElementById("transport-add-status").textContent = e.message; return; }
   ["t-name", "t-capacity", "t-contact", "t-lat", "t-lng"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("transport-add-status").textContent = "";
   showToast("Transport zone added.");
@@ -853,11 +959,13 @@ function renderResources(resources) {
 
 async function saveResource(type) {
   const quantity_total = parseInt(document.getElementById(`res-${type}`).value) || 0;
-  await api(`/api/event-setup/resources/${type}`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity_total }),
-  });
-  showToast(`${RESOURCE_LABELS[type]} updated.`);
-  await load();
+  try {
+    await api(`/api/event-setup/resources/${type}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity_total, email: getOperatorEmail() }),
+    });
+    showToast(`${RESOURCE_LABELS[type]} updated.`);
+    await load();
+  } catch (e) { showToast(e.message); }
 }
 
 // --- Create event inline (skips the Back Office step) -----------------------
@@ -920,7 +1028,9 @@ async function createEventInline() {
     safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
     owner_email: getOperatorEmail() || null,
   };
-  await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { status.textContent = e.message; return; }
   status.textContent = "Created.";
   await load();
   await refreshSwitchEventLink();
@@ -931,10 +1041,21 @@ async function createEventInline() {
 async function load() {
   setupData = await api("/api/event-setup");
   if (!setupData.configured) {
+    document.getElementById("wrong-event").classList.add("hidden");
     document.getElementById("not-configured").classList.remove("hidden");
     document.getElementById("setup-body").classList.add("hidden");
     return;
   }
+  const myEmail = getOperatorEmail();
+  const isMismatched = setupData.owner_email && myEmail && setupData.owner_email.toLowerCase() !== myEmail.toLowerCase();
+  if (isMismatched) {
+    document.getElementById("not-configured").classList.add("hidden");
+    document.getElementById("setup-body").classList.add("hidden");
+    document.getElementById("event-title").textContent = "EVENT SETUP";
+    await showWrongEventPanel(setupData);
+    return;
+  }
+  document.getElementById("wrong-event").classList.add("hidden");
   eventVenueLat = setupData.venue_lat;
   eventVenueLng = setupData.venue_lng;
   document.getElementById("not-configured").classList.add("hidden");
@@ -955,7 +1076,11 @@ async function load() {
 loadRegionsForCreate();
 load();
 refreshSwitchEventLink();
-setInterval(() => { if (setupData?.configured) loadCameraStatuses(); }, 4000);
+setInterval(() => {
+  const myEmail = getOperatorEmail();
+  const isMismatched = setupData?.owner_email && myEmail && setupData.owner_email.toLowerCase() !== myEmail.toLowerCase();
+  if (setupData?.configured && !isMismatched) loadCameraStatuses();
+}, 4000);
 </script>
 </body>
 </html>

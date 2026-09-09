@@ -4,22 +4,37 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Service Provider</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config={theme:{extend:{colors:{bg:'#EAF7F4',panel:'#FFFFFF',border:'#E2E8F0',muted:'#64748B',ink:'#123B6D',accent:'#1976D2',green:'#20C997',ok:'#16A34A',warn:'#D97706',danger:'#DC2626'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
+  tailwind.config={theme:{extend:{colors:{bg:'var(--bg)',panel:'var(--panel)',border:'var(--border)',muted:'var(--muted)',ink:'var(--ink)',accent:'var(--accent)',green:'var(--green)',ok:'var(--ok)',warn:'var(--warn)',danger:'var(--danger)'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
 </script>
 <style>
-body{background:radial-gradient(circle at 10% 0%,rgba(25,118,210,.08),transparent 40%),radial-gradient(circle at 90% 100%,rgba(32,201,151,.06),transparent 45%),#EAF7F4;color:#123B6D}
-.card{background:#fff;border:1px solid #E2E8F0;border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
+:root{
+  --bg:#EAF7F4; --panel:#FFFFFF; --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+  --accent:#1976D2; --green:#20C997; --ok:#16A34A; --warn:#D97706; --danger:#DC2626;
+  --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+  --warn-rgb:245,158,11; --high-rgb:248,113,113;
+}
+:root[data-theme="dark"]{
+  --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+  --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+  --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+  --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+  --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+  --warn-rgb:251,191,36; --high-rgb:251,113,133;
+}
+body{background:radial-gradient(circle at 10% 0%,rgba(var(--accent-rgb),.08),transparent 40%),radial-gradient(circle at 90% 100%,rgba(var(--green-rgb),.06),transparent 45%),var(--bg);color:var(--ink)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
 .btn{font-weight:800;transition:.15s}.btn:hover{transform:translateY(-1px)}
-input,select{background:#fff;border:1px solid #CBD5E1;border-radius:10px;color:#123B6D}
-input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px rgba(25,118,210,.1)}
-.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#64748B}
-.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #E2E8F0}
+input,select{background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.1)}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--border)}
 </style>
 <script src="/assets/account-avatar.js"></script>
 </head>
@@ -36,6 +51,7 @@ input:focus,select:focus{outline:none;border-color:#1976D2;box-shadow:0 0 0 3px 
     <div class="flex items-center gap-3">
       <span id="who" class="text-xs text-muted"></span>
       <button class="text-xs font-bold text-muted hover:text-accent" onclick="logout()">SIGN OUT</button>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2, var(--panel));border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
       <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center"></div>
     </div>
   </div>

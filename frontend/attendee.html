@@ -4,12 +4,33 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — My Event</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <meta http-equiv="refresh" content="0; url=my-events.html">
 <style>
-  body{ font-family: system-ui, sans-serif; background:#F5FAFF; color:#123B6D; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
-  a{ color:#1976D2; font-weight:700; }
+  :root{
+    --bg:#F5FAFF; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E7EEF7; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
+  body{ font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  a{ color:var(--accent); font-weight:700; }
+  .hidden{ display:none; }
+  .theme-toggle-btn{ position:fixed; top:12px; right:50px; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; background:var(--panel2); border:1px solid var(--border); cursor:pointer; }
+  .account-avatar{ position:fixed; top:12px; right:12px; width:28px; height:28px; border-radius:50%; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; background:var(--accent); }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body>
 <!--
@@ -21,6 +42,8 @@
   redirect so existing links (e.g. Command Centre's "Open guest view") still
   resolve.
 -->
+<button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="theme-toggle-btn" title="Toggle light/dark theme">🌙</button>
+<div id="account-avatar" class="account-avatar hidden"></div>
 <p>Redirecting to <a href="my-events.html">My Event</a>…</p>
 <script>location.replace("my-events.html");</script>
 </body>

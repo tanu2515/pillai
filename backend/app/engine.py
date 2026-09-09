@@ -3055,7 +3055,7 @@ def event_setup_summary(db):
     bus = resources_by_type.get("bus")
 
     return {
-        "configured": True, "event_name": event.name,
+        "configured": True, "event_name": event.name, "owner_email": event.owner_email,
         "venue": {"id": venue.id, "name": venue.name, "lat": venue.lat, "lng": venue.lng} if venue else None,
         "venue_lat": event.venue_lat, "venue_lng": event.venue_lng,
         "gates": gates, "hotels": hotels, "transport": transport,
@@ -3082,7 +3082,7 @@ def update_resource(db, resource_type, quantity_total):
     return resource
 
 
-def update_gate_setup(db, zone_id, capacity, staff_assigned, is_accessible=None):
+def update_gate_setup(db, zone_id, capacity, staff_assigned, is_accessible=None, name=None):
     zone = db.get(models.Zone, zone_id)
     if not zone or zone.type != "gate":
         return None
@@ -3090,6 +3090,8 @@ def update_gate_setup(db, zone_id, capacity, staff_assigned, is_accessible=None)
     zone.staff_assigned = staff_assigned
     if is_accessible is not None:
         zone.is_accessible = is_accessible
+    if name is not None and name.strip():
+        zone.name = name.strip()
     db.commit()
     return zone
 
@@ -3198,6 +3200,20 @@ def _deactivate_current_live_event(db):
         db.query(models.SimState).filter(models.SimState.emergency_zone_id.in_(zone_ids)).update(
             {"emergency_zone_id": None, "emergency_active": False}, synchronize_session=False
         )
+        # These four were missing before — any live event with camera/manual
+        # crowd readings, a partner-updated hotel, a Service-Provider-claimed
+        # hotel, or a walkway adjacency crashed this whole function with a
+        # Postgres ForeignKeyViolation on the zones DELETE below (SQLite never
+        # caught it, since it doesn't enforce the FK by default).
+        db.query(models.CrowdSnapshot).filter(models.CrowdSnapshot.zone_id.in_(zone_ids)).delete(synchronize_session=False)
+        db.query(models.HotelInventorySnapshot).filter(models.HotelInventorySnapshot.hotel_id.in_(zone_ids)).delete(synchronize_session=False)
+        db.query(models.HotelEventInterest).filter(models.HotelEventInterest.hotel_id.in_(zone_ids)).delete(synchronize_session=False)
+        db.query(models.UserAccount).filter(models.UserAccount.managed_zone_id.in_(zone_ids)).update(
+            {"managed_zone_id": None}, synchronize_session=False
+        )
+        db.query(models.ZoneEdge).filter(
+            models.ZoneEdge.from_zone_id.in_(zone_ids) | models.ZoneEdge.to_zone_id.in_(zone_ids)
+        ).delete(synchronize_session=False)
     db.query(models.Zone).filter(models.Zone.event_id == old_live.id).delete(synchronize_session=False)
     old_live.status = "paused"
     db.query(models.Resource).delete()
@@ -3262,13 +3278,21 @@ def create_event(db, name, region, expected_attendance, safe_capacity, owner_ema
 
 def switch_to_event(db, event_id, owner_email):
     """An Event Command Operator switching which of their own events is live.
-    Returns None if the event doesn't exist, isn't theirs, or isn't
-    live/paused (e.g. a public catalog listing). No-op if already live."""
+    Returns None if the event doesn't exist, isn't theirs, or is completed.
+    No-op if already live. Also promotes one of the operator's own 'upcoming'
+    catalog events (created via the Create Event wizard) straight to live —
+    the step create-event.html's wizard flags as "not implemented in this
+    build"; it's implemented here instead, reusing the same activation path
+    as a brand-new event, gated by the same ownership check as paused/live
+    switching. Requires a venue point (set at creation) so _activate_event
+    can build its arena zone."""
     target = db.get(models.Event, event_id)
-    if not target or target.owner_email != owner_email or target.status not in ("live", "paused"):
+    if not target or target.owner_email != owner_email or target.status not in ("live", "paused", "upcoming"):
         return None
     if target.status == "live":
         return target
+    if target.status == "upcoming" and (target.venue_lat is None or target.venue_lng is None):
+        return None
     _deactivate_current_live_event(db)
     target.status = "live"
     db.flush()
@@ -3291,11 +3315,12 @@ def list_all_events(db):
 
 
 def list_operator_events(db, owner_email):
-    """Events this Event Command Operator owns and could switch between —
-    used to decide whether login shows a picker."""
+    """Events this Event Command Operator owns and could switch to (live,
+    paused, or upcoming-and-not-yet-activated) — used to decide whether
+    login/Event Setup shows a picker."""
     events = (
         db.query(models.Event)
-        .filter(models.Event.owner_email == owner_email, models.Event.status.in_(["live", "paused"]))
+        .filter(models.Event.owner_email == owner_email, models.Event.status.in_(["live", "paused", "upcoming"]))
         .order_by(models.Event.id.desc())
         .all()
     )

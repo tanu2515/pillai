@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Government / City Intelligence</title>
+<script src="/assets/theme.js"></script>
+<script src="/assets/account-avatar.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,10 +24,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", panel2: "#F1F5F9",
-          border: "#E2E8F0", muted: "#64748B", ink: "#123B6D",
-          accent: "#1976D2", accentDim: "#123B6D", green: "#20C997", greenLight: "#5BE7A9",
-          warn: "#F59E0B", ok: "#22C55E", high: "#F87171", danger: "#DC2626",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", panel2: "var(--panel2)",
+          border: "var(--border)", muted: "var(--muted)", ink: "var(--ink)",
+          accent: "var(--accent)", accentDim: "var(--accentDim)", green: "var(--green)", greenLight: "var(--greenLight)",
+          warn: "var(--warn)", ok: "var(--ok)", high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -36,42 +38,58 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113; --ok-rgb:34,197,94;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133; --ok-rgb:52,211,153;
+  }
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
-      radial-gradient(circle at 5% 100%, rgba(32,201,151,.05), transparent 45%),
-      linear-gradient(#E2E8F0 1px, transparent 1px),
-      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+      radial-gradient(circle at 85% 0%, rgba(var(--accent-rgb),.05), transparent 45%),
+      radial-gradient(circle at 5% 100%, rgba(var(--green-rgb),.05), transparent 45%),
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size:auto, auto, 36px 36px, 36px 36px;
-    background-color:#EAF7F4;
+    background-color:var(--bg);
     background-attachment:fixed;
   }
-  .kpi-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; padding:14px 16px; }
-  .kpi-label{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:#64748B; text-transform:uppercase; }
-  .kpi-value{ font-size:26px; font-weight:800; margin-top:6px; color:#123B6D; }
+  .kpi-card{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .kpi-label{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; }
+  .kpi-value{ font-size:26px; font-weight:800; margin-top:6px; color:var(--ink); }
   .kpi-value.unavailable{ font-size:14px; font-weight:700; color:#94A3B8; font-style:italic; }
-  .kpi-trend{ font-size:11px; color:#64748B; margin-top:4px; }
-  .panel{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; padding:16px; }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.14em; color:#64748B; text-transform:uppercase; }
+  .kpi-trend{ font-size:11px; color:var(--muted); margin-top:4px; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
   .badge{ font-size:10px; font-weight:800; letter-spacing:.05em; padding:3px 9px; border-radius:20px; }
-  .b-low{ background:rgba(34,197,94,.12); color:#16803C; }
-  .b-moderate{ background:rgba(245,158,11,.14); color:#92620A; }
-  .b-high{ background:rgba(248,113,113,.16); color:#B91C1C; }
-  .b-critical{ background:rgba(220,38,38,.16); color:#991B1B; }
+  .b-low{ background:rgba(var(--ok-rgb),.12); color:#16803C; }
+  .b-moderate{ background:rgba(var(--warn-rgb),.14); color:#92620A; }
+  .b-high{ background:rgba(var(--high-rgb),.16); color:#B91C1C; }
+  .b-critical{ background:rgba(var(--danger-rgb),.16); color:#991B1B; }
   .table{ width:100%; border-collapse:collapse; font-size:13px; }
-  .table th{ text-align:left; font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:.06em; padding:8px 6px; border-bottom:1px solid #E2E8F0; }
-  .table td{ padding:9px 6px; border-bottom:1px solid #F1F5F9; }
+  .table th{ text-align:left; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; padding:8px 6px; border-bottom:1px solid var(--border); }
+  .table td{ padding:9px 6px; border-bottom:1px solid var(--panel2); }
   .table tr.clickable{ cursor:pointer; }
-  .table tr.clickable:hover{ background:rgba(25,118,210,.05); }
-  .table tr.current{ background:rgba(25,118,210,.08); }
-  .live-dot{ width:7px; height:7px; border-radius:50%; background:#22C55E; box-shadow:0 0 6px rgba(34,197,94,.6); display:inline-block; animation:blink 1.6s ease-in-out infinite; }
+  .table tr.clickable:hover{ background:rgba(var(--accent-rgb),.05); }
+  .table tr.current{ background:rgba(var(--accent-rgb),.08); }
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 6px rgba(var(--ok-rgb),.6); display:inline-block; animation:blink 1.6s ease-in-out infinite; }
   @keyframes blink{ 50%{ opacity:.3; } }
   .modal-veil{ position:fixed; inset:0; background:rgba(18,59,109,.45); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
   .modal-veil.show{ display:flex; }
-  .modal-box{ width:100%; max-width:720px; max-height:88vh; overflow-y:auto; background:#FFFFFF; border:1.5px solid rgba(25,118,210,.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); }
-  #city-map{ height:340px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0; }
+  .modal-box{ width:100%; max-width:720px; max-height:88vh; overflow-y:auto; background:var(--surface); border:1.5px solid rgba(var(--accent-rgb),.3); border-radius:16px; box-shadow:0 20px 50px rgba(18,59,109,.18); }
+  #city-map{ height:340px; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
   .unavail{ color:#94A3B8; font-style:italic; font-size:12.5px; }
-  .insight-card{ background:linear-gradient(135deg, rgba(25,118,210,.06), rgba(32,201,151,.06)); border:1px solid #E2E8F0; border-radius:12px; padding:12px 14px; }
+  .insight-card{ background:linear-gradient(135deg, rgba(var(--accent-rgb),.06), rgba(var(--green-rgb),.06)); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
 </style>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen">
@@ -88,6 +106,8 @@
     <div class="flex items-center gap-3 text-xs text-muted font-mono">
       <span><span class="live-dot"></span> Last updated: <span id="last-updated">—</span></span>
       <a href="/" class="text-accent hover:underline font-medium">Exit →</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full text-white text-[11px] font-extrabold flex items-center justify-center ml-1" style="background:var(--accent);"></div>
     </div>
   </div>
 </div>
@@ -191,6 +211,11 @@ async function api(path) {
   } catch (e) {
     return null;
   }
+}
+
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
 }
 
 const LEVEL_BADGE = { LOW: "b-low", MODERATE: "b-moderate", HIGH: "b-high", CRITICAL: "b-critical" };
@@ -320,7 +345,8 @@ function renderMap(events, risk, emergencyServices) {
   let placed = 0, skipped = 0;
   events.forEach(e => {
     if (e.venue_lat == null || e.venue_lng == null) { skipped++; return; }
-    L.circleMarker([e.venue_lat, e.venue_lng], { radius: 9, color: "#1976D2", fillColor: "#1976D2", fillOpacity: 0.85, weight: 2 })
+    const eventColor = cssVar("--accent", "#1976D2");
+    L.circleMarker([e.venue_lat, e.venue_lng], { radius: 9, color: eventColor, fillColor: eventColor, fillOpacity: 0.85, weight: 2 })
       .bindPopup(`<b>${e.name}</b><br>${e.status.toUpperCase()}${e.status === 'live' ? ' — LIVE' : ''}`)
       .addTo(mapLayer);
     placed++;
@@ -335,7 +361,7 @@ function renderMap(events, risk, emergencyServices) {
       return;
     }
     if (z.level !== "HIGH" && z.level !== "CRITICAL") return;
-    const color = z.level === "CRITICAL" ? "#DC2626" : "#F87171";
+    const color = z.level === "CRITICAL" ? cssVar("--danger", "#DC2626") : cssVar("--high", "#F87171");
     L.circleMarker([z.lat, z.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.9, weight: 1 })
       .bindPopup(`<b>${z.zone_name}</b><br>${z.event_name}<br>${z.level} · score ${z.score}`)
       .addTo(mapLayer);
@@ -379,16 +405,16 @@ async function loadTrends() {
     crowdCanvas.classList.remove("hidden"); crowdUnavail.classList.add("hidden");
     charts.crowd = lineChart(crowdCanvas,
       t.crowd_trend.map(p => new Date(p.captured_at).toLocaleTimeString()),
-      t.crowd_trend.map(p => p.total_count), "#1976D2", "Total crowd count");
+      t.crowd_trend.map(p => p.total_count), cssVar("--accent", "#1976D2"), "Total crowd count");
   } else {
     crowdCanvas.classList.add("hidden"); crowdUnavail.classList.remove("hidden");
     crowdUnavail.textContent = `Data unavailable — ${t.crowd_trend_scope}`;
   }
 
   charts.bookings = lineChart(document.getElementById("chart-bookings"),
-    t.booking_trend_by_day.map(p => p.date), t.booking_trend_by_day.map(p => p.count), "#20C997", "Bookings");
+    t.booking_trend_by_day.map(p => p.date), t.booking_trend_by_day.map(p => p.count), cssVar("--green", "#20C997"), "Bookings");
   charts.alerts = lineChart(document.getElementById("chart-alerts"),
-    t.alert_trend_by_day.map(p => p.date), t.alert_trend_by_day.map(p => p.count), "#DC2626", "Alerts");
+    t.alert_trend_by_day.map(p => p.date), t.alert_trend_by_day.map(p => p.count), cssVar("--danger", "#DC2626"), "Alerts");
 }
 
 async function openImpact(eventId, name) {

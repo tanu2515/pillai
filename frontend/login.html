@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Sign In</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,10 +15,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
-          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
-          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
-          high: "#F87171", danger: "#DC2626",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", border: "var(--border)",
+          muted: "var(--muted)", ink: "var(--ink)", accent: "var(--accent)", accentDim: "var(--accentDim)",
+          green: "var(--green)", greenLight: "var(--greenLight)", warn: "var(--warn)", ok: "var(--ok)",
+          high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -28,29 +29,47 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
   body{
     background-image:
-      radial-gradient(circle at 20% 0%, rgba(25,118,210,.06), transparent 55%),
-      radial-gradient(circle at 80% 100%, rgba(32,201,151,.05), transparent 55%),
-      linear-gradient(#E2E8F0 1px, transparent 1px),
-      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+      radial-gradient(circle at 20% 0%, rgba(var(--accent-rgb),.06), transparent 55%),
+      radial-gradient(circle at 80% 100%, rgba(var(--green-rgb),.05), transparent 55%),
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size:auto, auto, 36px 36px, 36px 36px;
-    background-color:#EAF7F4;
+    background-color:var(--bg);
   }
-  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); }
-  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  input[type=email], select{ background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:10px; }
-  input[type=email]:focus, select:focus{ outline:none; border-color:#1976D2; }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,var(--accent),var(--green)); box-shadow:0 0 8px rgba(var(--accent-rgb),.35); }
+  .brand-mark{ background:linear-gradient(90deg,var(--accentDim),var(--green)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  input[type=email], select{ background:var(--surface); border:1px solid var(--border); color:var(--ink); border-radius:10px; }
+  input[type=email]:focus, select:focus{ outline:none; border-color:var(--accent); }
   select{ appearance:none; }
-  select option{ background:#FFFFFF; color:#123B6D; }
+  select option{ background:var(--surface); color:var(--ink); }
   .selectwrap{ position:relative; }
-  .selectwrap::after{ content:'▾'; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:#64748B; font-size:11px; pointer-events:none; }
-  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.08em; transition:.15s; }
+  .selectwrap::after{ content:'▾'; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:11px; pointer-events:none; }
+  .btn-primary{ background:var(--accent); color:#fff; font-weight:800; letter-spacing:.08em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; }
 </style>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen flex items-center justify-center px-4">
+
+<button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm" style="background:var(--panel2);border:1px solid var(--border);position:fixed;top:16px;right:16px;z-index:20;" title="Toggle light/dark theme">🌙</button>
 
 <div class="max-w-sm w-full">
   <div class="flex items-center gap-2.5 justify-center mb-8">

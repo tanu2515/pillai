@@ -103,6 +103,7 @@ class ZoneCapacityUpdate(BaseModel):
 class CrowdCountIngest(BaseModel):
     count: int = Field(ge=0)
     source: str = "manual"
+    email: str | None = None
 
 
 class CameraFeedRequest(BaseModel):
@@ -149,6 +150,7 @@ class SwitchEventRequest(BaseModel):
 
 class ResourceUpdate(BaseModel):
     quantity_total: int = Field(ge=0)
+    email: str | None = None
 
 
 class RegionUpdate(BaseModel):
@@ -173,6 +175,7 @@ class ZoneCreate(BaseModel):
     capacity: int
     domain: str = "venue"
     type: str = "gate"
+    email: str | None = None
 
 
 class ZoneLocationUpdate(BaseModel):
@@ -184,6 +187,8 @@ class GateSetupUpdate(BaseModel):
     capacity: int
     staff_assigned: int | None = None
     is_accessible: bool | None = None
+    name: str | None = None
+    email: str | None = None
 
 
 class HotelCreate(BaseModel):
@@ -194,6 +199,7 @@ class HotelCreate(BaseModel):
     price_tier: int | None = None
     contact: str | None = None
     amenities: str | None = None
+    email: str | None = None
 
 
 class HotelUpdate(BaseModel):
@@ -206,6 +212,7 @@ class HotelUpdate(BaseModel):
     manual_recommended: bool | None = None
     lat: float | None = None
     lng: float | None = None
+    email: str | None = None
 
 
 class HotelDiscoveryRequest(BaseModel):
@@ -251,12 +258,14 @@ class TransportZoneCreate(BaseModel):
     lng: float
     type: str = "corridor"
     contact: str | None = None
+    email: str | None = None
 
 
 class TransportZoneUpdate(BaseModel):
     capacity: int | None = None
     current_count: int | None = None
     contact: str | None = None
+    email: str | None = None
 
 
 class AlertStatusUpdate(BaseModel):
@@ -352,6 +361,24 @@ def get_role(x_user_role: str | None = Header(default=None)):
 def require_domain_access(role: str | None, domain: str | None):
     if role is not None and role not in FULL_ACCESS_ROLES:
         raise HTTPException(403, f"role '{role}' cannot act on domain '{domain}'")
+
+
+def require_event_owner(event, email: str | None, *, strict: bool = False):
+    """Blocks editing an event that belongs to a different Event Command
+    Operator. Untracked events (owner_email is None — older seed/demo data)
+    are never gated, since there's no real owner to check against.
+    `strict=True` also rejects a missing email — used by Event Setup's own
+    endpoints, which always send one; the shared /api/zones endpoints (also
+    used by Command Centre's map-click add/delete, which doesn't send an
+    email yet) stay lenient when email is omitted so they keep working."""
+    if not event or not event.owner_email:
+        return
+    if not email:
+        if strict:
+            raise HTTPException(403, f"This event belongs to {event.owner_email} — sign in as that operator to edit it.")
+        return
+    if event.owner_email.strip().lower() != email.strip().lower():
+        raise HTTPException(403, f"This event belongs to {event.owner_email} — sign in as that operator to edit it.")
 
 
 def require_admin(role: str | None):
@@ -460,6 +487,7 @@ def ingest_crowd_count(zone_id: int, req: CrowdCountIngest, db: Session = Depend
     if not zone:
         raise HTTPException(404, "zone not found")
     require_domain_access(role, zone.domain)
+    require_event_owner(db.get(models.Event, zone.event_id), req.email, strict=True)
     try:
         result = engine.ingest_crowd_count(db, zone_id, req.count, req.source.strip()[:50] or "manual")
     except ValueError as exc:
@@ -846,6 +874,7 @@ def create_zone(req: ZoneCreate, db: Session = Depends(get_db)):
         raise HTTPException(400, "domain must be venue, transport, or hospitality")
     if not req.name.strip():
         raise HTTPException(400, "name is required")
+    require_event_owner(engine.get_live_event(db), req.email)
     zone = engine.create_zone(db, req.name.strip(), req.lat, req.lng, req.capacity, req.domain, req.type)
     if zone is None:
         raise HTTPException(404, "no event configured yet")
@@ -861,7 +890,10 @@ def update_zone_location(zone_id: int, req: ZoneLocationUpdate, db: Session = De
 
 
 @app.delete("/api/zones/{zone_id}")
-def delete_zone(zone_id: int, db: Session = Depends(get_db)):
+def delete_zone(zone_id: int, email: str | None = None, db: Session = Depends(get_db)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), email)
     result = engine.delete_zone(db, zone_id)
     if not result["ok"]:
         raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))
@@ -877,7 +909,10 @@ def get_event_setup(db: Session = Depends(get_db)):
 
 @app.patch("/api/event-setup/gates/{zone_id}")
 def patch_gate_setup(zone_id: int, req: GateSetupUpdate, db: Session = Depends(get_db)):
-    zone = engine.update_gate_setup(db, zone_id, req.capacity, req.staff_assigned, req.is_accessible)
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), req.email, strict=True)
+    zone = engine.update_gate_setup(db, zone_id, req.capacity, req.staff_assigned, req.is_accessible, req.name)
     if zone is None:
         raise HTTPException(404, "gate not found")
     return {"id": zone.id}
@@ -887,6 +922,7 @@ def patch_gate_setup(zone_id: int, req: GateSetupUpdate, db: Session = Depends(g
 def patch_resource(resource_type: str, req: ResourceUpdate, db: Session = Depends(get_db)):
     if resource_type not in ("bus", "staff", "medical"):
         raise HTTPException(400, "resource_type must be bus, staff, or medical")
+    require_event_owner(engine.get_live_event(db), req.email, strict=True)
     resource = engine.update_resource(db, resource_type, req.quantity_total)
     if resource is None:
         raise HTTPException(404, "no event configured yet")
@@ -910,6 +946,7 @@ def post_accessibility_request(req: AccessibilityRequest, db: Session = Depends(
 
 @app.post("/api/event-setup/hotels")
 def post_hotel(req: HotelCreate, db: Session = Depends(get_db)):
+    require_event_owner(engine.get_live_event(db), req.email, strict=True)
     zone = engine.create_hotel(db, req.name, req.capacity, req.lat, req.lng, req.price_tier, req.contact, req.amenities)
     if zone is None:
         raise HTTPException(404, "no event configured yet")
@@ -918,6 +955,9 @@ def post_hotel(req: HotelCreate, db: Session = Depends(get_db)):
 
 @app.patch("/api/event-setup/hotels/{zone_id}")
 def patch_hotel(zone_id: int, req: HotelUpdate, db: Session = Depends(get_db)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), req.email, strict=True)
     zone = engine.update_hotel(
         db, zone_id, req.capacity, req.occupied_rooms, req.price_tier, req.contact, req.amenities, req.manual_recommended,
         req.name, req.lat, req.lng,
@@ -928,7 +968,10 @@ def patch_hotel(zone_id: int, req: HotelUpdate, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/event-setup/hotels/{zone_id}")
-def delete_hotel(zone_id: int, db: Session = Depends(get_db)):
+def delete_hotel(zone_id: int, email: str | None = None, db: Session = Depends(get_db)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), email, strict=True)
     result = engine.delete_zone(db, zone_id)
     if not result["ok"]:
         raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))
@@ -937,6 +980,7 @@ def delete_hotel(zone_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/event-setup/transport")
 def post_transport_zone(req: TransportZoneCreate, db: Session = Depends(get_db)):
+    require_event_owner(engine.get_live_event(db), req.email, strict=True)
     zone = engine.create_transport_zone(db, req.name, req.capacity, req.lat, req.lng, req.type, req.contact)
     if zone is None:
         raise HTTPException(404, "no event configured yet")
@@ -945,6 +989,9 @@ def post_transport_zone(req: TransportZoneCreate, db: Session = Depends(get_db))
 
 @app.patch("/api/event-setup/transport/{zone_id}")
 def patch_transport_zone(zone_id: int, req: TransportZoneUpdate, db: Session = Depends(get_db)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), req.email, strict=True)
     zone = engine.update_transport_zone(db, zone_id, req.capacity, req.current_count, req.contact)
     if zone is None:
         raise HTTPException(404, "transport zone not found")
@@ -952,7 +999,10 @@ def patch_transport_zone(zone_id: int, req: TransportZoneUpdate, db: Session = D
 
 
 @app.delete("/api/event-setup/transport/{zone_id}")
-def delete_transport_zone(zone_id: int, db: Session = Depends(get_db)):
+def delete_transport_zone(zone_id: int, email: str | None = None, db: Session = Depends(get_db)):
+    zone = db.get(models.Zone, zone_id)
+    if zone:
+        require_event_owner(db.get(models.Event, zone.event_id), email, strict=True)
     result = engine.delete_zone(db, zone_id)
     if not result["ok"]:
         raise HTTPException(409 if "error" in result else 404, result.get("error", "not found"))

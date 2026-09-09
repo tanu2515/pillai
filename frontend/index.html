@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Mega-Event Orchestration</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,22 +15,22 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4",
-          surface: "#FFFFFF",
-          panel: "#FFFFFF",
-          panel2: "#F1F5F9",
-          border: "#E2E8F0",
-          muted: "#64748B",
-          ink: "#123B6D",
-          accent: "#1976D2",
-          accentDim: "#123B6D",
-          green: "#20C997",
-          greenLight: "#5BE7A9",
-          brandGreen: "#20C997",
-          warn: "#F59E0B",
-          ok: "#22C55E",
-          high: "#F87171",
-          danger: "#DC2626",
+          bg: "var(--bg)",
+          surface: "var(--surface)",
+          panel: "var(--panel)",
+          panel2: "var(--panel2)",
+          border: "var(--border)",
+          muted: "var(--muted)",
+          ink: "var(--ink)",
+          accent: "var(--accent)",
+          accentDim: "var(--accentDim)",
+          green: "var(--green)",
+          greenLight: "var(--greenLight)",
+          brandGreen: "var(--brandGreen)",
+          warn: "var(--warn)",
+          ok: "var(--ok)",
+          high: "var(--high)",
+          danger: "var(--danger)",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -40,35 +41,57 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --brandGreen:#20C997; --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --brandGreen:#34d399; --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
   body{
     background-image:
-      radial-gradient(circle at 15% 0%, rgba(25,118,210,.06), transparent 55%),
-      radial-gradient(circle at 85% 100%, rgba(32,201,151,.06), transparent 55%),
-      linear-gradient(#E2E8F0 1px, transparent 1px),
-      linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
+      radial-gradient(circle at 15% 0%, rgba(var(--accent-rgb),.06), transparent 55%),
+      radial-gradient(circle at 85% 100%, rgba(var(--green-rgb),.06), transparent 55%),
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size: auto, auto, 36px 36px, 36px 36px;
-    background-color:#EAF7F4;
+    background-color:var(--bg);
     background-attachment:fixed;
   }
   .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.015;
-    background:repeating-linear-gradient(to bottom, #123B6D 0 1px, transparent 1px 4px); }
-  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#1976D2,#20C997); box-shadow:0 0 8px rgba(25,118,210,.35); }
-  .brand-mark{ background:linear-gradient(90deg,#123B6D,#20C997); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    background:repeating-linear-gradient(to bottom, var(--ink) 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,var(--accent),var(--green)); box-shadow:0 0 8px rgba(var(--accent-rgb),.35); }
+  .brand-mark{ background:linear-gradient(90deg,var(--accentDim),var(--green)); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .role-card{ transition:.15s; }
-  .role-card:hover{ border-color:rgba(25,118,210,.5); background:rgba(25,118,210,.05); }
-  .role-card:hover .chev{ transform:translateX(3px); color:#1976D2; }
-  .role-icon{ background:rgba(25,118,210,.1); border:1px solid rgba(25,118,210,.25); }
-  .glow-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(25,118,210,.35),transparent); }
-  .corner{ position:absolute; width:20px; height:20px; border-color:rgba(25,118,210,.3); border-style:solid; border-width:0; }
+  .role-card:hover{ border-color:rgba(var(--accent-rgb),.5); background:rgba(var(--accent-rgb),.05); }
+  .role-card:hover .chev{ transform:translateX(3px); color:var(--accent); }
+  .role-icon{ background:rgba(var(--accent-rgb),.1); border:1px solid rgba(var(--accent-rgb),.25); }
+  .glow-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),.35),transparent); }
+  .corner{ position:absolute; width:20px; height:20px; border-color:rgba(var(--accent-rgb),.3); border-style:solid; border-width:0; }
   .corner.tl{ top:20px; left:20px; border-top-width:2px; border-left-width:2px; }
   .corner.tr{ top:20px; right:20px; border-top-width:2px; border-right-width:2px; }
   .corner.bl{ bottom:20px; left:20px; border-bottom-width:2px; border-left-width:2px; }
   .corner.br{ bottom:20px; right:20px; border-bottom-width:2px; border-right-width:2px; }
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="bg-bg text-ink font-sans m-0 min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
 <div class="scanlines"></div>
 <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+
+<div class="fixed top-4 right-4 z-20 flex items-center">
+  <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
+  <div id="account-avatar" class="hidden w-7 h-7 rounded-full text-white text-[11px] font-extrabold flex items-center justify-center ml-1" style="background:var(--accent);"></div>
+</div>
 
 <div class="max-w-lg w-full relative z-10">
   <div class="flex flex-col items-center text-center mb-10">

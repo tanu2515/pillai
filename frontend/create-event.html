@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Create New Event</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,10 +17,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
-          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
-          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
-          high: "#F87171", danger: "#DC2626",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", border: "var(--border)",
+          muted: "var(--muted)", ink: "var(--ink)", accent: "var(--accent)", accentDim: "var(--accentDim)",
+          green: "var(--green)", greenLight: "var(--greenLight)", warn: "var(--warn)", ok: "var(--ok)",
+          high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
       },
@@ -27,75 +28,91 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
-      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
-      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
-    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
+      radial-gradient(circle at 85% 0%, rgba(var(--accent-rgb),.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(var(--green-rgb),.05), transparent 45%),
+      linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:var(--bg);
   }
-  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
+  .row-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 2px rgba(18,59,109,.04); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; }
   input[type=text], input[type=number], input[type=email], input[type=date], input[type=time], textarea, select{
-    background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border); color:var(--ink); border-radius:8px;
   }
-  input:focus, select:focus, textarea:focus{ outline:none; border-color:#1976D2; }
-  select option{ background:#FFFFFF; color:#123B6D; }
-  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--accent); }
+  select option{ background:var(--surface); color:var(--ink); }
+  .btn-primary{ background:var(--accent); color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
   .btn-primary:disabled{ opacity:.45; cursor:not-allowed; filter:none; }
-  .btn-secondary{ background:#F1F5F9; color:#123B6D; font-weight:700; transition:.15s; }
-  .btn-secondary:hover{ background:#E2E8F0; }
-  .btn-danger{ background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.4); color:#DC2626; }
+  .btn-secondary{ background:var(--panel2); color:var(--ink); font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:var(--border); }
+  .btn-danger{ background:rgba(var(--danger-rgb),.08); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); }
   .dropdown{ position:relative; }
-  .dropdown-btn{ width:100%; text-align:left; background:#FFFFFF; border:1px solid #E2E8F0; color:#123B6D; border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
-  .dropdown-btn:hover{ border-color:#1976D2; }
-  .dropdown-caret{ color:#64748B; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
-  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid #E2E8F0; padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:#123B6D; border-radius:0; }
-  input.dropdown-search:focus{ outline:none; border-color:#1976D2; }
+  .dropdown-btn{ width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); color:var(--ink); border-radius:8px; padding:9px 12px; font-size:13px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .dropdown-btn:hover{ border-color:var(--accent); }
+  .dropdown-caret{ color:var(--muted); font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(18,59,109,.15); overflow:hidden; }
+  input.dropdown-search{ width:100%; box-sizing:border-box; border:none; border-bottom:1px solid var(--border); padding:8px 12px; font-size:12.5px; font-family:'Manrope',sans-serif; color:var(--ink); border-radius:0; }
+  input.dropdown-search:focus{ outline:none; border-color:var(--accent); }
   .dropdown-panel > div{ max-height:200px; overflow-y:auto; }
   .dropdown-item{ padding:8px 12px; font-size:12.5px; cursor:pointer; }
-  .dropdown-item:hover{ background:rgba(25,118,210,.08); }
-  .dropdown-item.selected{ background:rgba(25,118,210,.12); color:#1976D2; }
+  .dropdown-item:hover{ background:rgba(var(--accent-rgb),.08); }
+  .dropdown-item.selected{ background:rgba(var(--accent-rgb),.12); color:var(--accent); }
 
   .step-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 10px; border-radius:10px; cursor:pointer; transition:.15s; }
-  .step-row:hover{ background:#F1F5F9; }
-  .step-row.active{ background:rgba(25,118,210,.08); }
-  .step-num{ width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex:none; background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0; }
-  .step-row.active .step-num{ background:#1976D2; color:#fff; border-color:#1976D2; }
-  .step-row.done .step-num{ background:#20C997; color:#fff; border-color:#20C997; }
-  .step-label{ font-size:12.5px; font-weight:700; color:#123B6D; line-height:1.3; }
-  .step-row.active .step-label{ color:#1976D2; }
+  .step-row:hover{ background:var(--panel2); }
+  .step-row.active{ background:rgba(var(--accent-rgb),.08); }
+  .step-num{ width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex:none; background:var(--panel2); color:var(--muted); border:1px solid var(--border); }
+  .step-row.active .step-num{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .step-row.done .step-num{ background:var(--green); color:#fff; border-color:var(--green); }
+  .step-label{ font-size:12.5px; font-weight:700; color:var(--ink); line-height:1.3; }
+  .step-row.active .step-label{ color:var(--accent); }
   .step-sub{ font-size:10px; color:#94A3B8; margin-top:1px; }
 
   .locked-panel{ text-align:center; padding:34px 20px; }
   .locked-icon{ font-size:30px; opacity:.55; }
 
   .phase-pill{ font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:20px; padding:3px 10px; }
-  .status-pill-inline{ font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#94A3B8; background:#F1F5F9; border:1px solid #E2E8F0; border-radius:20px; padding:2px 8px; display:inline-block; }
-  .toast{ position:fixed; bottom:20px; right:20px; background:#123B6D; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
+  .status-pill-inline{ font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#94A3B8; background:var(--panel2); border:1px solid var(--border); border-radius:20px; padding:2px 8px; display:inline-block; }
+  .toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
   .toast.show{ display:block; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .fade-up{ animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
 
   .clock-time-label{ padding:2px 10px; border-radius:8px; color:#94A3B8; cursor:pointer; user-select:none; }
-  .clock-time-label.active{ background:rgba(25,118,210,.12); color:#1976D2; }
-  .clock-ampm-btn{ background:#F1F5F9; border:1px solid #E2E8F0; color:#64748B; font-size:10px; font-weight:800; letter-spacing:.04em; border-radius:6px; padding:3px 8px; cursor:pointer; }
-  .clock-ampm-btn.active{ background:#1976D2; color:#fff; border-color:#1976D2; }
-  .clock-face{ position:relative; width:240px; height:240px; margin:0 auto; border-radius:50%; background:#F1F5F9; border:1px solid #E2E8F0; }
-  .clock-center-dot{ position:absolute; width:8px; height:8px; border-radius:50%; background:#1976D2; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; }
+  .clock-time-label.active{ background:rgba(var(--accent-rgb),.12); color:var(--accent); }
+  .clock-ampm-btn{ background:var(--panel2); border:1px solid var(--border); color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.04em; border-radius:6px; padding:3px 8px; cursor:pointer; }
+  .clock-ampm-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .clock-face{ position:relative; width:240px; height:240px; margin:0 auto; border-radius:50%; background:var(--panel2); border:1px solid var(--border); }
+  .clock-center-dot{ position:absolute; width:8px; height:8px; border-radius:50%; background:var(--accent); left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; }
   .clock-hand-wrap{ position:absolute; left:50%; top:50%; width:0; height:0; z-index:2; }
-  .clock-hand-line{ position:absolute; left:-1px; top:-92px; width:2px; height:92px; background:#1976D2; transform-origin:bottom center; }
-  .clock-number{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:#123B6D; cursor:pointer; user-select:none; z-index:4; }
-  .clock-number:hover{ background:rgba(25,118,210,.14); }
-  .clock-number.selected{ background:#1976D2; color:#fff; }
+  .clock-hand-line{ position:absolute; left:-1px; top:-92px; width:2px; height:92px; background:var(--accent); transform-origin:bottom center; }
+  .clock-number{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:var(--ink); cursor:pointer; user-select:none; z-index:4; }
+  .clock-number:hover{ background:rgba(var(--accent-rgb),.14); }
+  .clock-number.selected{ background:var(--accent); color:#fff; }
 
   .date-weekday{ width:34px; text-align:center; font-size:10px; font-weight:800; color:#94A3B8; }
-  .date-cell{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:#123B6D; cursor:pointer; user-select:none; }
-  .date-cell:hover{ background:rgba(25,118,210,.14); }
-  .date-cell.selected{ background:#1976D2; color:#fff; }
-  .date-cell.today{ border:1px solid #1976D2; }
+  .date-cell{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; color:var(--ink); cursor:pointer; user-select:none; }
+  .date-cell:hover{ background:rgba(var(--accent-rgb),.14); }
+  .date-cell.selected{ background:var(--accent); color:#fff; }
+  .date-cell.today{ border:1px solid var(--accent); }
   .date-cell.empty{ visibility:hidden; cursor:default; }
 </style>
 <script src="/assets/account-avatar.js"></script>
@@ -115,6 +132,7 @@
       <a href="my-events-organizer.html" class="text-xs text-accent hover:underline font-bold">← My Events</a>
       <a href="event-setup.html" class="text-xs text-accent hover:underline font-bold">Live Event Setup →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
       <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
@@ -129,7 +147,7 @@
       <span class="text-sm font-bold" id="live-event-name">Loading…</span>
       <span class="text-muted text-xs">stays exactly as it is — unaffected by anything on this page</span>
     </div>
-    <span class="phase-pill" style="background:rgba(25,118,210,.08);border:1px solid rgba(25,118,210,.3);color:#1976D2;">+ CREATING · UPCOMING</span>
+    <span class="phase-pill" style="background:rgba(var(--accent-rgb),.08);border:1px solid rgba(var(--accent-rgb),.3);color:var(--accent);">+ CREATING · UPCOMING</span>
   </div>
 
   <!-- ================= WIZARD ================= -->
@@ -152,7 +170,7 @@
       <!-- Step content -->
       <div class="row-card p-5 sm:p-6 min-h-[420px]">
         <div id="step-content"></div>
-        <div class="flex items-center justify-between mt-6 pt-4 border-t" style="border-color:#E2E8F0;">
+        <div class="flex items-center justify-between mt-6 pt-4 border-t" style="border-color:var(--border);">
           <button class="btn-secondary px-4 py-2 rounded-lg text-xs" id="btn-back" onclick="stepBack()">← BACK</button>
           <button class="btn-primary px-5 py-2 rounded-lg text-xs" id="btn-next" onclick="stepNext()">CONTINUE →</button>
         </div>
@@ -168,7 +186,7 @@
       <p class="text-muted text-sm m-0 mb-3">
         <span id="success-name" class="font-bold text-ink"></span> — Event ID <span id="success-id" class="font-mono"></span>
       </p>
-      <span class="phase-pill" style="background:rgba(25,118,210,.08);border:1px solid rgba(25,118,210,.3);color:#1976D2;">STATUS: UPCOMING</span>
+      <span class="phase-pill" style="background:rgba(var(--accent-rgb),.08);border:1px solid rgba(var(--accent-rgb),.3);color:var(--accent);">STATUS: UPCOMING</span>
       <p class="text-muted text-[11px] mt-4 max-w-lg mx-auto">
         This event is now in the public catalog as upcoming. It is <b>not</b> the live operational event —
         <span id="success-live-name" class="font-bold"></span> continues to run Command Centre exactly as before.
@@ -234,7 +252,7 @@
       <button type="button" class="btn-secondary rounded-lg px-3 py-2 text-xs" onclick="searchMapPickerLocation()">SEARCH</button>
     </div>
     <div id="map-picker-search-status" class="text-[10.5px] text-muted mb-2"></div>
-    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0;"></div>
+    <div id="map-picker-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid var(--border);"></div>
     <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
       <span id="map-picker-coords" class="text-xs text-muted font-mono">No point selected yet — click the map.</span>
       <div class="flex gap-2">
@@ -426,8 +444,8 @@ function renderStep() {
       <h3 class="text-base font-extrabold mb-1">🗓 Date &amp; Time</h3>
       <p class="text-muted text-xs mb-4">When doors open — shown on the catalog and event page.</p>
       <div class="grid grid-cols-2 gap-3 max-w-sm">
-        ${field("Event date", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;" onclick="openDatePicker()"><span>${formatDateDisplay(wizardForm.event_date) || "Select date"}</span><span>📅</span></button>`)}
-        ${field("Event time", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;" onclick="openClockPicker()"><span>${formatTime12(wizardForm.event_time) || "Select time"}</span><span>🕐</span></button>`)}
+        ${field("Event date", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;" onclick="openDatePicker()"><span>${formatDateDisplay(wizardForm.event_date) || "Select date"}</span><span>📅</span></button>`)}
+        ${field("Event time", `<button type="button" class="w-full p-2.5 text-sm text-left flex items-center justify-between" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;" onclick="openClockPicker()"><span>${formatTime12(wizardForm.event_time) || "Select time"}</span><span>🕐</span></button>`)}
       </div>`;
   } else if (key === "venue") {
     el.innerHTML = `

@@ -4,16 +4,28 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>KAIRO — Nearby Hospitality Discovery</title>
+<script src="/assets/theme.js"></script>
+<script src="/assets/account-avatar.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <style>
-:root{--bg:#f7fafc;--panel:#fff;--ink:#172033;--muted:#68758a;--line:#dfe6ef;--blue:#2563eb;--green:#0f9d67;--amber:#b7791f;--red:#d63b3b;--shadow:0 10px 30px rgba(31,48,77,.08)}
-*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f5f9ff 0,#f7fafc 50%,#fff 100%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
-.page{max-width:1280px;margin:0 auto;padding:26px 20px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6b7a91}.title{font-size:30px;font-weight:800;margin:4px 0}.sub{font-size:13px;color:var(--muted);max-width:820px;line-height:1.45}.link{color:var(--blue);text-decoration:none;font-weight:600}.panel{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
-.controls{display:grid;grid-template-columns:1.5fr .65fr .65fr .8fr auto;gap:10px;padding:14px}.control label{display:block;font-size:11px;color:var(--muted);margin:0 0 6px;font-weight:700}.control input,.control select{width:100%;height:42px;border:1px solid #ccd7e5;border-radius:11px;padding:0 12px;color:var(--ink);background:#fff;outline:none}.control input:focus,.control select:focus{border-color:#7ba4f8;box-shadow:0 0 0 3px rgba(37,99,235,.1)}button{border:0;border-radius:11px;padding:0 16px;height:42px;font-weight:800;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#eef4ff;color:#1d4ed8}.ghost{background:#fff;border:1px solid var(--line);color:#43526a}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}.status{font-size:12px;color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid #dfe6ef;font-size:11px;color:#526177;background:#fbfdff}.legend{display:flex;flex-wrap:wrap;gap:7px}
-.recommendation-panel{margin-top:16px;padding:16px}.recommend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.recommend-head h2,.transport-head h2{margin:4px 0 4px;font-size:20px}.recommend-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.recommend-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.recommend-card{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fbfdff}.recommend-title{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.recommend-main{font-size:18px;font-weight:900;margin-top:5px}.recommend-reason{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}.mini.empty{padding:20px 12px}.transport-panel{margin-top:16px;padding:16px}.transport-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.transport-actions{display:flex;gap:8px;align-items:center}.transport-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:14px;margin-top:14px}.transport-list{display:grid;gap:8px}.transport-card{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}.transport-card .topline{display:flex;justify-content:space-between;gap:8px}.transport-card .mode{font-size:14px;font-weight:800}.transport-card .subline{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}.transport-card .eta{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:#1d4ed8}.foot-note{margin-top:12px;color:#738097;font-size:11px;line-height:1.45}.kairo-pick{border-color:#8cb4ff;box-shadow:0 0 0 2px rgba(37,99,235,.08)}
-.main{display:grid;grid-template-columns:minmax(320px,.95fr) minmax(380px,1.05fr);gap:16px;margin-top:16px}.map-wrap{overflow:hidden;min-height:620px}.map-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}.map{height:560px}.list-wrap{padding:16px}.summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.summary h2{margin:0;font-size:20px}.summary small{color:var(--muted)}.list{display:grid;gap:10px;max-height:560px;overflow:auto;padding-right:4px}.card{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff;transition:.18s}.card:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(20,40,80,.07)}.card-top{display:flex;justify-content:space-between;gap:12px}.name{font-size:16px;font-weight:800}.distance{font-size:12px;color:#3d67bd;font-weight:800}.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.address{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.4}.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ok{color:var(--green);background:#edf9f4;border-color:#caeedf}.warn{color:var(--amber);background:#fff8e8;border-color:#f3dfac}.danger{color:var(--red);background:#fff0f0;border-color:#f0cdcd}.muted{color:#64748b;background:#f6f8fb}.empty{padding:45px 12px;text-align:center;color:var(--muted);border:1px dashed #ccd7e5;border-radius:15px}.loading{display:flex;gap:9px;align-items:center;color:var(--muted);padding:20px}.spinner{width:18px;height:18px;border:2px solid #dbe4f0;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.foot{margin-top:16px;padding:0 4px;color:#738097;font-size:11px;line-height:1.45}
+:root{
+  --bg:#f7fafc;--panel:#fff;--panel2:#fbfdff;--ink:#172033;--muted:#68758a;--line:#dfe6ef;
+  --blue:#2563eb;--green:#0f9d67;--amber:#b7791f;--red:#d63b3b;--shadow:0 10px 30px rgba(31,48,77,.08);
+  --blue-rgb:37,99,235;--green-rgb:15,157,103;--amber-rgb:183,121,31;--red-rgb:214,59,59;
+}
+:root[data-theme="dark"]{
+  --bg:#071019;--panel:#0d1822;--panel2:#101f2b;--ink:#edf7fa;--muted:#8fa7b5;--line:#1d3443;
+  --blue:#2dd4bf;--green:#34d399;--amber:#fbbf24;--red:#e11d48;--shadow:0 10px 30px rgba(0,0,0,.4);
+  --blue-rgb:45,212,191;--green-rgb:52,211,153;--amber-rgb:251,191,36;--red-rgb:225,29,72;
+}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+.page{max-width:1280px;margin:0 auto;padding:26px 20px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}.title{font-size:30px;font-weight:800;margin:4px 0}.sub{font-size:13px;color:var(--muted);max-width:820px;line-height:1.45}.link{color:var(--blue);text-decoration:none;font-weight:600}.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+.controls{display:grid;grid-template-columns:1.5fr .65fr .65fr .8fr auto;gap:10px;padding:14px}.control label{display:block;font-size:11px;color:var(--muted);margin:0 0 6px;font-weight:700}.control input,.control select{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;padding:0 12px;color:var(--ink);background:var(--panel);outline:none}.control input:focus,.control select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(var(--blue-rgb),.1)}button{border:0;border-radius:11px;padding:0 16px;height:42px;font-weight:800;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:rgba(var(--blue-rgb),.1);color:var(--blue)}.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}.status{font-size:12px;color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--muted);background:var(--panel2)}.legend{display:flex;flex-wrap:wrap;gap:7px}
+.recommendation-panel{margin-top:16px;padding:16px}.recommend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.recommend-head h2,.transport-head h2{margin:4px 0 4px;font-size:20px}.recommend-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.recommend-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.recommend-card{border:1px solid var(--line);border-radius:16px;padding:14px;background:var(--panel2)}.recommend-title{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.recommend-main{font-size:18px;font-weight:900;margin-top:5px}.recommend-reason{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}.mini.empty{padding:20px 12px}.transport-panel{margin-top:16px;padding:16px}.transport-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.transport-actions{display:flex;gap:8px;align-items:center}.transport-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:14px;margin-top:14px}.transport-list{display:grid;gap:8px}.transport-card{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--panel)}.transport-card .topline{display:flex;justify-content:space-between;gap:8px}.transport-card .mode{font-size:14px;font-weight:800}.transport-card .subline{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}.transport-card .eta{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:var(--blue)}.foot-note{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.45}.kairo-pick{border-color:rgba(var(--blue-rgb),.5);box-shadow:0 0 0 2px rgba(var(--blue-rgb),.08)}
+.main{display:grid;grid-template-columns:minmax(320px,.95fr) minmax(380px,1.05fr);gap:16px;margin-top:16px}.map-wrap{overflow:hidden;min-height:620px}.map-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}.map{height:560px}.list-wrap{padding:16px}.summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.summary h2{margin:0;font-size:20px}.summary small{color:var(--muted)}.list{display:grid;gap:10px;max-height:560px;overflow:auto;padding-right:4px}.card{border:1px solid var(--line);border-radius:16px;padding:14px;background:var(--panel);transition:.18s}.card:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(20,40,80,.07)}.card-top{display:flex;justify-content:space-between;gap:12px}.name{font-size:16px;font-weight:800}.distance{font-size:12px;color:var(--blue);font-weight:800}.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.address{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.4}.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ok{color:var(--green);background:rgba(var(--green-rgb),.08);border-color:rgba(var(--green-rgb),.3)}.warn{color:var(--amber);background:rgba(var(--amber-rgb),.08);border-color:rgba(var(--amber-rgb),.35)}.danger{color:var(--red);background:rgba(var(--red-rgb),.08);border-color:rgba(var(--red-rgb),.3)}.muted{color:var(--muted);background:var(--panel2)}.empty{padding:45px 12px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:15px}.loading{display:flex;gap:9px;align-items:center;color:var(--muted);padding:20px}.spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.foot{margin-top:16px;padding:0 4px;color:var(--muted);font-size:11px;line-height:1.45}
 @media(max-width:1000px){.controls{grid-template-columns:1fr 1fr 1fr}.controls .wide{grid-column:1/-1}.main{grid-template-columns:1fr}.recommend-grid,.transport-grid{grid-template-columns:1fr}.map-wrap{min-height:420px}.map{height:420px}.list{max-height:none}}
 @media(max-width:600px){.page{padding:16px 12px 28px}.top{align-items:flex-start}.top .link{display:none}.title{font-size:24px}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:1/-1}.controls button{grid-column:1/-1}.transport-head{flex-direction:column}.transport-actions{width:100%}.transport-actions select{flex:1}.map{height:360px}}
+.hidden{display:none!important}
 </style>
 </head>
 <body>
@@ -24,7 +36,11 @@
       <div class="title">Nearby Hospitality Discovery</div>
       <div class="sub">Choose an event location and radius. KAIRO clears the previous result, queries the current location, and rebuilds the hotel list and map markers from scratch.</div>
     </div>
-    <a class="link" href="/">← Event Manager</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a class="link" href="/">← Event Manager</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" style="width:28px;height:28px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;" title="Toggle light/dark theme">🌙</button>
+      <div id="account-avatar" class="hidden" style="width:28px;height:28px;border-radius:999px;background:var(--blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;"></div>
+    </div>
   </header>
 
   <section class="panel">
@@ -67,7 +83,7 @@
     <section class="panel list-wrap">
       <div class="summary">
         <div><h2><span id="visibleCount">0</span> hotels shown</h2><small><span id="foundCount">0</span> discovered in the selected radius</small></div>
-        <select id="sort" style="height:38px;border:1px solid #ccd7e5;border-radius:10px;padding:0 10px"><option value="distance">Nearest</option><option value="stars">Highest star class</option><option value="name">Name</option></select>
+        <select id="sort" style="height:38px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--panel);color:var(--ink)"><option value="distance">Nearest</option><option value="stars">Highest star class</option><option value="name">Name</option></select>
       </div>
       <div id="list" class="list"><div class="empty">Search an event location to discover nearby hospitality properties.</div></div>
     </section>
@@ -81,7 +97,7 @@
       <p id="transport-context" class="status">Search an event location to load transport suggestions and current demo service options.</p>
     </div>
     <div class="transport-actions">
-      <select id="transport-filter" style="height:38px;border:1px solid #ccd7e5;border-radius:10px;padding:0 10px">
+      <select id="transport-filter" style="height:38px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--panel);color:var(--ink)">
         <option value="all">All modes</option>
         <option value="bus">Buses</option>
         <option value="train">Trains</option>
@@ -113,7 +129,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 const state = { hotels: [], center: null, markers: [], eventMarker: null, circle: null, partnerHotels: [], transport: null };
-const redEventIcon = L.divIcon({className:'', html:'<div style=\"width:18px;height:18px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 2px 8px rgba(220,38,38,.5);\"></div>', iconSize:[18,18], iconAnchor:[9,9], popupAnchor:[0,-10]});
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+const redEventIcon = L.divIcon({className:'', html:'<div style=\"width:18px;height:18px;border-radius:50%;background:var(--red);border:3px solid #fff;box-shadow:0 2px 8px rgba(var(--red-rgb),.5);\"></div>', iconSize:[18,18], iconAnchor:[9,9], popupAnchor:[0,-10]});
 const map = L.map('map').setView([19.0330,73.0297], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
 
@@ -150,7 +170,8 @@ function markerFor(h, idx){
 }
 function addEventOverlay(lat,lng,radius){
   state.eventMarker=L.marker([lat,lng],{title:'Event location', icon:redEventIcon}).addTo(map).bindPopup('<strong>Event location</strong>').openPopup();
-  state.circle=L.circle([lat,lng],{radius,color:'#2563eb',fillColor:'#2563eb',fillOpacity:.06,weight:2}).addTo(map);
+  const blue=cssVar('--blue','#2563eb');
+  state.circle=L.circle([lat,lng],{radius,color:blue,fillColor:blue,fillOpacity:.06,weight:2}).addTo(map);
 }
 function sortedFiltered(){
   let arr=[...state.hotels];

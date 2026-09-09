@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — My Events</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,10 +15,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#EAF7F4", surface: "#FFFFFF", panel: "#FFFFFF", border: "#E2E8F0",
-          muted: "#64748B", ink: "#123B6D", accent: "#1976D2", accentDim: "#123B6D",
-          green: "#20C997", greenLight: "#5BE7A9", warn: "#F59E0B", ok: "#22C55E",
-          high: "#F87171", danger: "#DC2626",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", border: "var(--border)",
+          muted: "var(--muted)", ink: "var(--ink)", accent: "var(--accent)", accentDim: "var(--accentDim)",
+          green: "var(--green)", greenLight: "var(--greenLight)", warn: "var(--warn)", ok: "var(--ok)",
+          high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: { sans: ["Manrope", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
       },
@@ -25,25 +26,41 @@
   };
 </script>
 <style>
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#22C55E; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113; --ok-rgb:34,197,94;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133; --ok-rgb:52,211,153;
+  }
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(25,118,210,.05), transparent 45%),
-      radial-gradient(circle at 10% 100%, rgba(32,201,151,.05), transparent 45%),
-      linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px);
-    background-size:auto, auto, 36px 36px, 36px 36px; background-color:#EAF7F4;
+      radial-gradient(circle at 85% 0%, rgba(var(--accent-rgb),.05), transparent 45%),
+      radial-gradient(circle at 10% 100%, rgba(var(--green-rgb),.05), transparent 45%),
+      linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:auto, auto, 36px 36px, 36px 36px; background-color:var(--bg);
   }
-  .row-card{ background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; box-shadow:0 1px 2px rgba(18,59,109,.04); transition:.15s; }
-  .row-card.event-card:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(18,59,109,.08); border-color:#1976D2; }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#64748B; text-transform:uppercase; }
-  .btn-primary{ background:#1976D2; color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
+  .row-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 2px rgba(18,59,109,.04); transition:.15s; }
+  .row-card.event-card:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(18,59,109,.08); border-color:var(--accent); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; }
+  .btn-primary{ background:var(--accent); color:#fff; font-weight:800; letter-spacing:.04em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-secondary{ background:#F1F5F9; color:#123B6D; font-weight:700; transition:.15s; }
-  .btn-secondary:hover{ background:#E2E8F0; }
+  .btn-secondary{ background:var(--panel2); color:var(--ink); font-weight:700; transition:.15s; }
+  .btn-secondary:hover{ background:var(--border); }
   .status-pill{ font-size:9.5px; font-weight:800; letter-spacing:.06em; border-radius:20px; padding:3px 10px; text-transform:uppercase; }
-  .kv{ font-size:11px; color:#64748B; display:flex; justify-content:space-between; gap:8px; padding:2px 0; }
-  .kv b{ color:#123B6D; font-weight:700; }
+  .kv{ font-size:11px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; padding:2px 0; }
+  .kv b{ color:var(--ink); font-weight:700; }
   .section-head{ display:flex; align-items:center; gap:8px; margin:22px 0 10px; }
-  .section-head .line{ flex:1; height:1px; background:#E2E8F0; }
+  .section-head .line{ flex:1; height:1px; background:var(--border); }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .fade-up{ animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
 </style>
@@ -63,6 +80,7 @@
     <div class="flex items-center gap-3">
       <a href="event-setup.html" class="text-xs text-accent hover:underline font-bold">Live Event Setup →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
       <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
@@ -99,10 +117,10 @@ function getOperatorEmail() { try { return sessionStorage.getItem("vyavastha_ema
 function esc(s) { return (s ?? "").toString().replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 
 const STATUS_STYLE = {
-  live: { bg: "rgba(34,197,94,.1)", border: "rgba(34,197,94,.35)", color: "#16A34A", label: "● LIVE" },
-  upcoming: { bg: "rgba(25,118,210,.08)", border: "rgba(25,118,210,.3)", color: "#1976D2", label: "UPCOMING" },
-  paused: { bg: "#F1F5F9", border: "#E2E8F0", color: "#64748B", label: "PAUSED" },
-  completed: { bg: "#F1F5F9", border: "#E2E8F0", color: "#64748B", label: "COMPLETED" },
+  live: { bg: "rgba(var(--ok-rgb),.1)", border: "rgba(var(--ok-rgb),.35)", color: "#16A34A", label: "● LIVE" },
+  upcoming: { bg: "rgba(var(--accent-rgb),.08)", border: "rgba(var(--accent-rgb),.3)", color: "var(--accent)", label: "UPCOMING" },
+  paused: { bg: "var(--panel2)", border: "var(--border)", color: "var(--muted)", label: "PAUSED" },
+  completed: { bg: "var(--panel2)", border: "var(--border)", color: "var(--muted)", label: "COMPLETED" },
 };
 
 const SECTIONS = [

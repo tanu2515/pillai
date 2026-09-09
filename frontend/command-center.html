@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Command Center</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,10 +17,10 @@
     theme: {
       extend: {
         colors: {
-          bg: "#071019", surface: "#0d1822", panel: "#0d1822", panel2: "#101f2b",
-          border: "#1d3443", muted: "#8fa7b5", ink: "#edf7fa",
-          accent: "#2dd4bf", accentDim: "#14b8a6", green: "#34d399", greenLight: "#6ee7b7",
-          warn: "#fbbf24", ok: "#34d399", high: "#fb7185", danger: "#e11d48",
+          bg: "var(--bg)", surface: "var(--surface)", panel: "var(--panel)", panel2: "var(--panel2)",
+          border: "var(--border)", muted: "var(--muted)", ink: "var(--ink)",
+          accent: "var(--accent)", accentDim: "var(--accentDim)", green: "var(--green)", greenLight: "var(--greenLight)",
+          warn: "var(--warn)", ok: "var(--ok)", high: "var(--high)", danger: "var(--danger)",
         },
         fontFamily: {
           sans: ["Manrope", "system-ui", "sans-serif"],
@@ -30,89 +31,105 @@
   };
 </script>
 <style>
-  /* Dark operator command-centre theme -- palette/tokens only, no structural
-     change: every rule below is the same selector as before, just re-colored
-     to match vyavastha_ui_example.html's reference palette. */
+  :root{
+    --bg:#EAF7F4; --surface:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F5F9;
+    --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+    --accent:#1976D2; --accentDim:#123B6D; --green:#20C997; --greenLight:#5BE7A9;
+    --warn:#F59E0B; --ok:#20C997; --high:#F87171; --danger:#DC2626;
+    --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+    --warn-rgb:245,158,11; --high-rgb:248,113,113;
+  }
+  :root[data-theme="dark"]{
+    --bg:#071019; --surface:#0d1822; --panel:#0d1822; --panel2:#101f2b;
+    --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+    --accent:#2dd4bf; --accentDim:#14b8a6; --green:#34d399; --greenLight:#6ee7b7;
+    --warn:#fbbf24; --ok:#34d399; --high:#fb7185; --danger:#e11d48;
+    --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+    --warn-rgb:251,191,36; --high-rgb:251,113,133;
+  }
+  /* Command-centre theme -- palette/tokens only, no structural change: every
+     rule below is the same selector as before, just re-colored via CSS
+     variables so the light/dark toggle can flip everything at once. */
   body{
     background-image:
-      radial-gradient(circle at 85% 0%, rgba(45,212,191,.06), transparent 45%),
-      radial-gradient(circle at 5% 100%, rgba(52,211,153,.05), transparent 45%),
-      linear-gradient(#12222e 1px, transparent 1px),
-      linear-gradient(90deg, #12222e 1px, transparent 1px);
+      radial-gradient(circle at 85% 0%, rgba(var(--accent-rgb),.06), transparent 45%),
+      radial-gradient(circle at 5% 100%, rgba(var(--green-rgb),.05), transparent 45%),
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
     background-size:auto, auto, 36px 36px, 36px 36px;
-    background-color:#071019;
+    background-color:var(--bg);
     background-attachment:fixed;
   }
   .scanlines{ position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.03;
-    background:repeating-linear-gradient(to bottom, #edf7fa 0 1px, transparent 1px 4px); }
-  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,#2dd4bf,#34d399); box-shadow:0 0 8px rgba(45,212,191,.35); flex-shrink:0; }
-  .brand-mark{ background:linear-gradient(90deg,#2dd4bf,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .tab-btn{ color:#8fa7b5; border-color:transparent; letter-spacing:.03em; }
-  .tab-btn.active{ color:#2dd4bf; border-color:#2dd4bf; }
-  .btn-primary{ background:#2dd4bf; color:#05201d; font-weight:800; letter-spacing:.06em; transition:.15s; }
+    background:repeating-linear-gradient(to bottom, var(--ink) 0 1px, transparent 1px 4px); }
+  .tick{ width:3px; height:20px; border-radius:2px; background:linear-gradient(180deg,var(--accent),var(--green)); box-shadow:0 0 8px rgba(var(--accent-rgb),.35); flex-shrink:0; }
+  .brand-mark{ background:linear-gradient(90deg,var(--accent),var(--green)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .tab-btn{ color:var(--muted); border-color:transparent; letter-spacing:.03em; }
+  .tab-btn.active{ color:var(--accent); border-color:var(--accent); }
+  .btn-primary{ background:var(--accent); color:#fff; font-weight:800; letter-spacing:.06em; transition:.15s; }
   .btn-primary:hover{ filter:brightness(1.08); }
-  .btn-ghost{ background:#101f2b; border:1px solid #1d3443; color:#edf7fa; transition:.15s; }
-  .btn-ghost:hover{ border-color:#2dd4bf; }
-  .btn-danger{ background:rgba(225,29,72,.12); border:1px solid rgba(225,29,72,.4); color:#fb7185; font-weight:700; letter-spacing:.05em; transition:.15s; }
-  .btn-danger:hover{ background:rgba(225,29,72,.2); }
-  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:#8fa7b5; text-transform:uppercase; }
+  .btn-ghost{ background:var(--panel2); border:1px solid var(--border); color:var(--ink); transition:.15s; }
+  .btn-ghost:hover{ border-color:var(--accent); }
+  .btn-danger{ background:rgba(var(--danger-rgb),.08); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); font-weight:700; letter-spacing:.05em; transition:.15s; }
+  .btn-danger:hover{ background:rgba(var(--danger-rgb),.2); }
+  .eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; }
   input[type=number], input[type=text], select{
-    background:#101f2b; border:1px solid #1d3443; color:#edf7fa; border-radius:10px;
+    background:var(--panel2); border:1px solid var(--border); color:var(--ink); border-radius:10px;
   }
-  input[type=number]:focus, input[type=text]:focus, select:focus{ outline:none; border-color:#2dd4bf; }
-  .live-dot{ width:6px; height:6px; border-radius:50%; background:#34d399; box-shadow:0 0 6px rgba(52,211,153,.6); animation:blink 1.6s ease-in-out infinite; }
+  input[type=number]:focus, input[type=text]:focus, select:focus{ outline:none; border-color:var(--accent); }
+  .live-dot{ width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 6px rgba(var(--green-rgb),.6); animation:blink 1.6s ease-in-out infinite; }
   @keyframes blink{ 50%{ opacity:.35; } }
-  .row-card{ background:#0d1822; border:1px solid #1d3443; border-radius:10px; transition:.12s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+  .row-card{ background:var(--surface); border:1px solid var(--border); border-radius:10px; transition:.12s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
   .row-card.clickable{ cursor:pointer; }
-  .row-card.clickable:hover{ border-color:#2dd4bf; }
+  .row-card.clickable:hover{ border-color:var(--accent); }
   .ack-pill{ font-size:9px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:20px; }
   .modal-veil{ position:fixed; inset:0; background:rgba(2,8,14,.65); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
   .modal-veil.show{ display:flex; }
-  .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:#0d1822; border:1.5px solid rgba(45,212,191,.3); border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.55); }
-  .ai-box{ background:#101f2b; border:1px solid #1d3443; border-radius:10px; padding:12px; margin-top:10px; }
-  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:#2dd4bf; background:rgba(45,212,191,.1); border:1px solid rgba(45,212,191,.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
-  .gauge{ height:6px; border-radius:4px; background:#101f2b; border:1px solid #1d3443; overflow:hidden; }
+  .modal-box{ width:100%; max-width:480px; max-height:85vh; overflow-y:auto; background:var(--surface); border:1.5px solid rgba(var(--accent-rgb),.3); border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.55); }
+  .ai-box{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+  .grounded-tag{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--accent); background:rgba(var(--accent-rgb),.1); border:1px solid rgba(var(--accent-rgb),.3); border-radius:20px; padding:2px 8px; margin-top:8px; }
+  .gauge{ height:6px; border-radius:4px; background:var(--panel2); border:1px solid var(--border); overflow:hidden; }
   .gauge-fill{ height:100%; border-radius:4px; transition:width .4s ease; }
-  .gauge-fill.overflow{ box-shadow:0 0 6px 1px #e11d48 inset; }
-  .flow-pill{ background:#0d1822; border:1px solid #1d3443; border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
-  .flow-arrow{ color:#5b7a8a; font-size:14px; flex-shrink:0; }
+  .gauge-fill.overflow{ box-shadow:0 0 6px 1px var(--danger) inset; }
+  .flow-pill{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; }
+  .flow-arrow{ color:var(--muted); font-size:14px; flex-shrink:0; }
   .dropdown{ position:relative; min-width:190px; }
-  .dropdown-btn{ width:100%; text-align:left; background:#101f2b; border:1px solid #1d3443; color:#edf7fa; border-radius:8px; padding:8px 12px; font-size:12px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:6px; }
-  .dropdown-btn:hover{ border-color:#2dd4bf; }
-  .dropdown-caret{ color:#8fa7b5; font-size:11px; }
-  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:max-content; min-width:100%; max-width:280px; max-height:200px; overflow-y:auto; background:#101f2b; border:1px solid #1d3443; border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+  .dropdown-btn{ width:100%; text-align:left; background:var(--panel2); border:1px solid var(--border); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:12px; font-family:'Manrope',sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .dropdown-btn:hover{ border-color:var(--accent); }
+  .dropdown-caret{ color:var(--muted); font-size:11px; }
+  .dropdown-panel{ position:absolute; top:calc(100% + 4px); left:0; width:max-content; min-width:100%; max-width:280px; max-height:200px; overflow-y:auto; background:var(--panel2); border:1px solid var(--border); border-radius:8px; z-index:30; box-shadow:0 10px 24px rgba(0,0,0,.4); }
   .dropdown-item{ padding:8px 12px; font-size:12px; cursor:pointer; }
-  .dropdown-item:hover{ background:rgba(45,212,191,.1); }
-  .dropdown-item.selected{ background:rgba(45,212,191,.15); color:#2dd4bf; }
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:#101f2b; color:#edf7fa; }
+  .dropdown-item:hover{ background:rgba(var(--accent-rgb),.1); }
+  .dropdown-item.selected{ background:rgba(var(--accent-rgb),.15); color:var(--accent); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:var(--panel2); color:var(--ink); }
   .leaflet-popup-content{ margin:12px 14px; font-family:'Manrope',sans-serif; font-size:12.5px; }
-  .leaflet-popup-content input{ background:#071019; border:1px solid #1d3443; color:#edf7fa; border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
-  .map-place-btn.on{ background:rgba(45,212,191,.15); border-color:#2dd4bf; color:#2dd4bf; }
-  #zone-map{ background:#101f2b; }
-  .chat-fab{ position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#2dd4bf,#34d399); color:#05201d; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(45,212,191,.35); z-index:60; border:none; }
+  .leaflet-popup-content input{ background:var(--bg); border:1px solid var(--border); color:var(--ink); border-radius:6px; padding:4px 6px; font-size:11px; width:100%; margin-bottom:6px; }
+  .map-place-btn.on{ background:rgba(var(--accent-rgb),.15); border-color:var(--accent); color:var(--accent); }
+  #zone-map{ background:var(--panel2); }
+  .chat-fab{ position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--green)); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(var(--accent-rgb),.35); z-index:60; border:none; }
   .chat-fab:hover{ filter:brightness(1.08); }
-  .chat-panel{ position:fixed; bottom:88px; right:20px; width:320px; max-width:calc(100vw - 40px); height:440px; max-height:calc(100vh - 120px); background:#0d1822; border:1.5px solid rgba(45,212,191,.3); border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.55); z-index:60; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel{ position:fixed; bottom:88px; right:20px; width:320px; max-width:calc(100vw - 40px); height:440px; max-height:calc(100vh - 120px); background:var(--surface); border:1.5px solid rgba(var(--accent-rgb),.3); border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.55); z-index:60; display:none; flex-direction:column; overflow:hidden; }
   .chat-panel.show{ display:flex; }
-  .chat-header{ padding:12px 14px; border-bottom:1px solid #1d3443; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#edf7fa; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .chat-header{ padding:12px 14px; border-bottom:1px solid var(--border); font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink); display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
   .chat-messages{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
   .chat-msg{ max-width:85%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.4; white-space:pre-wrap; }
-  .chat-msg.user{ align-self:flex-end; background:#2dd4bf; color:#05201d; font-weight:600; }
-  .chat-msg.bot{ align-self:flex-start; background:#101f2b; border:1px solid #1d3443; color:#edf7fa; }
-  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid #1d3443; flex-shrink:0; }
+  .chat-msg.user{ align-self:flex-end; background:var(--accent); color:#fff; font-weight:600; }
+  .chat-msg.bot{ align-self:flex-start; background:var(--panel2); border:1px solid var(--border); color:var(--ink); }
+  .chat-input-row{ display:flex; gap:6px; padding:10px; border-top:1px solid var(--border); flex-shrink:0; }
   .chat-input-row input{ flex:1; padding:8px 10px !important; font-size:12.5px; }
-  .chat-input-row button{ background:#2dd4bf; color:#05201d; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
+  .chat-input-row button{ background:var(--accent); color:#fff; border:none; border-radius:8px; padding:0 14px; font-weight:800; font-size:12px; cursor:pointer; }
 
   /* --- Phase 1: left sidebar nav shell (layout only -- .tab-btn/.tab-panel
      classes and their JS selectors are unchanged, so tab switching keeps
      working exactly as before) --- */
   .app-shell{ display:flex; min-height:100vh; align-items:stretch; }
-  .sidebar{ width:220px; flex-shrink:0; border-right:1px solid #1d3443; background:#08131d; padding:22px 14px; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .sidebar{ width:220px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); padding:22px 14px; position:sticky; top:0; height:100vh; overflow-y:auto; }
   .sidebar .brand-row{ display:flex; align-items:center; gap:8px; margin-bottom:2px; }
-  .sidebar .sub{ font-size:10px; color:#8fa7b5; letter-spacing:.1em; margin-bottom:22px; }
+  .sidebar .sub{ font-size:10px; color:var(--muted); letter-spacing:.1em; margin-bottom:22px; }
   .sidebar .tab-btn{ display:flex; width:100%; text-align:left; border:0; border-radius:9px; padding:10px 12px; margin:2px 0; background:transparent; white-space:normal; }
-  .sidebar .tab-btn.active, .sidebar .tab-btn:hover{ background:#102532; color:#edf7fa; }
+  .sidebar .tab-btn.active, .sidebar .tab-btn:hover{ background:rgba(var(--accent-rgb),.08); color:var(--ink); }
   .kpi-card .big{ font-size:26px; font-weight:800; margin-top:6px; }
-  .kpi-card .trend{ font-size:11px; color:#8fa7b5; margin-top:4px; }
+  .kpi-card .trend{ font-size:11px; color:var(--muted); margin-top:4px; }
   @media(max-width:1000px){ .sidebar{ display:none; } }
 </style>
 <script src="/assets/account-avatar.js"></script>
@@ -172,6 +189,7 @@
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline ml-1 font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
       <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
       <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
     </div>
   </div>
@@ -295,15 +313,15 @@
         <button id="map-place-btn" class="btn-ghost rounded-lg px-3 py-1.5 text-[11px] font-semibold" onclick="toggleMapPlaceMode()">📍 Click Map to Add Gate</button>
       </div>
       <div style="position:relative;">
-        <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid #1d3443;"></div>
-        <div id="zone-map-legend" style="position:absolute; bottom:8px; left:8px; z-index:1000; background:rgba(13,24,34,.92); border:1px solid #1d3443; border-radius:8px; padding:6px 9px; font-size:10px; line-height:1.6; color:#edf7fa; box-shadow:0 1px 4px rgba(0,0,0,.3);">
+        <div id="zone-map" style="height:320px; border-radius:10px; overflow:hidden; border:1px solid var(--border);"></div>
+        <div id="zone-map-legend" style="position:absolute; bottom:8px; left:8px; z-index:1000; background:rgba(13,24,34,.92); border:1px solid var(--border); border-radius:8px; padding:6px 9px; font-size:10px; line-height:1.6; color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.3);">
           <div style="display:flex; align-items:center; gap:5px;"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#2563EB;align-items:center;justify-content:center;font-size:9px;">🏨</span> Hotel</div>
           <div style="display:flex; align-items:center; gap:5px;"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#7C3AED;align-items:center;justify-content:center;font-size:9px;">🚌</span> Transport</div>
-          <div style="border-top:1px solid #1d3443; margin:4px 0;"></div>
-          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#34d399;flex-shrink:0;"></span> Gate — Low</div>
-          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#fbbf24;flex-shrink:0;"></span> Gate — Moderate</div>
-          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#fb7185;flex-shrink:0;"></span> Gate — High</div>
-          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:#e11d48;flex-shrink:0;"></span> Gate — Critical</div>
+          <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--green);flex-shrink:0;"></span> Gate — Low</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--warn);flex-shrink:0;"></span> Gate — Moderate</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--high);flex-shrink:0;"></span> Gate — High</div>
+          <div style="display:flex; align-items:center; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--danger);flex-shrink:0;"></span> Gate — Critical</div>
         </div>
       </div>
       <p class="text-[10.5px] text-muted mt-2 mb-3">Drag a marker to move it. Click a marker to edit or delete it.</p>
@@ -371,7 +389,7 @@
         <button class="btn-primary rounded-lg px-4 py-2.5 text-sm" onclick="searchNearbyHotels()">Find Hotels</button>
       </div>
       <div id="hotel-search-status" class="text-[10.5px] text-muted mb-2">Search the event's location to survey nearby hotels via OpenStreetMap.</div>
-      <div id="hotel-discovery-map" style="height:260px; border-radius:10px; overflow:hidden; border:1px solid #1d3443;" class="mb-3"></div>
+      <div id="hotel-discovery-map" style="height:260px; border-radius:10px; overflow:hidden; border:1px solid var(--border);" class="mb-3"></div>
       <div id="discovered-hotels-list"></div>
     </section>
 
@@ -523,7 +541,7 @@
 <div id="chat-panel" class="chat-panel">
   <div class="chat-header">
     <span>Ask Vyavastha</span>
-    <button onclick="toggleChat()" style="background:none;border:none;color:#8fa7b5;font-size:16px;cursor:pointer;">✕</button>
+    <button onclick="toggleChat()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;">✕</button>
   </div>
   <div id="chat-messages" class="chat-messages">
     <div class="chat-msg bot">Ask me about a gate, hotel, or corridor by name, or try "what should I do" or "what happened".</div>
@@ -545,6 +563,14 @@ const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", MEDIUM: "text-warn"
 const ROLE_CONFIG = {
   command:     { label: "EVENT COMMAND OPERATOR", roleName: "Event Command Operator", tabs: ["overview", "whatif", "actions", "alerts", "hotels", "transport", "analytics", "timeline"], showSimControls: true,  showAiAdvisor: true, showEmergency: true,  domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
 };
+// Leaflet writes marker colors as raw SVG attributes, not CSS, so
+// var(--token) strings don't resolve there the way they do in stylesheets —
+// resolve the current theme's actual value instead wherever a marker needs one.
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 const roleParam = new URLSearchParams(location.search).get("role");
 const roleKey = ROLE_CONFIG[roleParam] ? roleParam : "command";
 const roleCfg = ROLE_CONFIG[roleKey];
@@ -1562,10 +1588,10 @@ async function setAck(status) {
         document.body.innerHTML = `
           <div style="max-width:420px;margin:15vh auto;text-align:center;font-family:system-ui,sans-serif;padding:0 20px;">
             <h2 style="margin-bottom:8px;">Not your event</h2>
-            <p style="color:#64748B;font-size:14px;">
+            <p style="color:var(--muted);font-size:14px;">
               "${data.name}" belongs to another Event Command Operator. You can only manage events you created.
             </p>
-            <a href="my-events-organizer.html" style="display:inline-block;margin-top:16px;color:#1976D2;font-weight:700;text-decoration:none;">← Go to My Events</a>
+            <a href="my-events-organizer.html" style="display:inline-block;margin-top:16px;color:var(--accent);font-weight:700;text-decoration:none;">← Go to My Events</a>
           </div>`;
         return;
       }
@@ -1671,7 +1697,7 @@ function markerPopupContent(z) {
   return `
     <div style="min-width:170px">
       <div style="font-weight:800;margin-bottom:2px;">${z.name}</div>
-      <div style="color:#8fa7b5;font-size:10.5px;margin-bottom:6px;">${z.domain} · ${z.capacity_pressure_pct}% · ${z.level}</div>
+      <div style="color:var(--muted);font-size:10.5px;margin-bottom:6px;">${z.domain} · ${z.capacity_pressure_pct}% · ${z.level}</div>
       <button class="btn-danger rounded px-2 py-1 text-[11px] w-full" onclick="deleteGateFromMap(${z.id}, '${z.name.replace(/'/g, "\\'")}')">DELETE</button>
     </div>`;
 }
@@ -1695,7 +1721,7 @@ function renderMapMarkers(zones) {
 
   withCoords.forEach(z => {
     seen.add(z.id);
-    const color = { LOW: "#34d399", MODERATE: "#fbbf24", HIGH: "#fb7185", CRITICAL: "#e11d48" }[z.level] || "#2dd4bf";
+    const color = cssVar({ LOW: "--green", MODERATE: "--warn", HIGH: "--high", CRITICAL: "--danger" }[z.level] || "--accent", "#1976D2");
     const isHotel = z.domain === "hospitality";
     const isTransport = z.domain === "transport";
 
@@ -1714,7 +1740,7 @@ function renderMapMarkers(zones) {
         marker = L.marker([z.lat, z.lng], { icon: transportIcon }).addTo(zoneMap);
       } else {
         marker = L.circleMarker([z.lat, z.lng], {
-          radius: 9, color: "#FFFFFF", weight: 2, fillColor: color, fillOpacity: 0.9,
+          radius: 9, color: cssVar("--surface", "#fff"), weight: 2, fillColor: color, fillOpacity: 0.9,
           draggable: false,
         }).addTo(zoneMap);
       }
@@ -1873,7 +1899,7 @@ async function discoverHotelsFrom(lat, lng, label) {
   initDiscoveryMap();
   discoveryMarkers.forEach(m => m.remove());
   discoveryMarkers = [];
-  const eventMarker = L.circleMarker([lat, lng], { radius: 8, color: "#e11d48", fillColor: "#e11d48", fillOpacity: 1 })
+  const eventMarker = L.circleMarker([lat, lng], { radius: 8, color: cssVar("--danger", "#DC2626"), fillColor: cssVar("--danger", "#DC2626"), fillOpacity: 1 })
     .addTo(discoveryMap).bindPopup(`<strong>Event location</strong><br>${escapeHtml(label)}`);
   discoveryMarkers.push(eventMarker);
   discoveredHotels.forEach(h => {

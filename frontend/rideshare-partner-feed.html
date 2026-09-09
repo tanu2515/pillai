@@ -4,25 +4,43 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>VYAVASTHA — Rideshare Partner Feed</title>
+<script src="/assets/theme.js"></script>
 <link rel="icon" type="image/png" href="/assets/vyavastha-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config={theme:{extend:{colors:{bg:'#EAF7F4',panel:'#FFFFFF',border:'#E2E8F0',muted:'#64748B',ink:'#123B6D',accent:'#1976D2',green:'#20C997',danger:'#DC2626'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
+  tailwind.config={theme:{extend:{colors:{bg:'var(--bg)',panel:'var(--panel)',border:'var(--border)',muted:'var(--muted)',ink:'var(--ink)',accent:'var(--accent)',green:'var(--green)',danger:'var(--danger)'},fontFamily:{sans:['Manrope','system-ui','sans-serif'],mono:['JetBrains Mono','ui-monospace','monospace']}}}};
 </script>
 <style>
-body{background:radial-gradient(circle at 10% 0%,rgba(25,118,210,.08),transparent 40%),#EAF7F4;color:#123B6D}
-.card{background:#fff;border:1px solid #E2E8F0;border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
-.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#64748B}
+:root{
+  --bg:#EAF7F4; --panel:#FFFFFF; --panel2:#F1F5F9; --border:#E2E8F0; --muted:#64748B; --ink:#123B6D;
+  --accent:#1976D2; --green:#20C997; --danger:#DC2626;
+  --accent-rgb:25,118,210; --green-rgb:32,201,151; --danger-rgb:220,38,38;
+}
+:root[data-theme="dark"]{
+  --bg:#071019; --panel:#0d1822; --panel2:#101f2b; --border:#1d3443; --muted:#8fa7b5; --ink:#edf7fa;
+  --accent:#2dd4bf; --green:#34d399; --danger:#e11d48;
+  --accent-rgb:45,212,191; --green-rgb:52,211,153; --danger-rgb:225,29,72;
+}
+body{background:radial-gradient(circle at 10% 0%,rgba(var(--accent-rgb),.08),transparent 40%),var(--bg);color:var(--ink)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:18px;box-shadow:0 8px 30px rgba(18,59,109,.06)}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:var(--muted)}
 </style>
+<script src="/assets/account-avatar.js"></script>
 </head>
 <body class="min-h-screen font-sans">
-<header class="border-b border-border bg-white/85 backdrop-blur sticky top-0 z-10">
-  <div class="max-w-4xl mx-auto px-5 py-4">
-    <div class="text-[11px] uppercase tracking-[.22em] font-black text-accent">VYAVASTHA</div>
-    <div class="text-xl font-black -mt-0.5">Rideshare Partner Feed</div>
+<header class="border-b border-border bg-panel/85 backdrop-blur sticky top-0 z-10">
+  <div class="max-w-4xl mx-auto px-5 py-4 flex items-center justify-between gap-3">
+    <div>
+      <div class="text-[11px] uppercase tracking-[.22em] font-black text-accent">VYAVASTHA</div>
+      <div class="text-xl font-black -mt-0.5">Rideshare Partner Feed</div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
+      <div id="account-avatar" class="hidden w-7 h-7 rounded-full text-white text-[11px] font-extrabold flex items-center justify-center ml-1" style="background:var(--accent);"></div>
+    </div>
   </div>
 </header>
 <main class="max-w-4xl mx-auto px-5 py-7">
