@@ -62,6 +62,9 @@
   .btn-secondary:hover{ background:var(--border); }
   .btn-danger{ background:rgba(var(--danger-rgb),.08); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); }
   .small-input{ padding:6px 8px; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+  .tab-btn{ padding:9px 16px; font-size:12.5px; font-weight:800; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; }
+  .tab-btn.active{ color:var(--accent); border-color:var(--accent); }
+  .rec-badge{ font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff; background:var(--ok); border-radius:20px; padding:2px 8px; }
   .toast{ position:fixed; bottom:20px; right:20px; background:var(--accentDim); color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; font-weight:600; box-shadow:0 10px 24px rgba(18,59,109,.3); z-index:70; display:none; }
   .toast.show{ display:block; }
   .dropdown{ position:relative; min-width:220px; }
@@ -143,7 +146,7 @@
   <div id="wrong-event" class="row-card p-6 hidden">
     <p class="text-sm text-muted m-0 mb-1 text-center">
       The live event right now is <b id="wrong-event-name" class="text-ink"></b>, owned by
-      <b id="wrong-event-owner" class="text-ink font-mono"></b> — not you. Its gates aren't yours to see or edit.
+      <b id="wrong-event-owner" class="text-ink font-mono"></b> — not you. Its gates, hotels and transport aren't yours to see or edit.
     </p>
     <p class="text-xs text-muted m-0 mb-4 text-center">Pick one of your own events below to open its setup instead.</p>
     <div id="wrong-event-picker-list" class="flex flex-col gap-2 max-w-md mx-auto mb-3"></div>
@@ -195,6 +198,13 @@
   </div>
 
   <div id="setup-body" class="hidden">
+    <div class="flex border-b" style="border-color:var(--border);">
+      <div class="tab-btn active" data-tab="gates" onclick="switchTab(this)">Gates &amp; Staff</div>
+      <div class="tab-btn" data-tab="hotels" onclick="switchTab(this)">Hotels</div>
+      <div class="tab-btn" data-tab="transport" onclick="switchTab(this)">Transport</div>
+    </div>
+
+    <!-- GATES -->
     <section id="tab-gates" class="mt-4">
       <div id="gate-activity" class="row-card p-3 mb-3 hidden">
         <div class="eyebrow mb-1">Gate Activity</div>
@@ -216,12 +226,79 @@
         </div>
         <div id="gate-add-status" class="text-xs text-muted mt-2"></div>
       </div>
+      <div class="flex justify-end mt-4">
+        <button type="button" class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="goToSetupTab('hotels')">NEXT: HOTELS →</button>
+      </div>
+    </section>
 
-      <div class="row-card p-4 mt-4">
+    <!-- HOTELS -->
+    <section id="tab-hotels" class="mt-4 hidden">
+      <div id="hotels-list" class="mb-4"></div>
+      <div class="row-card p-4">
+        <h3 class="eyebrow mb-3">Add a hotel</h3>
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <label class="text-[10px] text-muted uppercase tracking-wide">Radius
+            <select id="h-radius" class="p-2.5 text-xs">
+              <option value="500">0.5 km</option>
+              <option value="1000">1 km</option>
+              <option value="2000">2 km</option>
+              <option value="5000" selected>5 km</option>
+              <option value="10000">10 km</option>
+            </select>
+          </label>
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="findNearbyHotelsForAdd()">🔎 FIND NEARBY HOTELS</button>
+          <select id="h-discovered" class="p-2.5 text-xs flex-1 min-w-[220px] hidden" onchange="pickDiscoveredHotel()">
+            <option value="">Select a hotel…</option>
+          </select>
+        </div>
+        <div id="h-discover-status" class="text-xs text-muted mb-2"></div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <input type="text" id="h-name" placeholder="Hotel name" class="p-2.5 text-xs" />
+          <input type="number" id="h-rooms" placeholder="Total rooms" class="p-2.5 text-xs font-mono" />
+          <input type="number" id="h-price" placeholder="Price tier 1-5" class="p-2.5 text-xs font-mono" min="1" max="5" />
+          <input type="text" id="h-contact" placeholder="10-digit mobile number" class="p-2.5 text-xs" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+          <input type="text" id="h-amenities" placeholder="Amenities (comma-separated)" class="p-2.5 text-xs sm:col-span-2" />
+          <input type="hidden" id="h-lat" />
+          <input type="hidden" id="h-lng" />
+        </div>
+        <div class="flex gap-2 mt-3 items-center flex-wrap">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('h-lat','h-lng')">📍 Pick on map instead</button>
+          <span id="h-location-status" class="text-[10.5px] text-muted">No location set yet — search nearby or pick on map.</span>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs ml-auto" onclick="addHotel()">ADD HOTEL</button>
+        </div>
+        <div id="hotel-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
+      <div class="flex justify-end mt-4">
+        <button type="button" class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="goToSetupTab('transport')">NEXT: TRANSPORT →</button>
+      </div>
+    </section>
+
+    <!-- TRANSPORT -->
+    <section id="tab-transport" class="mt-4 hidden">
+      <div class="row-card p-4 mb-4">
         <h3 class="eyebrow mb-3">Resources</h3>
         <div id="resources-list" class="flex flex-col gap-2"></div>
       </div>
-
+      <div id="transport-list" class="mb-4"></div>
+      <div class="row-card p-4">
+        <h3 class="eyebrow mb-3">Add a transport zone</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <input type="text" id="t-name" placeholder="Zone name" class="p-2.5 text-xs" />
+          <select id="t-type" class="p-2.5 text-xs">
+            <option value="corridor">Corridor</option>
+            <option value="hub">Transport Hub</option>
+          </select>
+          <input type="number" id="t-capacity" placeholder="Capacity" class="p-2.5 text-xs font-mono" />
+          <input type="text" id="t-contact" placeholder="10-digit mobile number" class="p-2.5 text-xs" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+          <input type="number" step="any" id="t-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
+          <input type="number" step="any" id="t-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
+        </div>
+        <div class="flex gap-2 mt-3 items-center">
+          <button type="button" class="btn-secondary px-3 py-2 rounded-lg text-xs" onclick="openMapPicker('t-lat','t-lng')">📍 Pick on map</button>
+          <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addTransport()">ADD TRANSPORT ZONE</button>
+        </div>
+        <div id="transport-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
       <div class="flex justify-end mt-4">
         <a href="command-center.html?role=command" class="btn-primary px-4 py-2 rounded-lg text-xs no-underline inline-block">FINISH SETUP: OPEN COMMAND CENTRE →</a>
       </div>
@@ -335,6 +412,7 @@ function confirmMapPicker() {
   if (!mapPickerPoint) { alert("Click the map to place a point first."); return; }
   document.getElementById(mapPickerTargetLat).value = mapPickerPoint.lat.toFixed(6);
   document.getElementById(mapPickerTargetLng).value = mapPickerPoint.lng.toFixed(6);
+  if (mapPickerTargetLat === "h-lat") refreshHotelLocationStatus();
   if (mapPickerTargetLat === "new-ev-lat" && mapPickerAddressInfo?.state) {
     const match = regionListForCreate.find(r => r.state.toLowerCase() === mapPickerAddressInfo.state.toLowerCase());
     if (match) selectNewEventRegion(match.state, `${match.state} — ${match.city}`);
@@ -424,6 +502,20 @@ function showToast(msg) {
 function setGateStatus(msg) {
   document.getElementById("gate-activity").classList.remove("hidden");
   document.getElementById("gate-activity-text").textContent = `${msg} — ${new Date().toLocaleTimeString()}`;
+}
+
+function switchTab(el) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  document.querySelectorAll("main section[id^='tab-']").forEach(s => s.classList.add("hidden"));
+  document.getElementById("tab-" + el.dataset.tab).classList.remove("hidden");
+}
+
+function goToSetupTab(tab) {
+  const tabButton = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!tabButton) return;
+  switchTab(tabButton);
+  document.getElementById("setup-body").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // --- Gates -----------------------------------------------------------------
@@ -655,6 +747,257 @@ async function saveGate(id) {
   } catch (e) { showToast(e.message); }
 }
 
+// --- Hotels ------------------------------------------------------------------
+
+function hotelRow(h) {
+  return `
+    <div class="row-card p-4 mb-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2 flex-1 min-w-[180px]">
+          <input type="text" class="small-input font-bold text-sm flex-1" id="h-name-${h.id}" value="${escapeHtml(h.name)}" />
+          ${h.recommended ? '<span class="rec-badge">RECOMMENDED</span>' : ""}
+        </div>
+        <button class="btn-secondary px-3 py-1 rounded-lg text-[11px]" onclick="openMapPicker('h-lat-${h.id}','h-lng-${h.id}')">📍 Edit location</button>
+        <button class="btn-danger px-3 py-1 rounded-lg text-[11px]" onclick="removeHotel(${h.id})">DELETE</button>
+      </div>
+      <input type="hidden" id="h-lat-${h.id}" value="${h.lat ?? ""}" />
+      <input type="hidden" id="h-lng-${h.id}" value="${h.lng ?? ""}" />
+      <div class="text-muted text-[10.5px] font-mono mt-1">${h.distance_km != null ? h.distance_km + " km from venue" : "distance unknown (no venue zone set for this event)"}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        <label class="text-[10px] text-muted uppercase tracking-wide">Total rooms
+          <input type="number" class="small-input w-full" id="h-rooms-${h.id}" value="${h.total_rooms}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Occupied rooms
+          <input type="number" class="small-input w-full" id="h-occ-${h.id}" value="${h.occupied_rooms}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Price tier (1-5)
+          <input type="number" min="1" max="5" class="small-input w-full" id="h-price-${h.id}" value="${h.price_tier ?? ""}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Mobile number
+          <input type="text" class="small-input w-full" id="h-contact-${h.id}" value="${h.contact ?? ""}" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+        </label>
+      </div>
+      <label class="text-[10px] text-muted uppercase tracking-wide block mt-2">Amenities
+        <input type="text" class="small-input w-full" id="h-amen-${h.id}" value="${h.amenities ?? ""}" />
+      </label>
+      <div class="flex items-center justify-between mt-3">
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" id="h-manual-${h.id}" ${h.manual_recommended ? "checked" : ""} />
+          Manually mark as the recommended hotel (overrides the automatic ranking)
+        </label>
+        <button class="btn-primary px-3 py-1.5 rounded-lg text-[11px]" onclick="saveHotel(${h.id})">SAVE</button>
+      </div>
+    </div>`;
+}
+
+async function saveHotel(id) {
+  const name = document.getElementById(`h-name-${id}`).value.trim();
+  if (!name) { showToast("Hotel name can't be empty."); return; }
+  const contact = document.getElementById(`h-contact-${id}`).value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    showToast("Enter a valid 10-digit hotel mobile number.");
+    document.getElementById(`h-contact-${id}`).focus();
+    return;
+  }
+  const lat = parseFloat(document.getElementById(`h-lat-${id}`).value);
+  const lng = parseFloat(document.getElementById(`h-lng-${id}`).value);
+  const body = {
+    name,
+    capacity: parseInt(document.getElementById(`h-rooms-${id}`).value) || null,
+    occupied_rooms: parseInt(document.getElementById(`h-occ-${id}`).value),
+    price_tier: parseInt(document.getElementById(`h-price-${id}`).value) || null,
+    contact: contact || null,
+    amenities: document.getElementById(`h-amen-${id}`).value.trim() || null,
+    manual_recommended: document.getElementById(`h-manual-${id}`).checked,
+    lat: isNaN(lat) ? null : lat,
+    lng: isNaN(lng) ? null : lng,
+    email: getOperatorEmail(),
+  };
+  try {
+    await api(`/api/event-setup/hotels/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    showToast("Hotel updated.");
+    await load();
+  } catch (e) { showToast(e.message); }
+}
+
+async function removeHotel(id) {
+  if (!confirm("Delete this hotel?")) return;
+  const res = await fetch(`/api/event-setup/hotels/${id}?email=${encodeURIComponent(getOperatorEmail())}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this hotel."); return; }
+  await load();
+}
+
+let discoveredHotelsForAdd = [];
+
+function isValidMobileNumber(value) {
+  return /^\d{10}$/.test(value);
+}
+
+async function findNearbyHotelsForAdd() {
+  const status = document.getElementById("h-discover-status");
+  const select = document.getElementById("h-discovered");
+  if (eventVenueLat == null || eventVenueLng == null) {
+    status.textContent = "Set the event's venue location first (Event tab) before searching nearby hotels.";
+    return;
+  }
+  status.textContent = "Searching nearby hotels…";
+  select.classList.add("hidden");
+  try {
+    const radius_m = Number(document.getElementById("h-radius").value);
+    const data = await api("/api/hotels/discover-nearby", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: eventVenueLat, lng: eventVenueLng, radius_m }),
+    });
+    discoveredHotelsForAdd = data.hotels || [];
+    if (!discoveredHotelsForAdd.length) {
+      status.textContent = "No hotels found in that radius. Try a larger radius, or add one manually below.";
+      return;
+    }
+    select.innerHTML = '<option value="">Select a hotel…</option>' + discoveredHotelsForAdd.map((h, i) =>
+      `<option value="${i}">${escapeHtml(h.name)} — ${h.distance_km} km${h.stars ? ` · ${h.stars}★` : ""}</option>`
+    ).join("");
+    select.classList.remove("hidden");
+    status.textContent = `${discoveredHotelsForAdd.length} hotel(s) found. Pick one, then fill in rooms/price below and click ADD HOTEL.`;
+  } catch (e) {
+    status.textContent = "Couldn't search nearby hotels: " + e.message;
+  }
+}
+
+function refreshHotelLocationStatus() {
+  const lat = parseFloat(document.getElementById("h-lat").value);
+  const lng = parseFloat(document.getElementById("h-lng").value);
+  const status = document.getElementById("h-location-status");
+  status.textContent = (!isNaN(lat) && !isNaN(lng))
+    ? `📍 Location set (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+    : "No location set yet — search nearby or pick on map.";
+}
+
+function pickDiscoveredHotel() {
+  const idx = document.getElementById("h-discovered").value;
+  if (idx === "") return;
+  const h = discoveredHotelsForAdd[idx];
+  document.getElementById("h-name").value = h.name;
+  document.getElementById("h-lat").value = h.lat;
+  document.getElementById("h-lng").value = h.lng;
+  if (h.phone) document.getElementById("h-contact").value = h.phone;
+  refreshHotelLocationStatus();
+}
+
+async function addHotel() {
+  const contact = document.getElementById("h-contact").value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    document.getElementById("hotel-add-status").textContent = "Enter a valid 10-digit hotel mobile number.";
+    document.getElementById("h-contact").focus();
+    return;
+  }
+  const body = {
+    name: document.getElementById("h-name").value.trim(),
+    capacity: parseInt(document.getElementById("h-rooms").value) || 0,
+    price_tier: parseInt(document.getElementById("h-price").value) || null,
+    contact: contact || null,
+    amenities: document.getElementById("h-amenities").value.trim() || null,
+    lat: parseFloat(document.getElementById("h-lat").value),
+    lng: parseFloat(document.getElementById("h-lng").value),
+    email: getOperatorEmail(),
+  };
+  if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
+    document.getElementById("hotel-add-status").textContent = "Name, total rooms, latitude and longitude are required.";
+    return;
+  }
+  try {
+    await api("/api/event-setup/hotels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { document.getElementById("hotel-add-status").textContent = e.message; return; }
+  ["h-name", "h-rooms", "h-price", "h-contact", "h-amenities", "h-lat", "h-lng"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("hotel-add-status").textContent = "";
+  document.getElementById("h-discovered").classList.add("hidden");
+  document.getElementById("h-discover-status").textContent = "";
+  refreshHotelLocationStatus();
+  showToast("Hotel added.");
+  await load();
+}
+
+// --- Transport ---------------------------------------------------------------
+
+function transportRow(t) {
+  return `
+    <div class="row-card p-4 mb-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="font-bold text-sm">${t.name} <span class="text-muted text-[10.5px] font-mono uppercase">${t.type}</span></div>
+        <button class="btn-danger px-3 py-1 rounded-lg text-[11px]" onclick="removeTransport(${t.id})">DELETE</button>
+      </div>
+      <div class="text-muted text-[10.5px] font-mono mt-1">${t.occupied_pct}% occupied${t.occupied_pct >= 90 ? " · CRITICAL" : t.occupied_pct >= 80 ? " · HIGH" : t.occupied_pct >= 60 ? " · MODERATE" : " · NORMAL"}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+        <label class="text-[10px] text-muted uppercase tracking-wide">Capacity
+          <input type="number" class="small-input w-full" id="t-cap-${t.id}" value="${t.capacity}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Currently occupied
+          <input type="number" class="small-input w-full" id="t-occ-${t.id}" value="${t.current_count}" />
+        </label>
+        <label class="text-[10px] text-muted uppercase tracking-wide">Mobile number
+          <input type="text" class="small-input w-full" id="t-contact-${t.id}" value="${t.contact ?? ""}" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+        </label>
+      </div>
+      <div id="cam-block-${t.id}" class="mt-3 pt-2 border-t" style="border-color:var(--border);"></div>
+      <button class="btn-primary mt-3 px-3 py-1.5 rounded-lg text-[11px]" onclick="saveTransport(${t.id})">SAVE</button>
+    </div>`;
+}
+
+async function saveTransport(id) {
+  const contact = document.getElementById(`t-contact-${id}`).value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    showToast("Enter a valid 10-digit transport mobile number.");
+    document.getElementById(`t-contact-${id}`).focus();
+    return;
+  }
+  const body = {
+    capacity: parseInt(document.getElementById(`t-cap-${id}`).value) || null,
+    current_count: parseInt(document.getElementById(`t-occ-${id}`).value),
+    contact: contact || null,
+    email: getOperatorEmail(),
+  };
+  try {
+    await api(`/api/event-setup/transport/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    showToast("Transport zone updated.");
+    await load();
+  } catch (e) { showToast(e.message); }
+}
+
+async function removeTransport(id) {
+  if (!confirm("Delete this transport zone?")) return;
+  const res = await fetch(`/api/event-setup/transport/${id}?email=${encodeURIComponent(getOperatorEmail())}`, { method: "DELETE" });
+  if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b.detail || "Couldn't delete this zone."); return; }
+  await load();
+}
+
+async function addTransport() {
+  const contact = document.getElementById("t-contact").value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    document.getElementById("transport-add-status").textContent = "Enter a valid 10-digit transport mobile number.";
+    document.getElementById("t-contact").focus();
+    return;
+  }
+  const body = {
+    name: document.getElementById("t-name").value.trim(),
+    type: document.getElementById("t-type").value,
+    capacity: parseInt(document.getElementById("t-capacity").value) || 0,
+    contact: contact || null,
+    lat: parseFloat(document.getElementById("t-lat").value),
+    lng: parseFloat(document.getElementById("t-lng").value),
+    email: getOperatorEmail(),
+  };
+  if (!body.name || !body.capacity || isNaN(body.lat) || isNaN(body.lng)) {
+    document.getElementById("transport-add-status").textContent = "Name, capacity, latitude and longitude are required.";
+    return;
+  }
+  try {
+    await api("/api/event-setup/transport", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { document.getElementById("transport-add-status").textContent = e.message; return; }
+  ["t-name", "t-capacity", "t-contact", "t-lat", "t-lng"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("transport-add-status").textContent = "";
+  showToast("Transport zone added.");
+  await load();
+}
+
 // --- Resources (bus/staff/medical pools) -------------------------------------
 
 const RESOURCE_LABELS = { bus: "Buses", staff: "Staff", medical: "Medical units" };
@@ -783,6 +1126,10 @@ async function load() {
 
   document.getElementById("gates-list").innerHTML = setupData.gates.map(gateRow).join("") ||
     `<p class="text-xs text-muted">No gates configured.</p>`;
+  document.getElementById("hotels-list").innerHTML = setupData.hotels.map(hotelRow).join("") ||
+    `<p class="text-xs text-muted">No hotels configured yet — add one below.</p>`;
+  document.getElementById("transport-list").innerHTML = setupData.transport.map(transportRow).join("") ||
+    `<p class="text-xs text-muted">No transport zones configured yet — add one below.</p>`;
   renderResources(setupData.resources || {});
   await loadCameraStatuses(true);
 }
