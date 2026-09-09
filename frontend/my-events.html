@@ -77,7 +77,6 @@
     </a>
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link">Home</a>
-      <a href="events.html?explore=1" class="nav-link">Explore</a>
       <a href="my-events.html" class="nav-link active">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
     </div>
@@ -105,7 +104,17 @@
     <div class="tab-btn" data-tab="active" onclick="switchTab(this)">Active</div>
     <div class="tab-btn" data-tab="past" onclick="switchTab(this)">Past</div>
   </div>
-  <section id="bookings-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6"></section>
+  <div id="top-row" class="grid grid-cols-1 gap-5 mt-6 items-start">
+    <section id="bookings-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></section>
+    <section id="user-map-section" class="card p-5 hidden">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <h2 class="eyebrow m-0">🗺 Venue map</h2>
+        <div id="user-poi-legend" class="flex items-center gap-3 flex-wrap"></div>
+      </div>
+      <p class="text-[10.5px] text-muted mb-2">Point-of-interest map for your event's venue — not a full indoor floor-plan.</p>
+      <div id="user-poi-map" style="height:320px;border-radius:14px;"></div>
+    </section>
+  </div>
 
   <section id="live-crowd-box" class="card p-4 mt-6 hidden fade-up"></section>
 
@@ -143,14 +152,6 @@
     <section class="card p-5 mb-5">
       <h2 class="eyebrow mb-3">🚑 Emergency &amp; Safety</h2>
       <div id="user-emergency" class="text-sm">Loading…</div>
-    </section>
-    <section id="user-map-section" class="card p-5 hidden">
-      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
-        <h2 class="eyebrow m-0">🗺 Venue map</h2>
-        <div id="user-poi-legend" class="flex items-center gap-3 flex-wrap"></div>
-      </div>
-      <p class="text-[10.5px] text-muted mb-2">Point-of-interest map for your event's venue — not a full indoor floor-plan.</p>
-      <div id="user-poi-map" style="height:320px;border-radius:14px;"></div>
     </section>
   </section>
 
@@ -485,7 +486,7 @@ async function loadUserMap(eventId) {
     const res = await api(`/api/attendee/venue-pois${eventId != null ? `?event_id=${eventId}` : ""}`);
     const zoneWithCoords = res.zones.filter(z => z.lat != null);
     const svcWithCoords = res.services.filter(p => p.lat != null);
-    if (!zoneWithCoords.length && !svcWithCoords.length) { section.classList.add("hidden"); return; }
+    if (!zoneWithCoords.length && !svcWithCoords.length) { section.classList.add("hidden"); layoutTopRow(); return; }
     section.classList.remove("hidden");
 
     if (!userPoiMap) {
@@ -515,12 +516,33 @@ async function loadUserMap(eventId) {
 
     document.getElementById("user-poi-legend").innerHTML = Object.entries(USER_POI_MARKER).map(([key, style]) => `
       <span class="flex items-center gap-1 text-[10.5px]"><span style="color:${poiColor(style)}">●</span> ${style.icon} ${key[0].toUpperCase() + key.slice(1)}</span>`).join("");
-  } catch (e) { section.classList.add("hidden"); }
+    setTimeout(layoutTopRow, 0);
+  } catch (e) { section.classList.add("hidden"); layoutTopRow(); }
+}
+
+// The Active tab usually has just one ticket, leaving the booking-cards grid
+// with empty columns to its right -- once the venue map has something to
+// show, pull it up to sit in that empty space next to the ticket instead of
+// leaving it stacked below with the rest of the live-event info.
+function layoutTopRow() {
+  const row = document.getElementById("top-row");
+  const list = document.getElementById("bookings-list");
+  const mapVisible = !document.getElementById("user-map-section").classList.contains("hidden");
+  const split = activeTab === "active" && mapVisible;
+  row.classList.toggle("lg:grid-cols-[1fr_360px]", split);
+  list.classList.toggle("lg:grid-cols-3", !split);
+  list.classList.toggle("lg:grid-cols-2", split);
+  if (userPoiMap) setTimeout(() => userPoiMap.invalidateSize(), 50);
 }
 
 function renderLiveInfo() {
   const box = document.getElementById("live-info");
-  if (activeTab !== "active" || !anyLiveActive) { box.classList.add("hidden"); return; }
+  if (activeTab !== "active" || !anyLiveActive) {
+    box.classList.add("hidden");
+    document.getElementById("user-map-section").classList.add("hidden");
+    layoutTopRow();
+    return;
+  }
   box.classList.remove("hidden");
   const toggle = document.getElementById("accessible-toggle");
   if (!toggle.dataset.defaulted) {

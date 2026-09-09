@@ -104,7 +104,6 @@
     </div>
     <div class="hidden md:flex items-center gap-1">
       <a href="events.html" class="nav-link active">Home</a>
-      <a href="events.html?explore=1" class="nav-link">Explore</a>
       <a href="my-events.html" class="nav-link">My Event</a>
       <a href="notifications.html" class="nav-link">Alerts</a>
     </div>
@@ -174,7 +173,6 @@
 <!-- Mobile bottom nav (laptop view uses the top nav above) -->
 <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-40" style="border-color:#E7EEF7;">
   <a href="events.html" class="flex flex-col items-center text-[9.5px] font-bold text-accent">🏠 Home</a>
-  <a href="events.html?explore=1" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🔍 Explore</a>
   <a href="my-events.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🎟️ Events</a>
   <a href="notifications.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">🔔 Alerts</a>
   <a href="profile.html" class="flex flex-col items-center text-[9.5px] font-bold text-muted">👤 Profile</a>
@@ -268,8 +266,6 @@ function isExploreMode() {
 async function loadExplore() {
   document.getElementById("home-view").classList.add("hidden");
   document.getElementById("explore-view").classList.remove("hidden");
-  document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
-  document.querySelector('.nav-link[href="events.html?explore=1"]')?.classList.add("active");
   const search = document.getElementById("search").value.trim();
   const qs = new URLSearchParams();
   if (search) qs.set("search", search);

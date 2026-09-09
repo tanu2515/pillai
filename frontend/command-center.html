@@ -207,13 +207,17 @@
       </span>
       <span id="readonly-note" class="text-xs text-muted italic hidden">Live event clock is run by the Event Command Operator</span>
       <button id="emergency-btn" class="btn-danger rounded-lg px-3 py-2 text-xs hidden" onclick="openEmergencyModal()">🚨 Emergency</button>
-      <a id="event-setup-link" href="/event-setup.html" class="text-xs text-accent hover:underline ml-1 font-bold hidden" title="View and edit gates, hotels, transport zones and operational resources">Edit Event Setup →</a>
-      <a id="back-office-link" href="/admin.html" class="text-xs text-accent hover:underline ml-1 font-medium hidden">Back Office →</a>
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline ml-1 font-bold" onclick="openEventPicker()">Switch Event ▾</button>
-      <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
-      <a href="/login.html" class="text-xs text-muted hover:text-accent hover:underline font-medium">Switch role →</a>
       <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="w-7 h-7 rounded-full flex items-center justify-center text-sm ml-1" style="background:var(--panel2);border:1px solid var(--border);" title="Toggle light/dark theme">🌙</button>
-      <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center ml-1"></div>
+      <div class="relative ml-1" id="account-menu">
+        <div id="account-avatar" class="hidden w-7 h-7 rounded-full bg-accent text-white text-[11px] font-extrabold flex items-center justify-center cursor-pointer" onclick="toggleAccountMenu()"></div>
+        <div id="account-menu-panel" class="dropdown-panel hidden" style="right:0; left:auto;">
+          <a id="event-setup-link" href="/event-setup.html" class="dropdown-item block text-ink no-underline hover:no-underline hidden" title="View and edit gates, hotels, transport zones and operational resources">Edit Event Setup</a>
+          <a id="back-office-link" href="/admin.html" class="dropdown-item block text-ink no-underline hover:no-underline hidden">Back Office</a>
+          <a href="/attendee.html" class="dropdown-item block text-ink no-underline hover:no-underline">Open guest view</a>
+          <a href="/login.html" class="dropdown-item block text-ink no-underline hover:no-underline">Switch role</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -469,13 +473,19 @@
   </div>
 
   <div id="tab-timeline" class="tab-panel hidden">
-    <section class="bg-panel border border-border rounded-xl p-4 max-w-2xl">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 class="eyebrow">Incident Timeline</h2>
-        <span class="text-[10.5px] text-muted font-mono">what happened, when, and how VYAVASTHA responded</span>
-      </div>
-      <div id="timeline-list"></div>
-    </section>
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start max-w-5xl">
+      <section class="bg-panel border border-border rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 class="eyebrow">Incident Timeline</h2>
+          <span class="text-[10.5px] text-muted font-mono">what happened, when, and how VYAVASTHA responded</span>
+        </div>
+        <div id="timeline-list"></div>
+      </section>
+      <section class="bg-panel border border-border rounded-xl p-4">
+        <h2 class="eyebrow mb-3">Summary</h2>
+        <div id="timeline-summary" class="flex flex-col gap-2"></div>
+      </section>
+    </div>
   </div>
 
 </main>
@@ -568,7 +578,7 @@ const LEVEL_TEXT  = { LOW: "text-ok", MODERATE: "text-warn", MEDIUM: "text-warn"
 // zone domains, which What-If fields, and whether they can drive the shared
 // event clock (only the Event Command Operator can).
 const ROLE_CONFIG = {
-  command:     { label: "EVENT COMMAND OPERATOR", roleName: "Event Command Operator", tabs: ["overview", "whatif", "actions", "alerts", "hotels", "transport", "analytics", "timeline"], showSimControls: true,  showAiAdvisor: true, showEmergency: true,  domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
+  command:     { label: "EVENT COMMAND OPERATOR", roleName: "Event Command Operator", tabs: ["overview", "whatif", "actions", "alerts", "analytics", "timeline"], showSimControls: true,  showAiAdvisor: true, showEmergency: true,  domain: null,          whatifFields: ["redirect","buses","staff","gate3"] },
 };
 // Leaflet writes marker colors as raw SVG attributes, not CSS, so
 // var(--token) strings don't resolve there the way they do in stylesheets —
@@ -704,8 +714,23 @@ function gaugeBar(z, widthClass) {
     </div>`;
 }
 
+let scenarioActive = false;
+// The header clock used to show the simulation's own fictional 14:00-start
+// event clock (state.clock), which drifts from the operator's actual
+// wall-clock time -- shows the device's real time instead, so "crowd rush
+// in progress" is stamped with when it's actually happening.
+function updateClockLabel() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  document.getElementById("clock-label").textContent = `${hh}:${mm}` + (scenarioActive ? " — crowd rush in progress" : "");
+}
+setInterval(updateClockLabel, 1000);
+updateClockLabel();
+
 function renderZones(state) {
-  document.getElementById("clock-label").textContent = state.clock + (state.scenario_active ? " — crowd rush in progress" : "");
+  scenarioActive = state.scenario_active;
+  updateClockLabel();
   currentZones = roleCfg.domain ? state.zones.filter(z => z.domain === roleCfg.domain) : state.zones;
   renderFlowMap(state.zones);
   populateWhatifZoneSelects();
@@ -877,6 +902,10 @@ const TIMELINE_COLOR = {
   scenario: "text-accent", zone_critical: "text-danger", acknowledged: "text-ok",
   escalated: "text-danger", action_executed: "text-warn",
 };
+const TIMELINE_DOT = {
+  scenario: "bg-accent", zone_critical: "bg-danger", acknowledged: "bg-ok",
+  escalated: "bg-danger", action_executed: "bg-warn",
+};
 
 function renderTimeline(entries) {
   const scoped = roleCfg.domain ? entries.filter(e => !e.zone_domain || e.zone_domain === roleCfg.domain) : entries;
@@ -889,6 +918,35 @@ function renderTimeline(entries) {
       </div>
     </div>
   `).join("") || `<div class="text-xs text-muted">Nothing has happened yet — trigger a scenario to see the timeline build up.</div>`;
+  renderTimelineSummary(scoped);
+}
+
+function renderTimelineSummary(scoped) {
+  const el = document.getElementById("timeline-summary");
+  if (!el) return;
+  if (!scoped.length) {
+    el.innerHTML = `<div class="text-xs text-muted">No incidents logged yet.</div>`;
+    return;
+  }
+  const counts = {};
+  scoped.forEach(e => { counts[e.category] = (counts[e.category] || 0) + 1; });
+  const rows = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).map(cat => `
+    <div class="flex items-center justify-between gap-2 text-xs">
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full ${TIMELINE_DOT[cat] || 'bg-muted'}"></span>${cat.replace('_', ' ')}</span>
+      <span class="font-mono font-bold">${counts[cat]}</span>
+    </div>
+  `).join("");
+  el.innerHTML = `
+    <div class="flex items-center justify-between text-xs pb-2 mb-1 border-b border-border">
+      <span class="text-muted">Total events</span>
+      <span class="font-mono font-bold">${scoped.length}</span>
+    </div>
+    ${rows}
+    <div class="flex items-center justify-between text-xs pt-2 mt-1 border-t border-border">
+      <span class="text-muted">Last event</span>
+      <span class="font-mono">${scoped[scoped.length - 1].clock}</span>
+    </div>
+  `;
 }
 
 async function approveAction(id, btn) {
@@ -1342,9 +1400,15 @@ function toggleScenarioDropdown() {
   document.getElementById("scenario-dropdown-panel").classList.toggle("hidden");
 }
 
+function toggleAccountMenu() {
+  document.getElementById("account-menu-panel").classList.toggle("hidden");
+}
+
 document.addEventListener("click", (e) => {
   const dd = document.getElementById("scenario-dropdown");
   if (dd && !dd.contains(e.target)) document.getElementById("scenario-dropdown-panel").classList.add("hidden");
+  const am = document.getElementById("account-menu");
+  if (am && !am.contains(e.target)) document.getElementById("account-menu-panel").classList.add("hidden");
 });
 
 function setSimStatus(text) {

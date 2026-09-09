@@ -153,6 +153,19 @@
         <input type="number" id="ev-capacity" class="w-full p-2.5 text-sm font-mono" />
       </div>
     </div>
+    <div class="flex gap-2 items-end flex-wrap mt-3">
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Venue latitude</label>
+        <input type="number" step="any" id="ev-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono w-28" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-muted uppercase tracking-wide mb-1">Venue longitude</label>
+        <input type="number" step="any" id="ev-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono w-28" />
+      </div>
+      <button type="button" class="btn-ghost rounded-lg px-3 py-2 text-xs" onclick="openMapPicker('ev-lat','ev-lng')">📍 Pick on map</button>
+      <span id="ev-venue-status" class="text-[10.5px] text-muted"></span>
+    </div>
+    <p class="text-[10.5px] text-muted mt-1 mb-0">Used to find this event in the Service Provider portal's "Nearby events" (hotels opt in within 30 km of this point) — separate from any gate/hotel/transport zone locations set in Event Setup.</p>
     <div class="flex items-center gap-3 mt-3">
       <button class="btn-primary rounded-lg px-4 py-2 text-xs" onclick="saveEvent()">SAVE EVENT DETAILS</button>
       <button class="btn-danger rounded-lg px-4 py-2 text-xs" onclick="deleteEvent()">DELETE EVENT</button>
@@ -418,6 +431,11 @@ async function loadEvent() {
     document.getElementById("ev-name").value = ev.name;
     document.getElementById("ev-attendance").value = ev.expected_attendance;
     document.getElementById("ev-capacity").value = ev.safe_capacity;
+    document.getElementById("ev-lat").value = ev.venue_lat ?? "";
+    document.getElementById("ev-lng").value = ev.venue_lng ?? "";
+    document.getElementById("ev-venue-status").textContent = (ev.venue_lat == null || ev.venue_lng == null)
+      ? "⚠ No venue location set — this event won't show up for nearby hotels."
+      : "";
     document.getElementById("event-title").textContent = `VYAVASTHA — ${ev.name}`;
   } else {
     document.getElementById("event-title").textContent = "VYAVASTHA — no event configured";
@@ -425,13 +443,20 @@ async function loadEvent() {
 }
 
 async function saveEvent() {
+  const lat = parseFloat(document.getElementById("ev-lat").value);
+  const lng = parseFloat(document.getElementById("ev-lng").value);
   const body = {
     name: document.getElementById("ev-name").value,
     expected_attendance: parseInt(document.getElementById("ev-attendance").value) || 0,
     safe_capacity: parseInt(document.getElementById("ev-capacity").value) || 0,
+    venue_lat: isNaN(lat) ? null : lat,
+    venue_lng: isNaN(lng) ? null : lng,
   };
-  await api("/api/admin/event", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const updated = await api("/api/admin/event", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   document.getElementById("event-title").textContent = `VYAVASTHA — ${body.name}`;
+  document.getElementById("ev-venue-status").textContent = (updated.venue_lat == null || updated.venue_lng == null)
+    ? "⚠ No venue location set — this event won't show up for nearby hotels."
+    : "";
   const status = document.getElementById("event-save-status");
   status.textContent = "Saved.";
   setTimeout(() => status.textContent = "", 2000);

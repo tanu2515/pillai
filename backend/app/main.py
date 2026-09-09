@@ -133,6 +133,8 @@ class EventUpdate(BaseModel):
     name: str
     expected_attendance: int
     safe_capacity: int
+    venue_lat: float | None = None
+    venue_lng: float | None = None
 
 
 class EventCreate(BaseModel):
@@ -1090,8 +1092,14 @@ def admin_update_event(req: EventUpdate, db: Session = Depends(get_db), role: st
     event.name = req.name.strip() or event.name
     event.expected_attendance = req.expected_attendance
     event.safe_capacity = req.safe_capacity
+    if req.venue_lat is not None and req.venue_lng is not None:
+        event.venue_lat = req.venue_lat
+        event.venue_lng = req.venue_lng
     db.commit()
-    return {"name": event.name, "expected_attendance": event.expected_attendance, "safe_capacity": event.safe_capacity}
+    return {
+        "name": event.name, "expected_attendance": event.expected_attendance, "safe_capacity": event.safe_capacity,
+        "venue_lat": event.venue_lat, "venue_lng": event.venue_lng,
+    }
 
 
 @app.post("/api/admin/event")

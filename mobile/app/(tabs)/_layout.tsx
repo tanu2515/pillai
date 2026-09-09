@@ -23,7 +23,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="explore"
-        options={{ title: "Explore", tabBarIcon: ({ focused }) => <TabIcon emoji="🔍" focused={focused} /> }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="my-events"
