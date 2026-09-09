@@ -120,6 +120,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
     <section class="card p-6 mt-5">
       <div class="eyebrow mb-1">📊 Event service report</div>
       <h2 class="text-lg font-black mb-3">How well did we serve an event?</h2>
+      <p id="report-hint" class="text-xs text-muted mb-3 hidden"></p>
       <div class="flex flex-col sm:flex-row gap-3 mb-4">
         <select id="report-event-select" class="flex-1 px-3 py-3 text-sm"><option value="">Select an event…</option></select>
         <button class="btn bg-accent text-white rounded-xl px-5 py-3 text-sm" onclick="loadReport()">GENERATE REPORT</button>
@@ -251,8 +252,22 @@ async function optIn(eventId, status){
 
 function populateReportSelect(){
   const sel = document.getElementById('report-event-select');
+  const hint = document.getElementById('report-hint');
   const opted = nearbyEvents.filter(e=>e.interest_status==='opted_in');
   sel.innerHTML = '<option value="">Select an event…</option>' + opted.map(e=>`<option value="${e.event_id}">${esc(e.name)}</option>`).join('');
+  // A report only makes sense for an event this property has actually opted
+  // in to coordinate with (see the Nearby events section above) -- when
+  // none are opted in yet the dropdown is correctly empty, but with no
+  // explanation that reads as "my event is missing", not "opt in first".
+  if (opted.length === 0 && nearbyEvents.length > 0) {
+    hint.textContent = `None of your ${nearbyEvents.length} nearby event${nearbyEvents.length === 1 ? '' : 's'} ${nearbyEvents.length === 1 ? 'is' : 'are'} opted in yet — click "Opt in" above to be able to report on one.`;
+    hint.classList.remove('hidden');
+  } else if (opted.length === 0) {
+    hint.textContent = 'No nearby events found yet — an event will show up here once one is within 30 km of this property.';
+    hint.classList.remove('hidden');
+  } else {
+    hint.classList.add('hidden');
+  }
 }
 
 async function loadReport(){
