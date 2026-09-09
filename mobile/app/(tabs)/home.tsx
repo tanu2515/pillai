@@ -86,7 +86,7 @@ export default function Home() {
         ListHeaderComponent={
           <>
             <Header title="VYAVASTHA" subtitle="Discover events near you" />
-            <Pressable style={styles.searchBar} onPress={() => router.push("/(tabs)/explore")}>
+            <Pressable style={styles.searchBar} onPress={() => router.push({ pathname: "/(tabs)/explore", params: { autoFocus: "1" } })}>
               <Text style={styles.searchIcon}>🔍</Text>
               <Text style={styles.searchPlaceholder}>Search events, venues, cities...</Text>
             </Pressable>

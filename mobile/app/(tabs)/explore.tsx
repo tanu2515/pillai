@@ -1,19 +1,29 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { View, Text, TextInput, FlatList, Pressable, StyleSheet } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { Header } from "../../src/components/Header";
 import { EventCard, EventSummary } from "../../src/components/EventCard";
 import { api } from "../../src/api";
 import { colors, spacing, radius } from "../../src/theme";
 
 export default function Explore() {
+  const { autoFocus } = useLocalSearchParams<{ autoFocus?: string }>();
   const [categories, setCategories] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState("");
   const [search, setSearch] = useState("");
   const [events, setEvents] = useState<EventSummary[]>([]);
+  const searchRef = useRef<TextInput>(null);
 
   useEffect(() => {
     api<string[]>("/api/event-categories").then(setCategories);
   }, []);
+
+  // Arriving from Home's search bar (which is a static Pressable, not a real
+  // input) should feel like continuing the same action, not landing on a
+  // blank screen -- focus the real search input here instead.
+  useEffect(() => {
+    if (autoFocus) searchRef.current?.focus();
+  }, [autoFocus]);
 
   const load = useCallback(async (q: string, cat: string) => {
     const params = new URLSearchParams();
@@ -34,6 +44,7 @@ export default function Explore() {
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
+          ref={searchRef}
           style={styles.searchInput}
           placeholder="Search events, venues, cities..."
           placeholderTextColor={colors.muted}

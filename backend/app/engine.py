@@ -185,7 +185,14 @@ def advance_tick(db):
     duration = scenario.duration_ticks if scenario else 0
     ramping = state.scenario_active and 0 <= ticks_since_trigger < duration
 
-    zones = db.query(models.Zone).all()
+    # Scoped to the live event only -- an unscoped query here previously
+    # advanced (and wrote CrowdSnapshot rows for) every zone across every
+    # event in the DB on every tick, including paused/completed events, and
+    # _open_alert() below attributes any newly-critical zone to
+    # get_live_event() regardless of which event it actually belongs to --
+    # so an unscoped zone list could misattribute an alert to the wrong event.
+    live = get_live_event(db)
+    zones = db.query(models.Zone).filter(models.Zone.event_id == live.id).all() if live else []
     old_levels = {z.id: zone_risk(z, db)["level"] for z in zones}
 
     for zone in zones:
@@ -492,7 +499,14 @@ def event_health_score(db):
         by_domain.setdefault(z["domain"], []).append(z["score"])
 
     domain_health = {d: round(100 - sum(scores) / len(scores), 1) for d, scores in by_domain.items()}
-    open_alerts = list_alerts(db, status="open") + list_alerts(db, status="acknowledged")
+    # Scoped to the live event only -- unscoped previously let an unresolved
+    # alert from a completed/paused event (e.g. a prior demo run) silently
+    # drag down the CURRENT live event's Safety score and Open Alerts count.
+    live = get_live_event(db)
+    open_alerts = (
+        (list_alerts(db, status="open", event_id=live.id) + list_alerts(db, status="acknowledged", event_id=live.id))
+        if live else []
+    )
     critical_open = sum(1 for a in open_alerts if a["severity"] == "CRITICAL")
     safety = round(max(0, 100 - critical_open * 20 - len(open_alerts) * 5), 1)
 
@@ -709,7 +723,15 @@ def run_whatif(db, redirect_count=0, open_gate3=False, add_buses=0, move_staff=0
         "actual_redirect_applied": actual_redirect,
     }
 
-    return {"before": before, "after": after, "warnings": warnings}
+    return {
+        "before": before, "after": after, "warnings": warnings,
+        # Response keys stay "gate2"/"gate3"/"corridor_b_pct" for backward
+        # compatibility, but the frontend must not hardcode "Gate 2"/"Gate 3"
+        # text -- these carry the REAL zone names for whichever from_zone/
+        # to_zone this preview actually ran against.
+        "gate2_name": gate2.name, "gate3_name": gate3.name,
+        "corridor_b_name": corridor_b.name if corridor_b else None,
+    }
 
 
 def compare_plans(db, plans):
@@ -719,7 +741,7 @@ def compare_plans(db, plans):
     side by side instead of each one drifting against a different moment."""
     results = []
     for plan in plans:
-        r = run_whatif(db, plan.redirect_count, plan.open_gate3, plan.add_buses, plan.move_staff)
+        r = run_whatif(db, plan.redirect_count, plan.open_gate3, plan.add_buses, plan.move_staff, plan.from_zone, plan.to_zone)
         if r is None:
             continue
         results.append({"name": plan.name, **r})
@@ -1530,7 +1552,7 @@ def event_detail(db, event_id):
         hotels = hotel_recommendations(db)
         announcements = [
             {"severity": a["severity"], "message": a["message"], "created_at": a["created_at"]}
-            for a in list_alerts(db)[:5]
+            for a in list_alerts(db, event_id=event.id)[:5]
         ]
         off_peak = offpeak_recommendations(db)
     else:

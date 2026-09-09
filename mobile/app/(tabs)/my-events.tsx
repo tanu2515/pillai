@@ -236,6 +236,30 @@ export default function MyEvents() {
                   <Text style={styles.smallMeta}>{liveCrowdText || "All gates are moving smoothly right now."}</Text>
                 </View>
               )}
+
+              {anyLiveActive && venuePois && (venuePois.zones.length || venuePois.services.length) && (
+                <View style={styles.liveInfoBox}>
+                  <Text style={styles.notifTitle}>🗺 Venue map</Text>
+                  <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>Point-of-interest list — not a full indoor floor-plan. Tap Navigate to open it in Maps.</Text>
+                  {venuePois.zones.filter((z) => z.lat != null).slice(0, 6).map((z) => (
+                    <View key={`z-${z.id}`} style={styles.rowBetween}>
+                      <Text style={styles.smallMeta}>{venuePois.legend[z.map_type] || z.map_type}: {z.name}</Text>
+                      <Pressable onPress={() => openInMaps(z.lat!, z.lng!)}>
+                        <Text style={styles.navLink}>🧭 Navigate</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  {venuePois.services.filter((p) => p.lat != null).slice(0, 10).map((p) => (
+                    <View key={`s-${p.id}`} style={styles.rowBetween}>
+                      <Text style={styles.smallMeta}>{p.name} · {p.category.replace(/_/g, " ")}{p.distance_km != null ? ` · ${p.distance_km} km` : ""}</Text>
+                      <Pressable onPress={() => openInMaps(p.lat!, p.lng!)}>
+                        <Text style={styles.navLink}>🧭 Navigate</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {anyLiveActive && (
                 <View style={styles.liveInfoBox}>
                   <Text style={styles.notifTitle}>🗺️ Inside the venue — accessibility &amp; emergency exits</Text>
@@ -359,29 +383,6 @@ export default function MyEvents() {
                   ) : (
                     <Text style={styles.smallMeta}>Emergency info unavailable right now.</Text>
                   )}
-                </View>
-              )}
-
-              {anyLiveActive && venuePois && (venuePois.zones.length || venuePois.services.length) && (
-                <View style={styles.liveInfoBox}>
-                  <Text style={styles.notifTitle}>🗺 Venue map</Text>
-                  <Text style={[styles.smallMeta, { fontStyle: "italic" }]}>Point-of-interest list — not a full indoor floor-plan. Tap Navigate to open it in Maps.</Text>
-                  {venuePois.zones.filter((z) => z.lat != null).slice(0, 6).map((z) => (
-                    <View key={`z-${z.id}`} style={styles.rowBetween}>
-                      <Text style={styles.smallMeta}>{venuePois.legend[z.map_type] || z.map_type}: {z.name}</Text>
-                      <Pressable onPress={() => openInMaps(z.lat!, z.lng!)}>
-                        <Text style={styles.navLink}>🧭 Navigate</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                  {venuePois.services.filter((p) => p.lat != null).slice(0, 10).map((p) => (
-                    <View key={`s-${p.id}`} style={styles.rowBetween}>
-                      <Text style={styles.smallMeta}>{p.name} · {p.category.replace(/_/g, " ")}{p.distance_km != null ? ` · ${p.distance_km} km` : ""}</Text>
-                      <Pressable onPress={() => openInMaps(p.lat!, p.lng!)}>
-                        <Text style={styles.navLink}>🧭 Navigate</Text>
-                      </Pressable>
-                    </View>
-                  ))}
                 </View>
               )}
 

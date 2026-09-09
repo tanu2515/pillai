@@ -63,6 +63,8 @@ class PlanSpec(BaseModel):
     open_gate3: bool = False
     add_buses: int = 0
     move_staff: int = 0
+    from_zone: str = "Gate 2"
+    to_zone: str = "Gate 3"
 
 
 class ComparePlansRequest(BaseModel):
@@ -1229,7 +1231,15 @@ def health_breakdown(db: Session = Depends(get_db)):
 
 @app.get("/api/alerts")
 def get_alerts(status: str | None = None, db: Session = Depends(get_db)):
-    return engine.list_alerts(db, status=status)
+    # Scoped to the live event only -- was previously unscoped, so the
+    # Command Centre's Alerts tab (its only caller) mixed in alerts from
+    # every other event ever created (including resolved ones from past
+    # demo runs), which is exactly the "resolved alerts look like current
+    # emergencies" confusion this needs to avoid.
+    live = engine.get_live_event(db)
+    if not live:
+        return []
+    return engine.list_alerts(db, status=status, event_id=live.id)
 
 
 @app.patch("/api/alerts/{alert_id}")
