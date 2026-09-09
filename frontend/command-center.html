@@ -170,8 +170,6 @@
     <button data-tab="whatif" class="tab-btn text-sm font-semibold"><span class="tab-icon">◇</span><span class="tab-label">What-If Simulator</span></button>
     <button data-tab="actions" class="tab-btn text-sm font-semibold"><span class="tab-icon">✓</span><span class="tab-label">Suggested Actions</span></button>
     <button data-tab="alerts" class="tab-btn text-sm font-semibold"><span class="tab-icon">⚠</span><span class="tab-label">Alerts</span></button>
-    <button data-tab="hotels" class="tab-btn text-sm font-semibold"><span class="tab-icon">⌂</span><span class="tab-label">Hotels</span></button>
-    <button data-tab="transport" class="tab-btn text-sm font-semibold"><span class="tab-icon">⇄</span><span class="tab-label">Transport</span></button>
     <button data-tab="analytics" class="tab-btn text-sm font-semibold"><span class="tab-icon">▥</span><span class="tab-label">Analytics</span></button>
     <button data-tab="timeline" class="tab-btn text-sm font-semibold"><span class="tab-icon">☰</span><span class="tab-label">Incident Timeline</span></button>
   </nav>
@@ -1763,9 +1761,12 @@ async function setAck(status) {
           <div style="max-width:420px;margin:15vh auto;text-align:center;font-family:system-ui,sans-serif;padding:0 20px;">
             <h2 style="margin-bottom:8px;">Not your event</h2>
             <p style="color:var(--muted);font-size:14px;">
-              "${data.name}" belongs to another Event Command Operator. You can only manage events you created.
+              The currently live event is being run by another Event Command Operator. You don't have an event of your own yet — create one to get your own Command Centre.
             </p>
-            <a href="my-events-organizer.html" style="display:inline-block;margin-top:16px;color:var(--accent);font-weight:700;text-decoration:none;">← Go to My Events</a>
+            <a href="create-event.html" class="btn-primary" style="display:inline-block;margin-top:18px;padding:10px 20px;border-radius:10px;font-size:13px;text-decoration:none;">+ Create Your Own Event</a>
+            <div style="margin-top:14px;">
+              <a href="my-events-organizer.html" style="color:var(--accent);font-weight:700;font-size:13px;text-decoration:none;">Already have one? Go to My Events →</a>
+            </div>
           </div>`;
         return;
       }

@@ -3284,7 +3284,20 @@ def create_event(db, name, region, expected_attendance, safe_capacity, owner_ema
     (upcoming/paused/completed) are untouched. venue_lat/lng is the point the
     operator picked on a map at creation time — an anchor so the gate/hotel/
     transport location pickers in Event Setup have somewhere sensible to
-    center on, since zones are no longer auto-created here."""
+    center on, since zones are no longer auto-created here.
+
+    Raises ValueError if the event currently live belongs to a different
+    operator — _deactivate_current_live_event permanently wipes its zones,
+    so creating a new event must never be able to do that to someone else's
+    event just because both operators share the "Event Command Operator"
+    role. An unowned live event (owner_email is None, e.g. old seed data)
+    has no operator to protect, so it stays replaceable as before."""
+    current = get_live_event(db)
+    if current and current.owner_email and current.owner_email != owner_email:
+        raise ValueError(
+            f'"{current.name}" is currently live under another Event Command Operator. '
+            f"It must be paused by its own operator before you can create a new event."
+        )
     _deactivate_current_live_event(db)
 
     event = models.Event(
@@ -3315,6 +3328,17 @@ def switch_to_event(db, event_id, owner_email):
         return target
     if target.status == "upcoming" and (target.venue_lat is None or target.venue_lng is None):
         return None
+    # Switching activates `target` but first wipes whichever event is
+    # currently live (_deactivate_current_live_event) — target being the
+    # caller's own event says nothing about who owns the one about to be
+    # destroyed, so that must be checked separately. An unowned live event
+    # (owner_email is None) has no operator to protect.
+    current = get_live_event(db)
+    if current and current.owner_email and current.owner_email != owner_email:
+        raise ValueError(
+            f'"{current.name}" is currently live under another Event Command Operator. '
+            f"It must be paused by its own operator before you can switch your event live."
+        )
     _deactivate_current_live_event(db)
     target.status = "live"
     db.flush()

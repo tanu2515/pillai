@@ -400,6 +400,14 @@ function closeEventPicker() {
 async function pickEvent(eventId, email) {
   const currentEvent = await api("/api/event");
   if (currentEvent.configured) {
+    // A live event owned by a different operator can't be touched by this
+    // switch at all (the backend rejects it) — so don't show a "this
+    // PERMANENTLY DELETES it" confirm as if the choice were this operator's
+    // to make; say plainly it belongs to someone else instead.
+    if (currentEvent.owner_email && currentEvent.owner_email !== email) {
+      alert(`"${currentEvent.name}" is currently live under another Event Command Operator (${currentEvent.owner_email}). It must be paused by its own operator before you can switch your event live.`);
+      return;
+    }
     const state = await api("/api/state");
     if (state.zones.length > 0) {
       const ok = confirm(
@@ -409,10 +417,11 @@ async function pickEvent(eventId, email) {
       if (!ok) return;
     }
   }
-  await api("/api/admin/switch-event", {
+  const result = await api("/api/admin/switch-event", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event_id: eventId, email }),
   });
+  if (result && result.detail) { alert(result.detail); return; }
   location.reload();
 }
 
@@ -622,6 +631,14 @@ async function createEvent() {
     return;
   }
   const currentEvent = await api("/api/event");
+  const myEmail = getOperatorEmail() || null;
+  // A live event owned by a different operator can't be replaced by this at
+  // all (the backend rejects it) — so don't show a "this PERMANENTLY
+  // DELETES it" confirm as if the choice were this operator's to make.
+  if (currentEvent.configured && currentEvent.owner_email && currentEvent.owner_email !== myEmail) {
+    alert(`"${currentEvent.name}" is currently live under another Event Command Operator (${currentEvent.owner_email}). It must be paused by its own operator before you can create a new event.`);
+    return;
+  }
   let warning = `Create "${name}"? This pauses the current event and starts this one fresh, with no zones yet.`;
   if (currentEvent.configured) {
     const state = await api("/api/state");
@@ -637,9 +654,10 @@ async function createEvent() {
     name, region: selectedNewEventRegion, venue_lat, venue_lng,
     expected_attendance: parseInt(document.getElementById("new-ev-attendance").value) || 0,
     safe_capacity: parseInt(document.getElementById("new-ev-capacity").value) || 0,
-    owner_email: getOperatorEmail() || null,
+    owner_email: myEmail,
   };
-  await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const result = await api("/api/admin/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (result && result.detail) { status.textContent = ""; alert(result.detail); return; }
   status.textContent = "Created.";
   setTimeout(() => status.textContent = "", 2000);
   await loadEvent();

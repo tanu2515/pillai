@@ -1110,10 +1110,13 @@ def admin_create_event(req: EventCreate, db: Session = Depends(get_db), role: st
     if not req.name.strip():
         raise HTTPException(400, "name is required")
     owner_email = req.owner_email.strip().lower() if req.owner_email else None
-    event = engine.create_event(
-        db, req.name.strip(), req.region, req.expected_attendance, req.safe_capacity, owner_email,
-        req.venue_lat, req.venue_lng,
-    )
+    try:
+        event = engine.create_event(
+            db, req.name.strip(), req.region, req.expected_attendance, req.safe_capacity, owner_email,
+            req.venue_lat, req.venue_lng,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
     return {"id": event.id, "name": event.name, "region": event.region}
 
 
@@ -1153,7 +1156,10 @@ def admin_all_events(db: Session = Depends(get_db), role: str | None = Depends(g
 @app.post("/api/admin/switch-event")
 def admin_switch_event(req: SwitchEventRequest, db: Session = Depends(get_db), role: str | None = Depends(get_role)):
     require_admin(role)
-    event = engine.switch_to_event(db, req.event_id, req.email.strip().lower())
+    try:
+        event = engine.switch_to_event(db, req.event_id, req.email.strip().lower())
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
     if event is None:
         raise HTTPException(404, "event not found, not yours, or not switchable")
     return {"id": event.id, "name": event.name, "status": event.status}
