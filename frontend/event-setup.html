@@ -116,7 +116,7 @@
 <div id="map-picker-overlay" class="hidden fixed inset-0 bg-ink/40 flex items-center justify-center px-4 z-50">
   <div class="row-card p-4 max-w-lg w-full">
     <h2 class="text-sm font-extrabold m-0 mb-1">Pick a location</h2>
-    <p class="text-muted text-xs m-0 mb-3">Search a place name, or click the map directly, then confirm.</p>
+    <p class="text-muted text-xs m-0 mb-3">The event venue is marked on the map. Click where the gate, hotel or transport point belongs, then confirm.</p>
     <div class="flex gap-2 mb-2">
       <input type="text" id="map-picker-search" placeholder="Search venue, address or city…" class="p-2.5 text-xs flex-1"
              onkeydown="if(event.key==='Enter'){event.preventDefault(); searchMapPickerLocation();}" />
@@ -226,6 +226,9 @@
         </div>
         <div id="gate-add-status" class="text-xs text-muted mt-2"></div>
       </div>
+      <div class="flex justify-end mt-4">
+        <button type="button" class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="goToSetupTab('hotels')">NEXT: HOTELS →</button>
+      </div>
     </section>
 
     <!-- HOTELS -->
@@ -253,7 +256,7 @@
           <input type="text" id="h-name" placeholder="Hotel name" class="p-2.5 text-xs" />
           <input type="number" id="h-rooms" placeholder="Total rooms" class="p-2.5 text-xs font-mono" />
           <input type="number" id="h-price" placeholder="Price tier 1-5" class="p-2.5 text-xs font-mono" min="1" max="5" />
-          <input type="text" id="h-contact" placeholder="Contact (phone)" class="p-2.5 text-xs" />
+          <input type="text" id="h-contact" placeholder="10-digit mobile number" class="p-2.5 text-xs" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
           <input type="text" id="h-amenities" placeholder="Amenities (comma-separated)" class="p-2.5 text-xs sm:col-span-2" />
           <input type="hidden" id="h-lat" />
           <input type="hidden" id="h-lng" />
@@ -264,6 +267,9 @@
           <button class="btn-primary px-4 py-2 rounded-lg text-xs ml-auto" onclick="addHotel()">ADD HOTEL</button>
         </div>
         <div id="hotel-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
+      <div class="flex justify-end mt-4">
+        <button type="button" class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="goToSetupTab('transport')">NEXT: TRANSPORT →</button>
       </div>
     </section>
 
@@ -283,7 +289,7 @@
             <option value="hub">Transport Hub</option>
           </select>
           <input type="number" id="t-capacity" placeholder="Capacity" class="p-2.5 text-xs font-mono" />
-          <input type="text" id="t-contact" placeholder="Contact (phone)" class="p-2.5 text-xs" />
+          <input type="text" id="t-contact" placeholder="10-digit mobile number" class="p-2.5 text-xs" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
           <input type="number" step="any" id="t-lat" placeholder="Latitude" class="p-2.5 text-xs font-mono" />
           <input type="number" step="any" id="t-lng" placeholder="Longitude" class="p-2.5 text-xs font-mono" />
         </div>
@@ -292,6 +298,9 @@
           <button class="btn-primary px-4 py-2 rounded-lg text-xs" onclick="addTransport()">ADD TRANSPORT ZONE</button>
         </div>
         <div id="transport-add-status" class="text-xs text-muted mt-2"></div>
+      </div>
+      <div class="flex justify-end mt-4">
+        <a href="command-center.html?role=command" class="btn-primary px-4 py-2 rounded-lg text-xs no-underline inline-block">FINISH SETUP: OPEN COMMAND CENTRE →</a>
       </div>
     </section>
   </div>
@@ -311,13 +320,17 @@ function getOperatorEmail() { return sessionStorage.getItem("vyavastha_email") |
 
 // --- Map location picker (shared by the create-event field and every add-a-gate/hotel/transport form) ---
 let eventVenueLat = null, eventVenueLng = null;
-let mapPickerInstance = null, mapPickerMarker = null, mapPickerPoint = null;
+let mapPickerInstance = null, mapPickerMarker = null, mapPickerVenueMarker = null, mapPickerPoint = null;
 let mapPickerTargetLat = null, mapPickerTargetLng = null;
 
 function openMapPicker(latInputId, lngInputId) {
   mapPickerTargetLat = latInputId;
   mapPickerTargetLng = lngInputId;
   mapPickerPoint = null;
+  if (mapPickerMarker && mapPickerInstance) {
+    mapPickerInstance.removeLayer(mapPickerMarker);
+    mapPickerMarker = null;
+  }
   document.getElementById("map-picker-coords").textContent = "No point selected yet — click the map.";
   document.getElementById("map-picker-search").value = "";
   document.getElementById("map-picker-search-status").textContent = "";
@@ -336,6 +349,15 @@ function openMapPicker(latInputId, lngInputId) {
       mapPickerInstance = L.map("map-picker-map");
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(mapPickerInstance);
       mapPickerInstance.on("click", (e) => setMapPickerPoint(e.latlng.lat, e.latlng.lng));
+    }
+    if (hasVenue) {
+      if (mapPickerVenueMarker) mapPickerInstance.removeLayer(mapPickerVenueMarker);
+      mapPickerVenueMarker = L.circleMarker([eventVenueLat, eventVenueLng], {
+        radius: 10, color: "#DC2626", weight: 2, fillColor: "#DC2626", fillOpacity: 0.9,
+      }).addTo(mapPickerInstance).bindTooltip("Event venue", { permanent: true, direction: "top", offset: [0, -8] });
+    } else if (mapPickerVenueMarker) {
+      mapPickerInstance.removeLayer(mapPickerVenueMarker);
+      mapPickerVenueMarker = null;
     }
     mapPickerInstance.setView([startLat, startLng], zoom);
     mapPickerInstance.invalidateSize();
@@ -489,6 +511,13 @@ function switchTab(el) {
   document.getElementById("tab-" + el.dataset.tab).classList.remove("hidden");
 }
 
+function goToSetupTab(tab) {
+  const tabButton = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!tabButton) return;
+  switchTab(tabButton);
+  document.getElementById("setup-body").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // --- Gates -----------------------------------------------------------------
 
 function gateRow(g) {
@@ -632,7 +661,9 @@ async function submitManualCount(zoneId) {
   });
   if (!res.ok) { const b = await res.json().catch(() => ({})); showToast(b.detail || "Couldn't set the count."); return; }
   const gate = (setupData?.gates || []).find(g => g.id === zoneId);
-  setGateStatus(`✓ Gate "${gate ? gate.name : zoneId}" count set to ${count.toLocaleString()}`);
+  const transport = (setupData?.transport || []).find(t => t.id === zoneId);
+  const message = `${gate ? "Gate" : "Transport zone"} "${(gate || transport)?.name || zoneId}" count set to ${count.toLocaleString()}`;
+  if (gate) setGateStatus(`✓ ${message}`); else showToast(`✓ ${message}`);
   input.value = "";
   await load();
 }
@@ -682,20 +713,21 @@ async function stopCamera(zoneId) {
   await loadCameraStatuses();
 }
 
-async function loadCameraStatuses() {
+async function loadCameraStatuses(forceRender = false) {
   const list = await api("/api/cameras");
   const next = Object.fromEntries(list.map(c => [c.zone_id, c]));
-  (setupData?.gates || []).forEach(g => {
-    const isFirstLoad = !(g.id in cameraStatusMap);
-    const wasRunning = !!cameraStatusMap[g.id]?.running;
-    const isRunning = !!next[g.id]?.running;
-    cameraStatusMap[g.id] = next[g.id];
+  const monitoredZones = [...(setupData?.gates || []), ...(setupData?.transport || [])];
+  monitoredZones.forEach(zone => {
+    const isFirstLoad = !(zone.id in cameraStatusMap);
+    const wasRunning = !!cameraStatusMap[zone.id]?.running;
+    const isRunning = !!next[zone.id]?.running;
+    cameraStatusMap[zone.id] = next[zone.id];
     // A zone with no camera running has nothing time-sensitive to refresh —
     // re-rendering it anyway on every 4s poll wipes out whatever the operator
     // is mid-typing/mid-selecting in its (still-empty) setup form, including
     // a file already chosen for upload. Only re-render when it hasn't been
     // rendered yet, there's live status to show, or the running state flipped.
-    if (isFirstLoad || isRunning || wasRunning !== isRunning) renderCamBlock(g.id);
+    if (forceRender || isFirstLoad || isRunning || wasRunning !== isRunning) renderCamBlock(zone.id);
   });
 }
 
@@ -741,8 +773,8 @@ function hotelRow(h) {
         <label class="text-[10px] text-muted uppercase tracking-wide">Price tier (1-5)
           <input type="number" min="1" max="5" class="small-input w-full" id="h-price-${h.id}" value="${h.price_tier ?? ""}" />
         </label>
-        <label class="text-[10px] text-muted uppercase tracking-wide">Contact
-          <input type="text" class="small-input w-full" id="h-contact-${h.id}" value="${h.contact ?? ""}" />
+        <label class="text-[10px] text-muted uppercase tracking-wide">Mobile number
+          <input type="text" class="small-input w-full" id="h-contact-${h.id}" value="${h.contact ?? ""}" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
         </label>
       </div>
       <label class="text-[10px] text-muted uppercase tracking-wide block mt-2">Amenities
@@ -761,6 +793,12 @@ function hotelRow(h) {
 async function saveHotel(id) {
   const name = document.getElementById(`h-name-${id}`).value.trim();
   if (!name) { showToast("Hotel name can't be empty."); return; }
+  const contact = document.getElementById(`h-contact-${id}`).value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    showToast("Enter a valid 10-digit hotel mobile number.");
+    document.getElementById(`h-contact-${id}`).focus();
+    return;
+  }
   const lat = parseFloat(document.getElementById(`h-lat-${id}`).value);
   const lng = parseFloat(document.getElementById(`h-lng-${id}`).value);
   const body = {
@@ -768,7 +806,7 @@ async function saveHotel(id) {
     capacity: parseInt(document.getElementById(`h-rooms-${id}`).value) || null,
     occupied_rooms: parseInt(document.getElementById(`h-occ-${id}`).value),
     price_tier: parseInt(document.getElementById(`h-price-${id}`).value) || null,
-    contact: document.getElementById(`h-contact-${id}`).value.trim() || null,
+    contact: contact || null,
     amenities: document.getElementById(`h-amen-${id}`).value.trim() || null,
     manual_recommended: document.getElementById(`h-manual-${id}`).checked,
     lat: isNaN(lat) ? null : lat,
@@ -790,6 +828,10 @@ async function removeHotel(id) {
 }
 
 let discoveredHotelsForAdd = [];
+
+function isValidMobileNumber(value) {
+  return /^\d{10}$/.test(value);
+}
 
 async function findNearbyHotelsForAdd() {
   const status = document.getElementById("h-discover-status");
@@ -842,11 +884,17 @@ function pickDiscoveredHotel() {
 }
 
 async function addHotel() {
+  const contact = document.getElementById("h-contact").value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    document.getElementById("hotel-add-status").textContent = "Enter a valid 10-digit hotel mobile number.";
+    document.getElementById("h-contact").focus();
+    return;
+  }
   const body = {
     name: document.getElementById("h-name").value.trim(),
     capacity: parseInt(document.getElementById("h-rooms").value) || 0,
     price_tier: parseInt(document.getElementById("h-price").value) || null,
-    contact: document.getElementById("h-contact").value.trim() || null,
+    contact: contact || null,
     amenities: document.getElementById("h-amenities").value.trim() || null,
     lat: parseFloat(document.getElementById("h-lat").value),
     lng: parseFloat(document.getElementById("h-lng").value),
@@ -885,19 +933,26 @@ function transportRow(t) {
         <label class="text-[10px] text-muted uppercase tracking-wide">Currently occupied
           <input type="number" class="small-input w-full" id="t-occ-${t.id}" value="${t.current_count}" />
         </label>
-        <label class="text-[10px] text-muted uppercase tracking-wide">Contact
-          <input type="text" class="small-input w-full" id="t-contact-${t.id}" value="${t.contact ?? ""}" />
+        <label class="text-[10px] text-muted uppercase tracking-wide">Mobile number
+          <input type="text" class="small-input w-full" id="t-contact-${t.id}" value="${t.contact ?? ""}" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
         </label>
       </div>
+      <div id="cam-block-${t.id}" class="mt-3 pt-2 border-t" style="border-color:var(--border);"></div>
       <button class="btn-primary mt-3 px-3 py-1.5 rounded-lg text-[11px]" onclick="saveTransport(${t.id})">SAVE</button>
     </div>`;
 }
 
 async function saveTransport(id) {
+  const contact = document.getElementById(`t-contact-${id}`).value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    showToast("Enter a valid 10-digit transport mobile number.");
+    document.getElementById(`t-contact-${id}`).focus();
+    return;
+  }
   const body = {
     capacity: parseInt(document.getElementById(`t-cap-${id}`).value) || null,
     current_count: parseInt(document.getElementById(`t-occ-${id}`).value),
-    contact: document.getElementById(`t-contact-${id}`).value.trim() || null,
+    contact: contact || null,
     email: getOperatorEmail(),
   };
   try {
@@ -915,11 +970,17 @@ async function removeTransport(id) {
 }
 
 async function addTransport() {
+  const contact = document.getElementById("t-contact").value.trim();
+  if (contact && !isValidMobileNumber(contact)) {
+    document.getElementById("transport-add-status").textContent = "Enter a valid 10-digit transport mobile number.";
+    document.getElementById("t-contact").focus();
+    return;
+  }
   const body = {
     name: document.getElementById("t-name").value.trim(),
     type: document.getElementById("t-type").value,
     capacity: parseInt(document.getElementById("t-capacity").value) || 0,
-    contact: document.getElementById("t-contact").value.trim() || null,
+    contact: contact || null,
     lat: parseFloat(document.getElementById("t-lat").value),
     lng: parseFloat(document.getElementById("t-lng").value),
     email: getOperatorEmail(),
@@ -1065,12 +1126,12 @@ async function load() {
 
   document.getElementById("gates-list").innerHTML = setupData.gates.map(gateRow).join("") ||
     `<p class="text-xs text-muted">No gates configured.</p>`;
-  await loadCameraStatuses();
   document.getElementById("hotels-list").innerHTML = setupData.hotels.map(hotelRow).join("") ||
     `<p class="text-xs text-muted">No hotels configured yet — add one below.</p>`;
   document.getElementById("transport-list").innerHTML = setupData.transport.map(transportRow).join("") ||
     `<p class="text-xs text-muted">No transport zones configured yet — add one below.</p>`;
   renderResources(setupData.resources || {});
+  await loadCameraStatuses(true);
 }
 
 loadRegionsForCreate();

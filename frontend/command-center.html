@@ -185,6 +185,7 @@
       </span>
       <span id="readonly-note" class="text-xs text-muted italic hidden">Live event clock is run by the Event Command Operator</span>
       <button id="emergency-btn" class="btn-danger rounded-lg px-3 py-2 text-xs hidden" onclick="openEmergencyModal()">🚨 Emergency</button>
+      <a id="event-setup-link" href="/event-setup.html" class="text-xs text-accent hover:underline ml-1 font-bold hidden" title="View and edit gates, hotels, transport zones and operational resources">Edit Event Setup →</a>
       <a id="back-office-link" href="/admin.html" class="text-xs text-accent hover:underline ml-1 font-medium hidden">Back Office →</a>
       <button id="switch-event-link" class="hidden text-xs text-accent hover:underline ml-1 font-bold" onclick="openEventPicker()">Switch Event ▾</button>
       <a href="/attendee.html" class="text-xs text-accent hover:underline ml-1 font-medium">Open guest view →</a>
@@ -582,7 +583,10 @@ if (!roleCfg.showSimControls) {
 }
 if (roleCfg.showAiAdvisor) document.getElementById("ai-advisor-btn").classList.remove("hidden");
 if (roleCfg.showEmergency) document.getElementById("emergency-btn").classList.remove("hidden");
-if (roleKey === "command") document.getElementById("back-office-link").classList.remove("hidden");
+if (roleKey === "command") {
+  document.getElementById("event-setup-link").classList.remove("hidden");
+  document.getElementById("back-office-link").classList.remove("hidden");
+}
 
 const ALL_WHATIF_FIELDS = ["redirect", "buses", "staff", "gate3"];
 ALL_WHATIF_FIELDS.forEach(f => {

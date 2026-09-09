@@ -3674,12 +3674,40 @@ def chatbot_answer(db, question):
             "grounded_in": [f"action:{top['id']}"],
         }
 
+    if any(k in q for k in ("restaurant", "food", "cafe", "meal", "eat", "dining")) or _fuzzy_word_match(q, ["restaurant", "food", "cafe", "meal", "eat"]):
+        restaurants = list_restaurants(db, sort="nearest")
+        if not restaurants["restaurants"]:
+            return {"text": "No restaurants are configured for this event yet.", "grounded_in": []}
+        lines = []
+        for r in restaurants["restaurants"][:5]:  # Show top 5 nearest
+            dist_str = f" ({r['distance_km']} km)" if r.get("distance_km") else ""
+            cuisine_str = f" · {r['cuisine']}" if r.get("cuisine") else ""
+            lines.append(f"{r['name']}{cuisine_str}{dist_str}")
+        return {
+            "text": "Nearby restaurants & food:\n" + "\n".join(lines),
+            "grounded_in": ["state:restaurants"] + [f"poi:{r['name']}" for r in restaurants["restaurants"][:5]]
+        }
+
     if any(k in q for k in ("hotel", "occupancy", "room", "accommodation")) or _fuzzy_word_match(q, ["hotel", "occupancy", "room", "accommodation", "event"]):
-        hotels = [z for z in zones if z.type == "hotel"]
-        if not hotels:
-            return {"text": "No hotel zones are configured for this event.", "grounded_in": []}
-        lines = [f"{h.name}: {round(h.current_count / h.capacity * 100, 1)}% occupied ({h.current_count}/{h.capacity})" for h in hotels]
-        return {"text": " · ".join(lines), "grounded_in": [f"zone:{h.name}" for h in hotels]}
+        # Show both event zones and nearby hotels
+        hotel_zones = [z for z in zones if z.type == "hotel"]
+        zone_lines = [f"{h.name}: {round(h.current_count / h.capacity * 100, 1)}% occupied ({h.current_count}/{h.capacity})" for h in hotel_zones]
+        
+        # Add nearby hotels from POI
+        nearby_hotels = db.query(models.Zone).filter(
+            models.Zone.type == "hotel", models.Zone.event_id == (get_live_event(db).id if get_live_event(db) else None)
+        ).order_by(models.Zone.name).all()
+        hotel_details = []
+        if nearby_hotels:
+            for h in nearby_hotels[:3]:
+                occupancy = round(h.current_count / h.capacity * 100, 1) if h.capacity else 0
+                hotel_details.append(f"{h.name}: {occupancy}% occupied, ${h.price_tier or 'N/A'}")
+        
+        all_lines = zone_lines + hotel_details
+        return {
+            "text": "Hotels:\n" + "\n".join(all_lines) if all_lines else "No hotel zones are configured for this event.",
+            "grounded_in": [f"zone:{h.name}" for h in hotel_zones]
+        }
 
     if any(k in q for k in ("long distance", "express train", "outstation train", "konkan")):
         local = local_transit_feed(db)
@@ -3706,14 +3734,58 @@ def chatbot_answer(db, question):
         corridors = [z for z in zones if z.type == "corridor"]
         resources = {r.type: r for r in db.query(models.Resource).all()}
         bus = resources.get("bus")
-        bus_line = f"Buses available: {bus.quantity_available}/{bus.quantity_total}. " if bus else ""
+        bus_line = f"Buses available: {bus.quantity_available}/{bus.quantity_total}" if bus else ""
+        
+        # Add local transit options
         local = local_transit_feed(db)
-        if local["available"] and local["buses"]["city"]:
-            next_bus = local["buses"]["city"][0]
-            bus_line += f"Next NMMT bus: Route {next_bus['route']} in {next_bus['arrives_in_min']} min. "
+        transit_lines = []
+        if local["available"]:
+            if local["buses"]["city"]:
+                next_bus = local["buses"]["city"][0]
+                transit_lines.append(f"Next city bus: Route {next_bus['route']} in {next_bus['arrives_in_min']} min")
+            if local["trains"]["suburban"]:
+                next_train = local["trains"]["suburban"][0]
+                transit_lines.append(f"Next local train: {next_train['line']} → {next_train['destination']} in {next_train['arrives_in_min']} min")
+            if local["trains"]["long_distance"]:
+                next_ldt = local["trains"]["long_distance"][0]
+                transit_lines.append(f"Next express train: {next_ldt['train']} → {next_ldt['destination']} in {next_ldt['arrives_in_min']} min")
+        
+        # Add nearby restaurants (deduplicate by name)
+        restaurants = list_restaurants(db, sort="nearest")
+        rest_lines = []
+        seen_restaurants = set()
+        if restaurants["restaurants"]:
+            for r in restaurants["restaurants"]:
+                name_key = r['name'].lower()
+                if name_key not in seen_restaurants:
+                    seen_restaurants.add(name_key)
+                    dist_str = f" ({r['distance_km']} km away)" if r.get("distance_km") else ""
+                    rest_lines.append(f"Nearby: {r['name']}{dist_str}")
+                    if len(rest_lines) >= 2:
+                        break
+        
+        # Add emergency services info
+        emergency = attendee_emergency_directory(db)
+        emerg_lines = []
+        if emergency["services"]:
+            hospitals = [s for s in emergency["services"] if s.get("category") == "hospital"]
+            if hospitals:
+                h = hospitals[0]
+                dist_str = f" ({h['distance_km']} km away)" if h.get("distance_km") else ""
+                emerg_lines.append(f"Emergency: Hospital nearby{dist_str}")
+        
+        # Build final response
         lines = [f"{c.name}: {round(c.current_count / c.capacity * 100, 1)}% loaded" for c in corridors]
-        grounded = [f"zone:{c.name}" for c in corridors] + (["resource:bus"] if bus else [])
-        return {"text": bus_line + " · ".join(lines), "grounded_in": grounded}
+        all_text_parts = []
+        if bus_line:
+            all_text_parts.append(bus_line)
+        all_text_parts.extend(transit_lines)
+        all_text_parts.extend(lines)
+        all_text_parts.extend(rest_lines)
+        all_text_parts.extend(emerg_lines)
+        
+        grounded = [f"zone:{c.name}" for c in corridors] + (["resource:bus"] if bus else []) + ["state:local_transit"]
+        return {"text": " · ".join(all_text_parts), "grounded_in": grounded}
 
     if any(k in q for k in ("escalat", "no feasible", "stuck", "human")):
         esc = escalations(db)
@@ -3722,6 +3794,23 @@ def chatbot_answer(db, question):
         return {
             "text": "Needs a human call: " + ", ".join(f"{e['zone_name']} ({e['level']})" for e in esc),
             "grounded_in": [f"zone:{e['zone_name']}" for e in esc],
+        }
+
+    if any(k in q for k in ("emergency", "hospital", "ambulance", "police", "fire", "safety", "help")) or _fuzzy_word_match(q, ["emergency", "hospital", "ambulance", "police", "fire", "safety", "help"]):
+        emergency = attendee_emergency_directory(db)
+        if not emergency["services"]:
+            return {"text": "Emergency services directory is not yet seeded for this event.", "grounded_in": []}
+        
+        lines = []
+        for service in emergency["services"][:5]:  # Show top 5 nearest
+            category = service.get("category", "Service").title()
+            dist_str = f" ({service['distance_km']} km)" if service.get("distance_km") else ""
+            contact_str = f" · {service['contact']}" if service.get("contact") else ""
+            lines.append(f"{category}: {service['name']}{contact_str}{dist_str}")
+        
+        return {
+            "text": "Emergency Services:\n" + "\n".join(lines),
+            "grounded_in": ["state:emergency"] + [f"poi:{s['name']}" for s in emergency["services"][:5]]
         }
 
     if any(k in q for k in ("happen", "timeline", "history", "log")):
